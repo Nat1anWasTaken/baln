@@ -5,6 +5,7 @@ import {
   ChevronUp,
   CircleUserRound,
   LayoutDashboard,
+  KeyRound,
   LogOut,
   Plus,
   WalletCards,
@@ -51,6 +52,7 @@ const pageNames: Record<string, string> = {
   "/entries/new": "新增交易",
   "/accounts": "帳戶",
   "/reports": "報表",
+  "/settings/api-tokens": "API 權杖",
 };
 
 function UserMenu() {
@@ -84,6 +86,11 @@ function UserMenu() {
             {auth.user?.email}
           </span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate("/settings/api-tokens")}>
+          <KeyRound aria-hidden="true" />
+          API 權杖
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => void handleLogout()}

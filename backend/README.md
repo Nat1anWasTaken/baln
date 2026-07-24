@@ -91,6 +91,11 @@ Protected endpoints use:
 Authorization: Bearer <access-token>
 ```
 
+The bearer value may also be a user-generated personal API token. Personal
+tokens start with `baln_pat_`, have the same ledger access as their owner, and
+remain valid until their optional expiration or explicit revocation. The
+plaintext value is returned only when the token is created.
+
 Refresh and logout requests require the configured frontend `Origin` header.
 
 ## Core API
@@ -100,6 +105,9 @@ GET    /api/v1/auth/me
 POST   /api/v1/auth/token
 POST   /api/v1/auth/refresh
 POST   /api/v1/auth/logout
+GET    /api/v1/auth/api-tokens
+POST   /api/v1/auth/api-tokens
+DELETE /api/v1/auth/api-tokens/{id}
 
 POST   /api/v1/accounts
 GET    /api/v1/accounts
@@ -115,6 +123,15 @@ DELETE /api/v1/entries/{id}
 
 GET    /api/v1/reports/summary
 GET    /api/v1/reports/monthly
+```
+
+API-token management requires a signed-in browser session; a personal token
+cannot create or revoke tokens. For example, after creating a token in the web
+application:
+
+```bash
+curl http://localhost:8080/api/v1/accounts \
+  -H 'Authorization: Bearer baln_pat_<secret>'
 ```
 
 Entry creation and replacement accept a complete balanced Posting collection.
@@ -153,7 +170,9 @@ cargo run --bin baln-admin -- user revoke-sessions --email person@example.com
 ```
 
 Disabling a user or revoking sessions increments `auth_version`, invalidating
-already-issued access JWTs as well as refresh tokens.
+already-issued access JWTs as well as refresh tokens. Personal API tokens are
+independent of browser sessions: disabling the user invalidates them, while
+revoking sessions does not.
 
 ## Verification
 

@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   accountBalanceSchema,
   accountSchema,
+  apiTokenSchema,
+  createdApiTokenSchema,
   entryPageSchema,
   entryResponseSchema,
   periodSummarySchema,
@@ -10,6 +12,7 @@ import {
   tokenResponseSchema,
   userSchema,
   type CreateAccountRequest,
+  type CreateApiTokenRequest,
   type CreateEntryRequest,
   type ProblemDetails,
   type UpdateAccountRequest,
@@ -39,6 +42,8 @@ const localizedProblems: Record<string, string> = {
   archived_account: "已封存的帳戶不能加入新交易。",
   invalid_date_range: "結束日期必須晚於開始日期。",
   invalid_cursor: "分頁資訊已失效，請重新載入。",
+  invalid_api_token_name: "權杖名稱必須為 1 至 100 個字元。",
+  invalid_api_token_expiry: "權杖到期時間必須晚於現在。",
   unique_constraint: "已有相同代碼的資料。",
   constraint_violation: "資料不符合帳務規則。",
   service_unavailable: "服務暫時無法使用，請稍後再試。",
@@ -105,11 +110,7 @@ async function request<T>(
     credentials: "include",
   });
 
-  if (
-    response.status === 401 &&
-    options.retryAuth !== false &&
-    !path.startsWith("/auth/")
-  ) {
+  if (response.status === 401 && options.retryAuth !== false) {
     try {
       await refreshAccessToken();
       return request(path, init, { ...options, retryAuth: false });
@@ -178,6 +179,19 @@ export const authApi = {
   me: () => request("/auth/me", {}, { schema: userSchema }),
   logout: () =>
     request<void>("/auth/logout", { method: "POST" }, { retryAuth: false }),
+};
+
+export const apiTokensApi = {
+  list: () =>
+    request("/auth/api-tokens", {}, { schema: z.array(apiTokenSchema) }),
+  create: (body: CreateApiTokenRequest) =>
+    request(
+      "/auth/api-tokens",
+      { method: "POST", body: JSON.stringify(body) },
+      { schema: createdApiTokenSchema },
+    ),
+  revoke: (id: string) =>
+    request<void>(`/auth/api-tokens/${id}`, { method: "DELETE" }),
 };
 
 export const accountsApi = {

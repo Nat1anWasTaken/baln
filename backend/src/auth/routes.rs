@@ -3,7 +3,7 @@ use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Redirect, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use cookie::{Cookie, SameSite, time::Duration};
 use serde::Deserialize;
@@ -24,6 +24,11 @@ pub fn router() -> Router<AppState> {
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
         .route("/me", get(me))
+        .route(
+            "/api-tokens",
+            get(super::api_tokens::list).post(super::api_tokens::create),
+        )
+        .route("/api-tokens/{id}", delete(super::api_tokens::revoke))
 }
 
 #[utoipa::path(

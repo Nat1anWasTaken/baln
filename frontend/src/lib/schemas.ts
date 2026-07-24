@@ -29,6 +29,31 @@ export const tokenResponseSchema = z.object({
 
 export type TokenResponse = z.infer<typeof tokenResponseSchema>;
 
+export const apiTokenStatusSchema = z.enum(["active", "expired"]);
+
+export const apiTokenSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  token_hint: z.string(),
+  expires_at: z.string().nullable(),
+  last_used_at: z.string().nullable(),
+  created_at: z.string(),
+  status: apiTokenStatusSchema,
+});
+
+export type ApiToken = z.infer<typeof apiTokenSchema>;
+
+export const createdApiTokenSchema = apiTokenSchema.extend({
+  token: z.string().startsWith("baln_pat_"),
+});
+
+export type CreatedApiToken = z.infer<typeof createdApiTokenSchema>;
+
+export type CreateApiTokenRequest = {
+  name: string;
+  expires_at: string | null;
+};
+
 export const problemDetailsSchema = z.object({
   type: z.string(),
   title: z.string(),

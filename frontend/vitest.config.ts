@@ -14,7 +14,19 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: ["src/lib/**/*.ts", "src/features/**/*.ts*"],
+      include: [
+        "src/lib/**/*.ts",
+        "src/features/**/*.ts*",
+        "src/pages/api-tokens-page.tsx",
+      ],
+      thresholds: {
+        "src/pages/api-tokens-page.tsx": {
+          statements: 70,
+          branches: 80,
+          functions: 70,
+          lines: 70,
+        },
+      },
     },
   },
 });

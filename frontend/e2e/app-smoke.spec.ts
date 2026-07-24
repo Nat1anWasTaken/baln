@@ -67,9 +67,20 @@ const entry = {
 };
 
 async function mockApi(page: Page) {
+  let apiTokens: Array<{
+    id: string;
+    name: string;
+    token_hint: string;
+    expires_at: string | null;
+    last_used_at: string | null;
+    created_at: string;
+    status: "active";
+  }> = [];
+
   await page.route("http://localhost:8080/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    const method = route.request().method();
 
     if (path === "/api/v1/auth/refresh") {
       return route.fulfill({
@@ -91,6 +102,39 @@ async function mockApi(page: Page) {
           updated_at: "2026-07-24T00:00:00Z",
         },
       });
+    }
+    if (path === "/api/v1/auth/api-tokens" && method === "GET") {
+      return route.fulfill({ json: apiTokens });
+    }
+    if (path === "/api/v1/auth/api-tokens" && method === "POST") {
+      const body = route.request().postDataJSON() as {
+        name: string;
+        expires_at: string | null;
+      };
+      const created = {
+        id: "01980000-0000-7000-8000-000000000088",
+        name: body.name,
+        token_hint: "baln_pat_…abcd",
+        expires_at: body.expires_at,
+        last_used_at: null,
+        created_at: "2026-07-24T00:00:00Z",
+        status: "active" as const,
+      };
+      apiTokens = [created];
+      return route.fulfill({
+        status: 201,
+        json: {
+          ...created,
+          token: "baln_pat_abcdefghijklmnopqrstuvwxyz1234567890ABCDE",
+        },
+      });
+    }
+    if (
+      path === "/api/v1/auth/api-tokens/01980000-0000-7000-8000-000000000088" &&
+      method === "DELETE"
+    ) {
+      apiTokens = [];
+      return route.fulfill({ status: 204 });
     }
     if (path === "/api/v1/reports/monthly") {
       return route.fulfill({
@@ -170,4 +214,31 @@ test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.getByRole("tab", { name: "進階分錄" }).click();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
+});
+
+test("creates, reveals, and revokes a personal API token", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /測試使用者/ }).click();
+  await page.getByRole("menuitem", { name: "API 權杖" }).click();
+  await expect(
+    page.getByRole("heading", { name: "個人 API 權杖" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "建立第一個權杖" }).click();
+  await page.getByLabel("名稱").fill("E2E 自動化");
+  await page.getByRole("button", { name: "建立權杖" }).click();
+
+  await expect(
+    page.getByText("這是唯一一次顯示完整權杖。關閉後將無法再次查看。"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("baln_pat_abcdefghijklmnopqrstuvwxyz1234567890ABCDE"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "我已儲存" }).click();
+
+  await expect(page.getByText("E2E 自動化")).toBeVisible();
+  await page.getByRole("button", { name: "撤銷" }).click();
+  await page.getByRole("button", { name: "撤銷權杖" }).click();
+  await expect(page.getByText("還沒有 API 權杖")).toBeVisible();
 });

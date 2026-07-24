@@ -23,6 +23,9 @@ use utoipa::{
         crate::auth::routes::refresh,
         crate::auth::routes::logout,
         crate::auth::routes::me,
+        crate::auth::api_tokens::list,
+        crate::auth::api_tokens::create,
+        crate::auth::api_tokens::revoke,
         crate::accounts::routes::create,
         crate::accounts::routes::list,
         crate::accounts::routes::get_one,
@@ -40,6 +43,10 @@ use utoipa::{
         crate::auth::User,
         crate::auth::routes::ExchangeCodeRequest,
         crate::auth::service::TokenResponse,
+        crate::auth::api_tokens::ApiTokenStatus,
+        crate::auth::api_tokens::ApiToken,
+        crate::auth::api_tokens::CreateApiTokenRequest,
+        crate::auth::api_tokens::CreatedApiToken,
         crate::accounts::AccountType,
         crate::accounts::Account,
         crate::accounts::CreateAccountRequest,
@@ -64,10 +71,10 @@ struct SecurityAddon;
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
-            components.add_security_scheme(
-                "bearer_auth",
-                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
-            );
+            let mut bearer = Http::new(HttpAuthScheme::Bearer);
+            bearer.description =
+                Some("Short-lived session JWT or user-generated personal API token".to_owned());
+            components.add_security_scheme("bearer_auth", SecurityScheme::Http(bearer));
         }
     }
 }

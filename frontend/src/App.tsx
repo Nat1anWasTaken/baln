@@ -45,6 +45,11 @@ const ReportsPage = lazy(() =>
     default: module.ReportsPage,
   })),
 );
+const ApiTokensPage = lazy(() =>
+  import("@/pages/api-tokens-page").then((module) => ({
+    default: module.ApiTokensPage,
+  })),
+);
 const NotFoundPage = lazy(() =>
   import("@/pages/not-found-page").then((module) => ({
     default: module.NotFoundPage,
@@ -69,6 +74,7 @@ export default function App() {
             />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/settings/api-tokens" element={<ApiTokensPage />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />

@@ -1259,3 +1259,12 @@ GET    /reports/monthly
 * Account key 格式與 Account type 必須一致。
 
 所有 migration 都位於 `backend/migrations/`，並具備對應的 up/down SQL。
+
+## 19.5 Personal API Tokens
+
+* 使用者可在已登入的 Web session 中建立、列出與撤銷 personal API token。
+* API token 使用 `baln_pat_` prefix 與 opaque random secret；資料庫只保存 SHA-256 hash。
+* API token 透過既有的 `Authorization: Bearer` header 存取相同的 `/api/v1` ledger API。
+* API token 擁有使用者的完整 ledger 權限，可設定到期時間或持續有效至撤銷。
+* API token 無法管理其他 API token。
+* 停用使用者會阻止其 API token；撤銷 browser sessions 不影響 API token。
