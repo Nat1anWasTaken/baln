@@ -6,7 +6,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -81,8 +81,11 @@ export function EntriesPage() {
 
   return (
     <div className="grid gap-5">
-      <Card className="p-4">
-        <div className="grid gap-3 md:grid-cols-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>篩選條件</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
           <Field className="md:col-span-2">
             <FieldLabel htmlFor="entry-search">搜尋交易</FieldLabel>
             <div className="relative">
@@ -150,7 +153,7 @@ export function EntriesPage() {
               </Link>
             </Button>
           </div>
-        </div>
+        </CardContent>
       </Card>
 
       {entries.isPending ? (
