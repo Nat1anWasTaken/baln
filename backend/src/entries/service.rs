@@ -84,6 +84,89 @@ pub async fn create(
     Ok((entry, false))
 }
 
+/// Creates or idempotently replays a complete batch in one database
+/// transaction. Any validation, account, conflict, or insertion failure rolls
+/// the entire batch back.
+pub async fn create_batch(
+    pool: &PgPool,
+    user_id: Uuid,
+    requests: Vec<CreateEntryRequest>,
+) -> ApiResult<Vec<(EntryResponse, bool)>> {
+    if requests.is_empty() {
+        return Err(ApiError::bad_request(
+            "empty_batch",
+            "the batch must contain at least one entry",
+        ));
+    }
+    for request in &requests {
+        validate_entry(
+            &request.description,
+            request.dedup_key.as_deref(),
+            &request.postings,
+        )?;
+    }
+    let dedup_keys: Vec<_> = requests
+        .iter()
+        .filter_map(|request| request.dedup_key.as_deref())
+        .collect();
+    let unique_keys: HashSet<_> = dedup_keys.iter().copied().collect();
+    if unique_keys.len() != dedup_keys.len() {
+        return Err(ApiError::bad_request(
+            "duplicate_batch_dedup_key",
+            "each entry in a batch must have a distinct idempotency key",
+        ));
+    }
+
+    let mut transaction = pool.begin().await?;
+    let mut results = Vec::with_capacity(requests.len());
+    for request in requests {
+        if let Some(key) = request.dedup_key.as_deref()
+            && let Some(existing) =
+                repository::get_by_dedup_in_transaction(&mut transaction, user_id, key).await?
+        {
+            results.push(compare_idempotent(existing, &request)?);
+            continue;
+        }
+        let accounts = resolve_and_validate_accounts(
+            &mut transaction,
+            user_id,
+            &request.postings,
+            &HashSet::new(),
+        )
+        .await?;
+        let entry_id = Uuid::now_v7();
+        sqlx::query(
+            r#"
+            INSERT INTO entries (id, user_id, date, description, note, dedup_key)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+        )
+        .bind(entry_id)
+        .bind(user_id)
+        .bind(request.date)
+        .bind(&request.description)
+        .bind(&request.note)
+        .bind(&request.dedup_key)
+        .execute(&mut *transaction)
+        .await?;
+        insert_postings(
+            &mut transaction,
+            user_id,
+            entry_id,
+            &request.postings,
+            &accounts,
+        )
+        .await?;
+        let row = repository::lock_entry(&mut transaction, user_id, entry_id)
+            .await?
+            .ok_or_else(|| ApiError::internal("created batch entry disappeared"))?;
+        let entry = repository::hydrate_in_transaction(&mut transaction, row).await?;
+        results.push((entry, false));
+    }
+    transaction.commit().await?;
+    Ok(results)
+}
+
 pub async fn update(
     pool: &PgPool,
     user_id: Uuid,
@@ -451,6 +534,55 @@ mod tests {
         let (second, replayed) = create(&pool, user_id, request()).await.unwrap();
         assert!(replayed);
         assert_eq!(first.id, second.id);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_creation_is_atomic_when_one_entry_is_invalid(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let valid = request();
+        let mut invalid = request();
+        invalid.description = "計程車".to_owned();
+        invalid.dedup_key = Some("manual-message:invalid".to_owned());
+        invalid.postings[0].account_key = "expense.transport".to_owned();
+
+        let error = create_batch(&pool, user_id, vec![valid, invalid])
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "unknown_account",
+                ..
+            }
+        ));
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM entries WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_exact_retry_replays_without_duplicates(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let mut second = request();
+        second.description = "晚餐".to_owned();
+        second.dedup_key = Some("manual-message:dinner".to_owned());
+        let requests = vec![request(), second];
+
+        let first = create_batch(&pool, user_id, requests.clone())
+            .await
+            .unwrap();
+        assert!(first.iter().all(|(_, replayed)| !replayed));
+        let replay = create_batch(&pool, user_id, requests).await.unwrap();
+        assert!(replay.iter().all(|(_, replayed)| *replayed));
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM entries WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
     }
 
     #[sqlx::test(migrations = "./migrations")]

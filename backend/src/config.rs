@@ -1,5 +1,7 @@
 use std::{env, net::SocketAddr, str::FromStr};
 
+use chrono_tz::Tz;
+
 use crate::error::{ApiError, ApiResult};
 
 #[derive(Clone)]
@@ -17,6 +19,10 @@ pub struct AppConfig {
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
     pub cookie_secure: bool,
+    pub public_base_url: String,
+    pub bookkeeping_timezone: Tz,
+    pub oauth_access_token_ttl_seconds: i64,
+    pub oauth_refresh_token_ttl_seconds: i64,
 }
 
 impl AppConfig {
@@ -37,6 +43,16 @@ impl AppConfig {
             access_token_ttl_seconds: parse_or("ACCESS_TOKEN_TTL_SECONDS", "900")?,
             refresh_token_ttl_seconds: parse_or("REFRESH_TOKEN_TTL_SECONDS", "2592000")?,
             cookie_secure: parse_or("COOKIE_SECURE", "true")?,
+            public_base_url: public_base_url(required("PUBLIC_BASE_URL")?)?,
+            bookkeeping_timezone: parse_or("BOOKKEEPING_TIMEZONE", "Asia/Taipei")?,
+            oauth_access_token_ttl_seconds: positive_seconds(
+                "OAUTH_ACCESS_TOKEN_TTL_SECONDS",
+                parse_or("OAUTH_ACCESS_TOKEN_TTL_SECONDS", "900")?,
+            )?,
+            oauth_refresh_token_ttl_seconds: positive_seconds(
+                "OAUTH_REFRESH_TOKEN_TTL_SECONDS",
+                parse_or("OAUTH_REFRESH_TOKEN_TTL_SECONDS", "2592000")?,
+            )?,
         })
     }
 }
@@ -66,4 +82,29 @@ fn validate_jwt_secret(secret: String) -> ApiResult<String> {
         ));
     }
     Ok(secret)
+}
+
+fn public_base_url(value: String) -> ApiResult<String> {
+    let normalized = value.trim_end_matches('/').to_owned();
+    let url = url::Url::parse(&normalized)
+        .map_err(|error| ApiError::configuration(format!("PUBLIC_BASE_URL: {error}")))?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.path(), "" | "/")
+    {
+        return Err(ApiError::configuration(
+            "PUBLIC_BASE_URL must be an HTTP(S) origin without a path, query, or fragment",
+        ));
+    }
+    Ok(normalized)
+}
+
+fn positive_seconds(name: &str, value: i64) -> ApiResult<i64> {
+    if value <= 0 {
+        return Err(ApiError::configuration(format!(
+            "{name} must be greater than zero"
+        )));
+    }
+    Ok(value)
 }

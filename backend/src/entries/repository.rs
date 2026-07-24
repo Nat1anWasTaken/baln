@@ -51,6 +51,29 @@ pub async fn get_by_dedup(
     }
 }
 
+pub(crate) async fn get_by_dedup_in_transaction(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    dedup_key: &str,
+) -> ApiResult<Option<EntryResponse>> {
+    let row = sqlx::query_as::<_, EntryRow>(
+        r#"
+        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+          FROM entries
+         WHERE user_id = $1 AND dedup_key = $2
+         FOR SHARE
+        "#,
+    )
+    .bind(user_id)
+    .bind(dedup_key)
+    .fetch_optional(&mut **transaction)
+    .await?;
+    match row {
+        Some(row) => Ok(Some(hydrate_in_transaction(transaction, row).await?)),
+        None => Ok(None),
+    }
+}
+
 pub async fn hydrate(pool: &PgPool, row: EntryRow) -> ApiResult<EntryResponse> {
     let postings = sqlx::query_as::<_, PostingRow>(
         r#"
@@ -65,6 +88,50 @@ pub async fn hydrate(pool: &PgPool, row: EntryRow) -> ApiResult<EntryResponse> {
     .bind(row.id)
     .bind(row.user_id)
     .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|posting| PostingResponse {
+        id: posting.id,
+        account: AccountSummary {
+            id: posting.account_id,
+            key: posting.account_key,
+            name: posting.account_name,
+            r#type: posting.account_type,
+        },
+        amount_minor: posting.amount_minor,
+        memo: posting.memo,
+        created_at: posting.created_at,
+    })
+    .collect();
+    Ok(EntryResponse {
+        id: row.id,
+        date: row.date,
+        description: row.description,
+        note: row.note,
+        dedup_key: row.dedup_key,
+        postings,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
+}
+
+pub(crate) async fn hydrate_in_transaction(
+    transaction: &mut Transaction<'_, Postgres>,
+    row: EntryRow,
+) -> ApiResult<EntryResponse> {
+    let postings = sqlx::query_as::<_, PostingRow>(
+        r#"
+        SELECT p.id, p.account_id, a.key AS account_key, a.name AS account_name,
+               a.type AS account_type, p.amount_minor, p.memo, p.created_at
+          FROM postings p
+          JOIN accounts a ON a.id = p.account_id
+         WHERE p.entry_id = $1 AND p.user_id = $2
+         ORDER BY p.created_at, p.id
+        "#,
+    )
+    .bind(row.id)
+    .bind(row.user_id)
+    .fetch_all(&mut **transaction)
     .await?
     .into_iter()
     .map(|posting| PostingResponse {

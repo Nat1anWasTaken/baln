@@ -5,6 +5,8 @@ pub mod config;
 pub mod db;
 pub mod entries;
 pub mod error;
+pub mod mcp;
+pub mod oauth;
 pub mod openapi;
 pub mod reports;
 

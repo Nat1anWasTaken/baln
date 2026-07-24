@@ -84,6 +84,10 @@ mod tests {
             access_token_ttl_seconds: 900,
             refresh_token_ttl_seconds: 2_592_000,
             cookie_secure: false,
+            public_base_url: "http://localhost:8080".to_owned(),
+            bookkeeping_timezone: chrono_tz::Asia::Taipei,
+            oauth_access_token_ttl_seconds: 900,
+            oauth_refresh_token_ttl_seconds: 2_592_000,
         }
     }
 

@@ -1,7 +1,7 @@
 mod model;
-mod repository;
+pub(crate) mod repository;
 pub(crate) mod routes;
-mod service;
+pub(crate) mod service;
 
 pub use model::{
     Account, AccountBalance, AccountType, BalanceQuery, CreateAccountRequest, ListAccountsQuery,
