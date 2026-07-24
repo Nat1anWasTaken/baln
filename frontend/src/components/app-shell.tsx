@@ -6,6 +6,7 @@ import {
   CircleUserRound,
   LayoutDashboard,
   KeyRound,
+  PlugZap,
   LogOut,
   Plus,
   WalletCards,
@@ -53,6 +54,7 @@ const pageNames: Record<string, string> = {
   "/accounts": "帳戶",
   "/reports": "報表",
   "/settings/api-tokens": "API 權杖",
+  "/settings/connected-apps": "已連接的應用程式",
 };
 
 function UserMenu() {
@@ -90,6 +92,10 @@ function UserMenu() {
         <DropdownMenuItem onSelect={() => navigate("/settings/api-tokens")}>
           <KeyRound aria-hidden="true" />
           API 權杖
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => navigate("/settings/connected-apps")}>
+          <PlugZap aria-hidden="true" />
+          已連接的應用程式
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

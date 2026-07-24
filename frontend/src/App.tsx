@@ -50,6 +50,16 @@ const ApiTokensPage = lazy(() =>
     default: module.ApiTokensPage,
   })),
 );
+const OAuthConsentPage = lazy(() =>
+  import("@/pages/oauth-consent-page").then((module) => ({
+    default: module.OAuthConsentPage,
+  })),
+);
+const ConnectedAppsPage = lazy(() =>
+  import("@/pages/connected-apps-page").then((module) => ({
+    default: module.ConnectedAppsPage,
+  })),
+);
 const NotFoundPage = lazy(() =>
   import("@/pages/not-found-page").then((module) => ({
     default: module.NotFoundPage,
@@ -63,6 +73,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route element={<ProtectedRoute />}>
+          <Route path="/oauth/consent" element={<OAuthConsentPage />} />
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="/entries" element={<EntriesPage />} />
@@ -75,6 +86,10 @@ export default function App() {
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings/api-tokens" element={<ApiTokensPage />} />
+            <Route
+              path="/settings/connected-apps"
+              element={<ConnectedAppsPage />}
+            />
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />

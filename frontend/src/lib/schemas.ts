@@ -54,6 +54,29 @@ export type CreateApiTokenRequest = {
   expires_at: string | null;
 };
 
+export const oauthConsentSchema = z.object({
+  request_id: z.string().uuid(),
+  client_name: z.string(),
+  scopes: z.array(z.string()),
+  expires_at: z.string(),
+});
+
+export type OAuthConsent = z.infer<typeof oauthConsentSchema>;
+
+export const oauthConsentDecisionSchema = z.object({
+  status: z.enum(["approved", "denied"]),
+  redirect_url: z.string().url(),
+});
+
+export const connectedAppSchema = z.object({
+  id: z.string().uuid(),
+  client_name: z.string(),
+  scopes: z.array(z.string()),
+  created_at: z.string(),
+});
+
+export type ConnectedApp = z.infer<typeof connectedAppSchema>;
+
 export const problemDetailsSchema = z.object({
   type: z.string(),
   title: z.string(),

@@ -5,9 +5,12 @@ import {
   accountSchema,
   apiTokenSchema,
   createdApiTokenSchema,
+  connectedAppSchema,
   entryPageSchema,
   entryResponseSchema,
   periodSummarySchema,
+  oauthConsentDecisionSchema,
+  oauthConsentSchema,
   problemDetailsSchema,
   tokenResponseSchema,
   userSchema,
@@ -192,6 +195,25 @@ export const apiTokensApi = {
     ),
   revoke: (id: string) =>
     request<void>(`/auth/api-tokens/${id}`, { method: "DELETE" }),
+};
+
+export const oauthApi = {
+  consentDetails: (requestId: string) =>
+    request(`/oauth/consent/${requestId}`, {}, { schema: oauthConsentSchema }),
+  decideConsent: (requestId: string, approve: boolean) =>
+    request(
+      `/oauth/consent/${requestId}`,
+      { method: "POST", body: JSON.stringify({ approve }) },
+      { schema: oauthConsentDecisionSchema },
+    ),
+  connectedApps: () =>
+    request(
+      "/oauth/connected-apps",
+      {},
+      { schema: z.array(connectedAppSchema) },
+    ),
+  revokeConnectedApp: (id: string) =>
+    request<void>(`/oauth/connected-apps/${id}`, { method: "POST" }),
 };
 
 export const accountsApi = {
