@@ -1,0 +1,89 @@
+name: baln
+
+services:
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-baln}
+      POSTGRES_USER: ${POSTGRES_USER:-baln}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    expose:
+      - "5432"
+    volumes:
+      - baln-postgres:/var/lib/postgresql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-baln} -d ${POSTGRES_DB:-baln}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-baln}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-baln}
+      BIND_ADDR: 0.0.0.0:8080
+      RUST_LOG: ${RUST_LOG:-baln_backend=info,tower_http=info}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-https://b.nath.tw/api/v1/auth/google/callback}
+      FRONTEND_AUTH_CALLBACK_URL: ${FRONTEND_AUTH_CALLBACK_URL:-https://b.nath.tw/auth/callback}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://b.nath.tw}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_ISSUER: ${JWT_ISSUER:-baln-backend}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-baln-api}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      COOKIE_SECURE: "true"
+      INITIAL_USER_EMAIL: ${INITIAL_USER_EMAIL:?INITIAL_USER_EMAIL is required}
+      INITIAL_USER_NAME: ${INITIAL_USER_NAME:?INITIAL_USER_NAME is required}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        baln-migrate up
+        baln-admin user ensure --email "$$INITIAL_USER_EMAIL" --name "$$INITIAL_USER_NAME"
+        exec baln-backend
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "--fail",
+          "--silent",
+          "--show-error",
+          "http://127.0.0.1:8080/health/ready",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+    expose:
+      - "80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  baln-postgres:
