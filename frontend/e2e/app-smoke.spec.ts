@@ -199,12 +199,18 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
 
   await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
   await expect(
-    page.getByText("$50,000", { exact: true }).first(),
+    page.getByText(/TWD\s+50,000/, { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByText("早餐", { exact: true }).first()).toBeVisible();
   await expect(
+    page.getByRole("button", { name: "開啟使用者選單" }),
+  ).toBeVisible();
+  await expect(
     page.getByRole("navigation", { name: "主要導覽" }),
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: "總覽" })).toHaveClass(
+    /ring-sidebar-border/,
+  );
 });
 
 test("opens the advanced balanced-postings editor", async ({ page }) => {

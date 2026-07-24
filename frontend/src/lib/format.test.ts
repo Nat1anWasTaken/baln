@@ -8,9 +8,11 @@ import {
 } from "@/lib/format";
 
 describe("ledger formatting", () => {
-  it("formats TWD without fractional digits", () => {
-    expect(formatMoney(123_456)).toContain("123,456");
-    expect(formatMoney(123_456)).not.toContain(".00");
+  it("formats TWD explicitly without fractional digits", () => {
+    const formatted = formatMoney(123_456);
+
+    expect(formatted).toMatch(/^TWD\s123,456$/);
+    expect(formatted).not.toContain(".00");
   });
 
   it("converts inclusive UI end dates to exclusive API dates", () => {
