@@ -3,15 +3,10 @@ import { Navigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context";
 import { AppLoading } from "@/components/app-loading";
+import { CenteredCardHeader } from "@/components/centered-card-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { API_BASE_URL } from "@/lib/api-client";
 
 export function LoginPage() {
@@ -40,15 +35,11 @@ export function LoginPage() {
         <ThemeToggle />
       </div>
       <Card className="w-full max-w-sm">
-        <CardHeader className="items-center justify-items-center text-center">
-          <div className="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Landmark className="size-6" aria-hidden="true" />
-          </div>
-          <CardTitle className="text-xl">登入 Baln</CardTitle>
-          <CardDescription>
-            使用已授權的 Google 帳號管理你的個人帳務。
-          </CardDescription>
-        </CardHeader>
+        <CenteredCardHeader
+          icon={<Landmark className="size-6" aria-hidden="true" />}
+          title="登入 Baln"
+          description="使用已授權的 Google 帳號管理你的個人帳務。"
+        />
         <CardContent>
           <Button
             type="button"

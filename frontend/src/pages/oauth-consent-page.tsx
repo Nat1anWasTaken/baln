@@ -3,15 +3,9 @@ import { Bot, CircleAlert, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { AppLoading } from "@/components/app-loading";
+import { CenteredCardHeader } from "@/components/centered-card-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { oauthApi } from "@/lib/api-client";
 
 const scopeLabels: Record<string, string> = {
@@ -51,15 +45,11 @@ export function OAuthConsentPage() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-lg">
-        <CardHeader className="items-center text-center">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Bot className="size-6" aria-hidden="true" />
-          </div>
-          <CardTitle>允許 {consent.data.client_name} 連接 Baln？</CardTitle>
-          <CardDescription>
-            核准後，這個應用程式能依照下列權限存取你的個人帳務。
-          </CardDescription>
-        </CardHeader>
+        <CenteredCardHeader
+          icon={<Bot className="size-6" aria-hidden="true" />}
+          title={`允許 ${consent.data.client_name} 連接 Baln？`}
+          description="核准後，這個應用程式能依照下列權限存取你的個人帳務。"
+        />
         <CardContent>
           <ul className="grid gap-3">
             {consent.data.scopes.map((scope) => (
@@ -110,11 +100,12 @@ function ConsentError({ message }: { message: string }) {
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <CircleAlert className="size-8 text-destructive" aria-hidden="true" />
-          <CardTitle>無法完成連線</CardTitle>
-          <CardDescription>{message}</CardDescription>
-        </CardHeader>
+        <CenteredCardHeader
+          icon={<CircleAlert className="size-6" aria-hidden="true" />}
+          iconTone="destructive"
+          title="無法完成連線"
+          description={message}
+        />
         <CardContent>
           <p className="text-center text-sm text-muted-foreground">
             請返回 ChatGPT，重新連接 Baln，並再次核准權限。

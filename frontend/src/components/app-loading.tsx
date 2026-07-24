@@ -1,14 +1,15 @@
 import { Landmark } from "lucide-react";
 
+import { IconBadge } from "@/components/icon-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function AppLoading({ label = "載入中" }: { label?: string }) {
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-6">
       <div className="flex w-full max-w-sm flex-col items-center gap-5 text-center">
-        <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <IconBadge>
           <Landmark className="size-6" aria-hidden="true" />
-        </div>
+        </IconBadge>
         <p className="text-sm text-muted-foreground">{label}</p>
         <div className="grid w-full gap-2">
           <Skeleton className="h-8 w-full" />

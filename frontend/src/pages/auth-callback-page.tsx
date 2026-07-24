@@ -3,14 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context";
+import { CenteredCardHeader } from "@/components/centered-card-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function AuthCallbackPage() {
   const auth = useAuth();
@@ -47,23 +42,21 @@ export function AuthCallbackPage() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
-          {error ? (
-            <CircleAlert
-              className="size-8 text-destructive"
-              aria-hidden="true"
-            />
-          ) : (
-            <LoaderCircle
-              className="size-8 animate-spin text-muted-foreground"
-              aria-hidden="true"
-            />
-          )}
-          <CardTitle>{error ? "登入失敗" : "正在完成登入"}</CardTitle>
-          <CardDescription>
-            {error ?? "正在安全地建立你的登入狀態，請稍候。"}
-          </CardDescription>
-        </CardHeader>
+        <CenteredCardHeader
+          icon={
+            error ? (
+              <CircleAlert className="size-6" aria-hidden="true" />
+            ) : (
+              <LoaderCircle
+                className="size-6 animate-spin"
+                aria-hidden="true"
+              />
+            )
+          }
+          iconTone={error ? "destructive" : "muted"}
+          title={error ? "登入失敗" : "正在完成登入"}
+          description={error ?? "正在安全地建立你的登入狀態，請稍候。"}
+        />
         {error ? (
           <CardContent>
             <Button
