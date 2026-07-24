@@ -40,7 +40,7 @@ export function LoginPage() {
         <ThemeToggle />
       </div>
       <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
+        <CardHeader className="items-center justify-items-center text-center">
           <div className="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Landmark className="size-6" aria-hidden="true" />
           </div>
