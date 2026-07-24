@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Field,
   FieldDescription,
@@ -20,15 +21,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
@@ -228,7 +220,7 @@ function entryDefaults(
   };
 }
 
-function AccountSelect({
+function AccountCombobox({
   value,
   onValueChange,
   accounts,
@@ -248,28 +240,24 @@ function AccountSelect({
     : accounts;
 
   return (
-    <Select value={value || undefined} onValueChange={onValueChange}>
-      <SelectTrigger id={id} className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {accountTypes.map((type) => {
-          const group = filtered.filter((account) => account.type === type);
-          if (group.length === 0) return null;
-          return (
-            <SelectGroup key={type}>
-              <SelectLabel>{accountTypeLabels[type]}</SelectLabel>
-              {group.map((account) => (
-                <SelectItem key={account.id} value={account.key}>
-                  {account.name}
-                  {account.archived ? "（已封存）" : ""}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          );
-        })}
-      </SelectContent>
-    </Select>
+    <Combobox
+      id={id}
+      value={value || undefined}
+      onValueChange={onValueChange}
+      placeholder={placeholder}
+      searchPlaceholder="搜尋帳戶…"
+      emptyText="找不到帳戶。"
+      groups={accountTypes.map((type) => ({
+        label: accountTypeLabels[type],
+        options: filtered
+          .filter((account) => account.type === type)
+          .map((account) => ({
+            value: account.key,
+            label: `${account.name}${account.archived ? "（已封存）" : ""}`,
+            keywords: [account.key, accountTypeLabels[type]],
+          })),
+      }))}
+    />
   );
 }
 
@@ -547,7 +535,7 @@ export function EntryEditor({
                   control={form.control}
                   name="primaryAccountKey"
                   render={({ field }) => (
-                    <AccountSelect
+                    <AccountCombobox
                       id="guided-primary"
                       value={field.value}
                       onValueChange={field.onChange}
@@ -565,7 +553,7 @@ export function EntryEditor({
                   control={form.control}
                   name="secondaryAccountKey"
                   render={({ field }) => (
-                    <AccountSelect
+                    <AccountCombobox
                       id="guided-secondary"
                       value={field.value}
                       onValueChange={field.onChange}
@@ -598,7 +586,7 @@ export function EntryEditor({
                       control={form.control}
                       name={`postings.${index}.accountKey`}
                       render={({ field: accountField }) => (
-                        <AccountSelect
+                        <AccountCombobox
                           id={`posting-account-${index}`}
                           value={accountField.value}
                           onValueChange={accountField.onChange}
@@ -615,21 +603,17 @@ export function EntryEditor({
                       control={form.control}
                       name={`postings.${index}.direction`}
                       render={({ field: directionField }) => (
-                        <Select
+                        <Combobox
+                          id={`posting-direction-${index}`}
                           value={directionField.value}
                           onValueChange={directionField.onChange}
-                        >
-                          <SelectTrigger
-                            id={`posting-direction-${index}`}
-                            className="w-full"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="debit">借方</SelectItem>
-                            <SelectItem value="credit">貸方</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          options={[
+                            { value: "debit", label: "借方" },
+                            { value: "credit", label: "貸方" },
+                          ]}
+                          searchPlaceholder="搜尋方向…"
+                          emptyText="找不到方向。"
+                        />
                       )}
                     />
                   </Field>

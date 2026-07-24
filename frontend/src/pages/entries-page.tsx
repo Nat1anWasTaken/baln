@@ -7,15 +7,9 @@ import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -126,23 +120,21 @@ export function EntriesPage() {
           </Field>
           <Field className="md:col-span-2">
             <FieldLabel htmlFor="entry-account">帳戶</FieldLabel>
-            <Select
+            <Combobox
+              id="entry-account"
               value={accountKey}
               onValueChange={(value) => setFilter("account", value)}
-            >
-              <SelectTrigger id="entry-account" className="w-full">
-                <SelectValue placeholder="所有帳戶" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">所有帳戶</SelectItem>
-                {accounts.data?.map((account) => (
-                  <SelectItem key={account.id} value={account.key}>
-                    {account.name}
-                    {account.archived ? "（已封存）" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                { value: "all", label: "所有帳戶" },
+                ...(accounts.data ?? []).map((account) => ({
+                  value: account.key,
+                  label: `${account.name}${account.archived ? "（已封存）" : ""}`,
+                  keywords: [account.key],
+                })),
+              ]}
+              searchPlaceholder="搜尋帳戶…"
+              emptyText="找不到帳戶。"
+            />
           </Field>
           <div className="flex items-end gap-2 md:col-span-2 md:justify-end">
             {hasFilters ? (

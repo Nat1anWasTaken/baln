@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -18,13 +19,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   accountKeyIsValid,
   accountTypeLabels,
@@ -101,21 +95,17 @@ export function CreateAccountDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="account-type">帳戶類型</FieldLabel>
-              <Select
+              <Combobox
+                id="account-type"
                 value={type}
                 onValueChange={(value) => setType(value as AccountType)}
-              >
-                <SelectTrigger id="account-type" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accountTypes.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {accountTypeLabels[value]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={accountTypes.map((value) => ({
+                  value,
+                  label: accountTypeLabels[value],
+                }))}
+                searchPlaceholder="搜尋帳戶類型…"
+                emptyText="找不到帳戶類型。"
+              />
             </Field>
             <Field data-invalid={submitted && !keyValid}>
               <FieldLabel htmlFor="account-key">帳戶代碼</FieldLabel>
