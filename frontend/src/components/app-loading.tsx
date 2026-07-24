@@ -1,11 +1,12 @@
 import { Landmark } from "lucide-react";
 
+import { CenteredPage } from "@/components/centered-page";
 import { IconBadge } from "@/components/icon-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function AppLoading({ label = "載入中" }: { label?: string }) {
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/30 p-6">
+    <CenteredPage>
       <div className="flex w-full max-w-sm flex-col items-center gap-5 text-center">
         <IconBadge>
           <Landmark className="size-6" aria-hidden="true" />
@@ -16,6 +17,6 @@ export function AppLoading({ label = "載入中" }: { label?: string }) {
           <Skeleton className="h-8 w-4/5 justify-self-center" />
         </div>
       </div>
-    </main>
+    </CenteredPage>
   );
 }

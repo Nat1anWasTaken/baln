@@ -4,6 +4,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/auth/auth-context";
 import { AppLoading } from "@/components/app-loading";
 import { CenteredCardHeader } from "@/components/centered-card-header";
+import { CenteredPage } from "@/components/centered-page";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,7 +31,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-svh items-center justify-center bg-muted/30 p-4">
+    <CenteredPage className="relative">
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
@@ -55,6 +56,6 @@ export function LoginPage() {
           </p>
         </CardContent>
       </Card>
-    </main>
+    </CenteredPage>
   );
 }

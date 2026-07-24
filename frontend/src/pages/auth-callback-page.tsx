@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context";
 import { CenteredCardHeader } from "@/components/centered-card-header";
+import { CenteredPage } from "@/components/centered-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -40,7 +41,7 @@ export function AuthCallbackPage() {
   }, [auth, code, navigate]);
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
+    <CenteredPage>
       <Card className="w-full max-w-sm">
         <CenteredCardHeader
           icon={
@@ -69,6 +70,6 @@ export function AuthCallbackPage() {
           </CardContent>
         ) : null}
       </Card>
-    </main>
+    </CenteredPage>
   );
 }

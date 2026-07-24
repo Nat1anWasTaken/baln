@@ -2,12 +2,13 @@ import { FileQuestion } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { CenteredCardHeader } from "@/components/centered-card-header";
+import { CenteredPage } from "@/components/centered-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function NotFoundPage() {
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
+    <CenteredPage>
       <Card className="w-full max-w-sm">
         <CenteredCardHeader
           icon={<FileQuestion className="size-6" aria-hidden="true" />}
@@ -21,6 +22,6 @@ export function NotFoundPage() {
           </Button>
         </CardContent>
       </Card>
-    </main>
+    </CenteredPage>
   );
 }
