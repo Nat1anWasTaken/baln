@@ -1,5 +1,4 @@
-import { Landmark } from "lucide-react";
-
+import { BrandIcon } from "@/components/brand-icon";
 import { CenteredPage } from "@/components/centered-page";
 import { IconBadge } from "@/components/icon-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,7 +8,7 @@ export function AppLoading({ label = "載入中" }: { label?: string }) {
     <CenteredPage>
       <div className="flex w-full max-w-sm flex-col items-center gap-5 text-center">
         <IconBadge>
-          <Landmark className="size-6" aria-hidden="true" />
+          <BrandIcon className="size-6" aria-hidden="true" />
         </IconBadge>
         <p className="text-sm text-muted-foreground">{label}</p>
         <div className="grid w-full gap-2">

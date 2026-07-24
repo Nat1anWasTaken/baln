@@ -1,8 +1,9 @@
-import { Landmark, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context";
 import { AppLoading } from "@/components/app-loading";
+import { BrandIcon } from "@/components/brand-icon";
 import { CenteredCardHeader } from "@/components/centered-card-header";
 import { CenteredPage } from "@/components/centered-page";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -37,7 +38,7 @@ export function LoginPage() {
       </div>
       <Card className="w-full max-w-sm">
         <CenteredCardHeader
-          icon={<Landmark className="size-6" aria-hidden="true" />}
+          icon={<BrandIcon className="size-6" aria-hidden="true" />}
           title="登入 Baln"
           description="使用已授權的 Google 帳號管理你的個人帳務。"
         />

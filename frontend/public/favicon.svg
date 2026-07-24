@@ -1,5 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
   <rect width="48" height="48" rx="12" fill="#171717"/>
-  <path d="M14 13h20v22H14z" fill="none" stroke="#fafafa" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M19 19h10M19 25h10M19 31h6" stroke="#fafafa" stroke-width="3" stroke-linecap="round"/>
+  <!-- Lucide BookOpenText, scaled from its 24 × 24 viewBox. -->
+  <g
+    fill="none"
+    stroke="#fafafa"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    transform="translate(4 4) scale(1.6667)"
+  >
+    <path d="M12 5v16"/>
+    <path d="M16 13h2"/>
+    <path d="M16 9h2"/>
+    <path d="M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/>
+    <path d="M6 13h2"/>
+    <path d="M6 9h2"/>
+  </g>
 </svg>

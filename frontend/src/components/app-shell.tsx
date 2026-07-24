@@ -1,7 +1,6 @@
 import {
   ArrowLeftRight,
   BarChart3,
-  BookOpenText,
   ChevronUp,
   CircleUserRound,
   LayoutDashboard,
@@ -15,6 +14,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/auth-context";
+import { BrandIcon } from "@/components/brand-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -122,7 +122,7 @@ export function AppShell() {
         <SidebarHeader>
           <div className="flex h-10 items-center gap-2 px-2">
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <BookOpenText className="size-4" aria-hidden="true" />
+              <BrandIcon className="size-4" aria-hidden="true" />
             </div>
             <span className="font-heading font-semibold group-data-[collapsible=icon]:hidden">
               Baln
