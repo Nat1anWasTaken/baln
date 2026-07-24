@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Unplug } from "lucide-react";
+import { Bot, Copy, Unplug } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -23,7 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { oauthApi } from "@/lib/api-client";
+import { API_BASE_URL, oauthApi } from "@/lib/api-client";
 import { formatTimestamp } from "@/lib/format";
 import type { ConnectedApp } from "@/lib/schemas";
 
@@ -34,9 +34,26 @@ const scopeLabels: Record<string, string> = {
   offline_access: "離線存取",
 };
 
+function getMcpUrl() {
+  return new URL(
+    "../../mcp",
+    new URL(`${API_BASE_URL}/`, window.location.origin),
+  ).toString();
+}
+
 export function ConnectedAppsPage() {
   const queryClient = useQueryClient();
   const [revoking, setRevoking] = useState<ConnectedApp | null>(null);
+
+  async function copyMcpUrl() {
+    try {
+      await navigator.clipboard.writeText(getMcpUrl());
+      toast.success("MCP URL 已複製");
+    } catch {
+      toast.error("無法複製，請手動取得 MCP URL。");
+    }
+  }
+
   const apps = useQuery({
     queryKey: ["connected-apps"],
     queryFn: oauthApi.connectedApps,
@@ -99,11 +116,23 @@ export function ConnectedAppsPage() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h2 className="font-heading text-xl font-semibold">已連接的應用程式</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          管理透過 OAuth 存取 Baln 的 ChatGPT 與 MCP 用戶端。
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-xl font-semibold">
+            已連接的應用程式
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            管理透過 OAuth 存取 Baln 的 ChatGPT 與 MCP 用戶端。
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void copyMcpUrl()}
+        >
+          <Copy aria-hidden="true" />
+          複製 MCP URL
+        </Button>
       </div>
       {content}
       <AlertDialog
