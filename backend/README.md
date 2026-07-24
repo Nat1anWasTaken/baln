@@ -145,6 +145,7 @@ the schema implicitly.
 
 ```bash
 cargo run --bin baln-admin -- user list
+cargo run --bin baln-admin -- user ensure --email person@example.com --name "Person"
 cargo run --bin baln-admin -- user enable --email person@example.com
 cargo run --bin baln-admin -- user disable --email person@example.com
 cargo run --bin baln-admin -- user unlink-google --email person@example.com

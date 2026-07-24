@@ -27,6 +27,12 @@ enum UserCommand {
         #[arg(long)]
         name: String,
     },
+    Ensure {
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        name: String,
+    },
     List,
     Enable {
         #[arg(long)]
@@ -78,6 +84,28 @@ async fn handle_user(pool: &PgPool, command: UserCommand) -> Result<(), sqlx::Er
             .execute(pool)
             .await?;
             println!("created user {email} ({id})");
+        }
+        UserCommand::Ensure { email, name } => {
+            let email = normalize_email(&email);
+            let name = name.trim();
+            let id = Uuid::now_v7();
+            let created_id: Option<Uuid> = sqlx::query_scalar(
+                r#"
+                INSERT INTO users (id, email, display_name)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (email) DO NOTHING
+                RETURNING id
+                "#,
+            )
+            .bind(id)
+            .bind(&email)
+            .bind(name)
+            .fetch_optional(pool)
+            .await?;
+            match created_id {
+                Some(id) => println!("created user {email} ({id})"),
+                None => println!("user already exists: {email}"),
+            }
         }
         UserCommand::List => {
             let users: Vec<(Uuid, String, String, bool, bool)> = sqlx::query_as(
