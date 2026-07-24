@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS postings;
+DROP TABLE IF EXISTS entries;
+DROP TABLE IF EXISTS accounts;
+DROP TYPE IF EXISTS account_type;

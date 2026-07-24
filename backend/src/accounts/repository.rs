@@ -1,0 +1,115 @@
+use chrono::NaiveDate;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::{
+    ApiResult,
+    accounts::{Account, AccountType},
+};
+
+pub async fn create(
+    pool: &PgPool,
+    user_id: Uuid,
+    key: &str,
+    name: &str,
+    account_type: AccountType,
+) -> ApiResult<Account> {
+    Ok(sqlx::query_as::<_, Account>(
+        r#"
+        INSERT INTO accounts (id, user_id, key, name, type)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, user_id, key, name, type, archived, created_at, updated_at
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(user_id)
+    .bind(key)
+    .bind(name)
+    .bind(account_type)
+    .fetch_one(pool)
+    .await?)
+}
+
+pub async fn list(
+    pool: &PgPool,
+    user_id: Uuid,
+    include_archived: bool,
+    query: Option<&str>,
+) -> ApiResult<Vec<Account>> {
+    Ok(sqlx::query_as::<_, Account>(
+        r#"
+        SELECT id, user_id, key, name, type, archived, created_at, updated_at
+          FROM accounts
+         WHERE user_id = $1
+           AND ($2 OR archived = FALSE)
+           AND ($3::text IS NULL OR key ILIKE '%' || $3 || '%' OR name ILIKE '%' || $3 || '%')
+         ORDER BY type, key
+        "#,
+    )
+    .bind(user_id)
+    .bind(include_archived)
+    .bind(query)
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn get(pool: &PgPool, user_id: Uuid, account_id: Uuid) -> ApiResult<Option<Account>> {
+    Ok(sqlx::query_as::<_, Account>(
+        r#"
+        SELECT id, user_id, key, name, type, archived, created_at, updated_at
+          FROM accounts
+         WHERE id = $1 AND user_id = $2
+        "#,
+    )
+    .bind(account_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?)
+}
+
+pub async fn update(
+    pool: &PgPool,
+    user_id: Uuid,
+    account_id: Uuid,
+    name: Option<&str>,
+    archived: Option<bool>,
+) -> ApiResult<Option<Account>> {
+    Ok(sqlx::query_as::<_, Account>(
+        r#"
+        UPDATE accounts
+           SET name = COALESCE($3, name),
+               archived = COALESCE($4, archived)
+         WHERE id = $1 AND user_id = $2
+        RETURNING id, user_id, key, name, type, archived, created_at, updated_at
+        "#,
+    )
+    .bind(account_id)
+    .bind(user_id)
+    .bind(name)
+    .bind(archived)
+    .fetch_optional(pool)
+    .await?)
+}
+
+pub async fn raw_balance(
+    pool: &PgPool,
+    user_id: Uuid,
+    account_id: Uuid,
+    as_of: Option<NaiveDate>,
+) -> ApiResult<i64> {
+    Ok(sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COALESCE(sum(p.amount_minor), 0)::bigint
+          FROM postings p
+          JOIN entries e ON e.id = p.entry_id
+         WHERE p.user_id = $1
+           AND p.account_id = $2
+           AND ($3::date IS NULL OR e.date <= $3)
+        "#,
+    )
+    .bind(user_id)
+    .bind(account_id)
+    .bind(as_of)
+    .fetch_one(pool)
+    .await?)
+}

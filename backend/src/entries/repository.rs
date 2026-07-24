@@ -1,0 +1,216 @@
+use chrono::NaiveDate;
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
+
+use crate::{
+    ApiResult,
+    accounts::Account,
+    entries::{
+        AccountSummary, EntryResponse, PostingResponse,
+        model::{EntryRow, PostingRow},
+    },
+};
+
+pub async fn get(pool: &PgPool, user_id: Uuid, entry_id: Uuid) -> ApiResult<Option<EntryResponse>> {
+    let row = sqlx::query_as::<_, EntryRow>(
+        r#"
+        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+          FROM entries
+         WHERE id = $1 AND user_id = $2
+        "#,
+    )
+    .bind(entry_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    match row {
+        Some(row) => Ok(Some(hydrate(pool, row).await?)),
+        None => Ok(None),
+    }
+}
+
+pub async fn get_by_dedup(
+    pool: &PgPool,
+    user_id: Uuid,
+    dedup_key: &str,
+) -> ApiResult<Option<EntryResponse>> {
+    let row = sqlx::query_as::<_, EntryRow>(
+        r#"
+        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+          FROM entries
+         WHERE user_id = $1 AND dedup_key = $2
+        "#,
+    )
+    .bind(user_id)
+    .bind(dedup_key)
+    .fetch_optional(pool)
+    .await?;
+    match row {
+        Some(row) => Ok(Some(hydrate(pool, row).await?)),
+        None => Ok(None),
+    }
+}
+
+pub async fn hydrate(pool: &PgPool, row: EntryRow) -> ApiResult<EntryResponse> {
+    let postings = sqlx::query_as::<_, PostingRow>(
+        r#"
+        SELECT p.id, p.account_id, a.key AS account_key, a.name AS account_name,
+               a.type AS account_type, p.amount_minor, p.memo, p.created_at
+          FROM postings p
+          JOIN accounts a ON a.id = p.account_id
+         WHERE p.entry_id = $1 AND p.user_id = $2
+         ORDER BY p.created_at, p.id
+        "#,
+    )
+    .bind(row.id)
+    .bind(row.user_id)
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|posting| PostingResponse {
+        id: posting.id,
+        account: AccountSummary {
+            id: posting.account_id,
+            key: posting.account_key,
+            name: posting.account_name,
+            r#type: posting.account_type,
+        },
+        amount_minor: posting.amount_minor,
+        memo: posting.memo,
+        created_at: posting.created_at,
+    })
+    .collect();
+    Ok(EntryResponse {
+        id: row.id,
+        date: row.date,
+        description: row.description,
+        note: row.note,
+        dedup_key: row.dedup_key,
+        postings,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
+}
+
+pub async fn resolve_accounts(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    keys: &[String],
+) -> ApiResult<Vec<Account>> {
+    Ok(sqlx::query_as::<_, Account>(
+        r#"
+        SELECT id, user_id, key, name, type, archived, created_at, updated_at
+          FROM accounts
+         WHERE user_id = $1 AND key = ANY($2)
+         FOR SHARE
+        "#,
+    )
+    .bind(user_id)
+    .bind(keys)
+    .fetch_all(&mut **transaction)
+    .await?)
+}
+
+pub async fn lock_entry(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    entry_id: Uuid,
+) -> ApiResult<Option<EntryRow>> {
+    Ok(sqlx::query_as::<_, EntryRow>(
+        r#"
+        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+          FROM entries
+         WHERE id = $1 AND user_id = $2
+         FOR UPDATE
+        "#,
+    )
+    .bind(entry_id)
+    .bind(user_id)
+    .fetch_optional(&mut **transaction)
+    .await?)
+}
+
+pub async fn existing_postings(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    entry_id: Uuid,
+) -> ApiResult<Vec<(Uuid, Uuid)>> {
+    Ok(sqlx::query_as::<_, (Uuid, Uuid)>(
+        r#"
+        SELECT id, account_id
+          FROM postings
+         WHERE entry_id = $1 AND user_id = $2
+         FOR UPDATE
+        "#,
+    )
+    .bind(entry_id)
+    .bind(user_id)
+    .fetch_all(&mut **transaction)
+    .await?)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn list_rows(
+    pool: &PgPool,
+    user_id: Uuid,
+    date_from: Option<NaiveDate>,
+    date_to: Option<NaiveDate>,
+    account_key: Option<&str>,
+    query: Option<&str>,
+    cursor_date: Option<NaiveDate>,
+    cursor_id: Option<Uuid>,
+    limit: i64,
+) -> ApiResult<Vec<EntryRow>> {
+    Ok(sqlx::query_as::<_, EntryRow>(
+        r#"
+        SELECT e.id, e.user_id, e.date, e.description, e.note, e.dedup_key,
+               e.created_at, e.updated_at
+          FROM entries e
+         WHERE e.user_id = $1
+           AND ($2::date IS NULL OR e.date >= $2)
+           AND ($3::date IS NULL OR e.date < $3)
+           AND (
+               $4::text IS NULL OR EXISTS (
+                   SELECT 1
+                     FROM postings p
+                     JOIN accounts a ON a.id = p.account_id
+                    WHERE p.entry_id = e.id
+                      AND p.user_id = e.user_id
+                      AND a.key = $4
+               )
+           )
+           AND (
+               $5::text IS NULL
+               OR e.description ILIKE '%' || $5 || '%'
+               OR COALESCE(e.note, '') ILIKE '%' || $5 || '%'
+               OR EXISTS (
+                   SELECT 1
+                     FROM postings p
+                     JOIN accounts a ON a.id = p.account_id
+                    WHERE p.entry_id = e.id
+                      AND p.user_id = e.user_id
+                      AND (
+                          COALESCE(p.memo, '') ILIKE '%' || $5 || '%'
+                          OR a.name ILIKE '%' || $5 || '%'
+                      )
+               )
+           )
+           AND (
+               $6::date IS NULL
+               OR (e.date, e.id) < ($6, $7)
+           )
+         ORDER BY e.date DESC, e.id DESC
+         LIMIT $8
+        "#,
+    )
+    .bind(user_id)
+    .bind(date_from)
+    .bind(date_to)
+    .bind(account_key)
+    .bind(query)
+    .bind(cursor_date)
+    .bind(cursor_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?)
+}

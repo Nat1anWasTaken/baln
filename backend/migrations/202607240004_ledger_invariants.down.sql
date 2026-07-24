@@ -1,0 +1,11 @@
+DROP TRIGGER IF EXISTS postings_keep_entries_balanced ON postings;
+DROP TRIGGER IF EXISTS entries_are_balanced ON entries;
+DROP TRIGGER IF EXISTS postings_active_account ON postings;
+DROP TRIGGER IF EXISTS entries_set_updated_at ON entries;
+DROP TRIGGER IF EXISTS accounts_set_updated_at ON accounts;
+DROP TRIGGER IF EXISTS users_set_updated_at ON users;
+DROP FUNCTION IF EXISTS check_entry_balance_from_posting();
+DROP FUNCTION IF EXISTS check_entry_balance_from_entry();
+DROP FUNCTION IF EXISTS assert_entry_balanced(UUID);
+DROP FUNCTION IF EXISTS enforce_posting_account_is_active();
+DROP FUNCTION IF EXISTS set_updated_at();
