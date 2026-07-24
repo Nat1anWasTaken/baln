@@ -7,6 +7,7 @@ export const APP_TIME_ZONE = "Asia/Taipei";
 const currencyFormatter = new Intl.NumberFormat("zh-TW", {
   style: "currency",
   currency: "TWD",
+  currencyDisplay: "code",
   maximumFractionDigits: 0,
 });
 

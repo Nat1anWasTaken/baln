@@ -101,11 +101,13 @@ export function ReportsPage() {
             <CategoryChart
               title="支出明細"
               description="依支出帳戶彙整"
+              tone="expense"
               accounts={report.data.expense_accounts}
             />
             <CategoryChart
               title="收入明細"
               description="依收入帳戶彙整"
+              tone="income"
               accounts={report.data.income_accounts}
             />
           </div>

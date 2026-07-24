@@ -1,19 +1,21 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Plus, WalletCards } from "lucide-react";
+import { WalletCards } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import { CategoryChart, SummaryCards } from "@/components/report-summary";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { MonthPicker } from "@/components/ui/month-picker";
 import {
   Table,
   TableBody,
@@ -21,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { accountTypeLabels } from "@/lib/account";
 import { accountsApi, entriesApi, reportsApi } from "@/lib/api-client";
 import {
   currentMonthTaipei,
@@ -54,23 +57,37 @@ function BalanceGrid({ accounts }: { accounts: Account[] }) {
     <div className="grid gap-2 sm:grid-cols-2">
       {relevant.map((account, index) => {
         const balance = balances[index];
+        const typeLabel = accountTypeLabels[account.type];
+        const formattedBalance = balance.isPending
+          ? "載入中"
+          : balance.isError
+            ? "—"
+            : formatMoney(balance.data.display_balance_minor);
         return (
           <div
             key={account.id}
             className="flex items-center justify-between gap-3 rounded-lg border p-3"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{account.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium">{account.name}</p>
+                <Badge
+                  variant={
+                    account.type === "liability" ? "outline" : "secondary"
+                  }
+                >
+                  {typeLabel}
+                </Badge>
+              </div>
               <p className="truncate text-xs text-muted-foreground">
                 {account.key}
               </p>
             </div>
-            <p className="shrink-0 text-sm font-medium tabular-nums">
-              {balance.isPending
-                ? "載入中"
-                : balance.isError
-                  ? "—"
-                  : formatMoney(balance.data.display_balance_minor)}
+            <p
+              className="shrink-0 text-sm font-medium tabular-nums"
+              aria-label={`${typeLabel}餘額 ${formattedBalance}`}
+            >
+              {formattedBalance}
             </p>
           </div>
         );
@@ -102,24 +119,16 @@ export function DashboardPage() {
           <h2 className="text-2xl font-semibold">{monthLabel(month)}</h2>
         </div>
         <div className="flex gap-2">
-          <Input
-            type="month"
+          <MonthPicker
             aria-label="總覽月份"
             value={month}
-            onChange={(event) => setMonth(event.target.value)}
-            className="w-40"
+            onValueChange={setMonth}
           />
-          <Button asChild className="sm:hidden">
-            <Link to="/entries/new">
-              <Plus aria-hidden="true" />
-              新增
-            </Link>
-          </Button>
         </div>
       </div>
 
       {report.isPending ? (
-        <PageLoading rows={3} />
+        <PageLoading variant="dashboard" />
       ) : report.isError ? (
         <ErrorState
           message={report.error.message}
@@ -132,18 +141,20 @@ export function DashboardPage() {
             <CategoryChart
               title="支出分類"
               description="依支出帳戶彙整本月金額"
+              tone="expense"
               accounts={report.data.expense_accounts}
             />
             <CategoryChart
               title="收入分類"
               description="依收入帳戶彙整本月金額"
+              tone="income"
               accounts={report.data.income_accounts}
             />
           </div>
         </>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <Card>
           <CardHeader>
             <CardTitle>帳戶餘額</CardTitle>
@@ -161,14 +172,14 @@ export function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle>最近交易</CardTitle>
-              <CardDescription>依交易日期由新到舊排列</CardDescription>
-            </div>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/entries">查看全部</Link>
-            </Button>
+          <CardHeader>
+            <CardTitle>最近交易</CardTitle>
+            <CardDescription>依交易日期由新到舊排列</CardDescription>
+            <CardAction>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/entries">查看全部</Link>
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent>
             {entries.isPending ? (

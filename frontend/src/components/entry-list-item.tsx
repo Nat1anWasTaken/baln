@@ -49,7 +49,7 @@ export function EntryCard({ entry }: { entry: EntryResponse }) {
         <div className="flex min-w-0 flex-1 flex-wrap gap-1">
           {entry.postings.slice(0, 3).map((posting) => (
             <Badge key={posting.id} variant="secondary">
-              {posting.account.name}
+              {accountTypeLabels[posting.account.type]} · {posting.account.name}
             </Badge>
           ))}
         </div>
