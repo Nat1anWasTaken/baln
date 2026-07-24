@@ -1,0 +1,1 @@
+import type { SelectHTMLAttributes } from 'react'; import { cn } from '@/lib/cn'; export function Select({className,...p}:SelectHTMLAttributes<HTMLSelectElement>){return <select className={cn('h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring',className)} {...p}/>}

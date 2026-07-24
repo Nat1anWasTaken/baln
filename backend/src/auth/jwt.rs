@@ -84,6 +84,7 @@ mod tests {
             access_token_ttl_seconds: 900,
             refresh_token_ttl_seconds: 2_592_000,
             cookie_secure: false,
+            frontend_dist_dir: std::path::PathBuf::from("../frontend/dist"),
         }
     }
 

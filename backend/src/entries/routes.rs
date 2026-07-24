@@ -24,6 +24,7 @@ pub fn router() -> Router<AppState> {
 }
 
 #[utoipa::path(
+    operation_id = "entries_create",
     post,
     path = "/api/v1/entries",
     tag = "entries",
@@ -53,6 +54,7 @@ pub(crate) async fn create(
 }
 
 #[utoipa::path(
+    operation_id = "entries_list",
     get,
     path = "/api/v1/entries",
     tag = "entries",
@@ -69,6 +71,7 @@ pub(crate) async fn list(
 }
 
 #[utoipa::path(
+    operation_id = "entries_get_one",
     get,
     path = "/api/v1/entries/{id}",
     tag = "entries",
@@ -88,6 +91,7 @@ pub(crate) async fn get_one(
 }
 
 #[utoipa::path(
+    operation_id = "entries_update",
     put,
     path = "/api/v1/entries/{id}",
     tag = "entries",
@@ -108,6 +112,7 @@ pub(crate) async fn update(
 }
 
 #[utoipa::path(
+    operation_id = "entries_delete",
     delete,
     path = "/api/v1/entries/{id}",
     tag = "entries",

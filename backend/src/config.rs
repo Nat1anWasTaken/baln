@@ -1,4 +1,4 @@
-use std::{env, net::SocketAddr, str::FromStr};
+use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 
 use crate::error::{ApiError, ApiResult};
 
@@ -17,6 +17,7 @@ pub struct AppConfig {
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
     pub cookie_secure: bool,
+    pub frontend_dist_dir: PathBuf,
 }
 
 impl AppConfig {
@@ -37,6 +38,7 @@ impl AppConfig {
             access_token_ttl_seconds: parse_or("ACCESS_TOKEN_TTL_SECONDS", "900")?,
             refresh_token_ttl_seconds: parse_or("REFRESH_TOKEN_TTL_SECONDS", "2592000")?,
             cookie_secure: parse_or("COOKIE_SECURE", "true")?,
+            frontend_dist_dir: PathBuf::from(value_or("FRONTEND_DIST_DIR", "../frontend/dist")),
         })
     }
 }

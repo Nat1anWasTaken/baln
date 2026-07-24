@@ -1,0 +1,1 @@
+import {describe,expect,it} from 'vitest';import {formatTwd,monthRange} from './format';describe('format helpers',()=>{it('formats integer TWD',()=>expect(formatTwd(1234)).toContain('1,234'));it('uses an exclusive end for leap-month reports',()=>expect(monthRange('2024-02')).toEqual({start:'2024-02-01',end:'2024-03-01'}))})

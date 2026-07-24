@@ -1,0 +1,2 @@
+import * as Primitive from '@radix-ui/react-progress'; import { cn } from '@/lib/cn'
+export function Progress({value=0,className,...p}:React.ComponentProps<typeof Primitive.Root>){return <Primitive.Root className={cn('relative h-2 w-full overflow-hidden rounded-full bg-secondary',className)} {...p}><Primitive.Indicator className='h-full bg-primary transition-transform' style={{transform:`translateX(-${100-Math.min(100,Math.max(0,value ?? 0))}%)`}}/></Primitive.Root>}
