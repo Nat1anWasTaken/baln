@@ -57,7 +57,7 @@ const pageNames: Record<string, string> = {
   "/settings/connected-apps": "已連接的應用程式",
 };
 
-function UserMenu() {
+function UserMenu({ compact = false }: { compact?: boolean }) {
   const auth = useAuth();
   const navigate = useNavigate();
 
@@ -73,15 +73,25 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" className="w-full justify-start">
+        <Button
+          type="button"
+          variant="ghost"
+          size={compact ? "icon" : "default"}
+          className={compact ? undefined : "w-full justify-start"}
+          aria-label={compact ? "開啟使用者選單" : undefined}
+        >
           <CircleUserRound aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-left">
-            {auth.user?.display_name}
-          </span>
-          <ChevronUp className="size-3.5" aria-hidden="true" />
+          {!compact && (
+            <>
+              <span className="min-w-0 flex-1 truncate text-left">
+                {auth.user?.display_name}
+              </span>
+              <ChevronUp className="size-3.5" aria-hidden="true" />
+            </>
+          )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-64" align="end">
+      <DropdownMenuContent className="w-60" align="end">
         <DropdownMenuLabel className="grid gap-0.5">
           <span>{auth.user?.display_name}</span>
           <span className="truncate text-xs font-normal text-muted-foreground">
@@ -163,6 +173,9 @@ export function AppShell() {
           <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-semibold">
             {pageName}
           </h1>
+          <div className="md:hidden">
+            <UserMenu compact />
+          </div>
           <ThemeToggle />
           <Button asChild size="sm" className="hidden sm:inline-flex">
             <NavLink to="/entries/new">
@@ -187,7 +200,15 @@ export function AppShell() {
             variant="ghost"
             className="h-12 flex-col gap-0.5 rounded-md px-1 text-xs"
           >
-            <NavLink to={item.to} end={item.end}>
+            <NavLink
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                isActive
+                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground ring-1 ring-inset ring-sidebar-border"
+                  : ""
+              }
+            >
               <item.icon aria-hidden="true" />
               {item.label}
             </NavLink>
@@ -210,7 +231,15 @@ export function AppShell() {
             variant="ghost"
             className="h-12 flex-col gap-0.5 rounded-md px-1 text-xs"
           >
-            <NavLink to={item.to}>
+            <NavLink
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                isActive
+                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground ring-1 ring-inset ring-sidebar-border"
+                  : ""
+              }
+            >
               <item.icon aria-hidden="true" />
               {item.label}
             </NavLink>
