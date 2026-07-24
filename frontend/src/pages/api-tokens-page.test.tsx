@@ -35,6 +35,22 @@ function renderPage() {
 }
 
 describe("API tokens page", () => {
+  it("copies the OpenAPI JSON URL", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get(`${API_BASE_URL}/auth/api-tokens`, () => HttpResponse.json([])),
+    );
+
+    renderPage();
+    await user.click(
+      await screen.findByRole("button", { name: "複製 OpenAPI JSON URL" }),
+    );
+
+    expect(await navigator.clipboard.readText()).toBe(
+      "http://localhost:8080/api/openapi.json",
+    );
+  });
+
   it("creates a token and displays its secret only in the result dialog", async () => {
     const user = userEvent.setup();
     server.use(

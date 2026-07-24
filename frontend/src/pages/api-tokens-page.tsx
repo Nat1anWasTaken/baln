@@ -39,7 +39,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { apiTokensApi } from "@/lib/api-client";
+import { API_BASE_URL, apiTokensApi } from "@/lib/api-client";
 import { formatTimestamp } from "@/lib/format";
 import type { ApiToken, CreatedApiToken } from "@/lib/schemas";
 
@@ -50,6 +50,13 @@ function expirationTimestamp(choice: ExpirationChoice) {
   const expiresAt = new Date();
   expiresAt.setUTCDate(expiresAt.getUTCDate() + Number(choice));
   return expiresAt.toISOString();
+}
+
+function getOpenApiJsonUrl() {
+  return new URL(
+    "../openapi.json",
+    new URL(`${API_BASE_URL}/`, window.location.origin),
+  ).toString();
 }
 
 function TokenDates({ token }: { token: ApiToken }) {
@@ -247,6 +254,15 @@ export function ApiTokensPage() {
   );
   const [revoking, setRevoking] = useState<ApiToken | null>(null);
 
+  async function copyOpenApiJsonUrl() {
+    try {
+      await navigator.clipboard.writeText(getOpenApiJsonUrl());
+      toast.success("OpenAPI JSON URL 已複製");
+    } catch {
+      toast.error("無法複製，請手動取得 OpenAPI JSON URL。");
+    }
+  }
+
   const tokens = useQuery({
     queryKey: ["api-tokens"],
     queryFn: apiTokensApi.list,
@@ -328,10 +344,20 @@ export function ApiTokensPage() {
             使用 Bearer 權杖從外部工具存取現有的 API。
           </p>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
-          <Plus aria-hidden="true" />
-          建立權杖
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void copyOpenApiJsonUrl()}
+          >
+            <Copy aria-hidden="true" />
+            複製 OpenAPI JSON URL
+          </Button>
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            <Plus aria-hidden="true" />
+            建立權杖
+          </Button>
+        </div>
       </div>
 
       {content}
