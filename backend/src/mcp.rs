@@ -38,6 +38,38 @@ use crate::{
 
 const MAX_BATCH_ENTRIES: usize = 100;
 const MAX_MOVEMENTS_PER_ENTRY: usize = 50;
+const FOREIGN_CURRENCY_POLICY: &str = "When the user gives a non-TWD amount, automatically \
+convert it to whole TWD before calling an entry creation or update tool. Prefer the actual \
+settled TWD amount from a receipt, card, or bank statement. Otherwise use a reliable exchange \
+rate for the transaction date, round to the nearest whole TWD, and disclose the original amount \
+and currency, rate, rate date, source, and rounding. Preserve those conversion details in the \
+entry note or movement memo. Ask the user only when no reliable rate is available or the intended \
+rate is materially ambiguous; never guess or silently convert.";
+const SERVER_INSTRUCTIONS: &str = "Baln is a private TWD double-entry ledger. Before creating an \
+entry, call get_entry_creation_context unless exact active account keys are already known. Never \
+invent an account key. Creation tools accept positive semantic movements from a source account to \
+a destination account and return natural-language next actions whenever more information is \
+required. When a user supplies a non-TWD amount, automatically convert it under the foreign-currency \
+policy returned by get_entry_creation_context before writing the entry.";
+
+fn foreign_currency_policy() -> Value {
+    json!({
+        "behavior": "convert_automatically_when_reliable",
+        "preferred_twd_source": "actual settled TWD amount from a receipt, card, or bank statement",
+        "fallback_rate": "reliable exchange rate for the transaction date",
+        "rounding": "nearest whole TWD",
+        "disclose": [
+            "original amount and currency",
+            "exchange rate",
+            "rate date",
+            "rate source",
+            "rounding"
+        ],
+        "preserve_in": "entry note or movement memo",
+        "ask_user_when": "no reliable rate is available or the intended rate is materially ambiguous",
+        "prohibited": "guessing or silently converting"
+    })
+}
 
 pub type McpHttpService = StreamableHttpService<BalnMcp, LocalSessionManager>;
 
@@ -519,8 +551,10 @@ impl BalnMcp {
             return action_error(
                 "needs_user_input",
                 format!(
-                    "Baln records whole TWD amounts, and today’s bookkeeping date is {today} in {}. There are no active accounts, so an entry cannot be created yet.",
-                    self.state.config.bookkeeping_timezone
+                    "Baln records whole TWD amounts, and today’s bookkeeping date is {today} in {}. \
+                     There are no active accounts, so an entry cannot be created yet. \
+                     {FOREIGN_CURRENCY_POLICY}",
+                    self.state.config.bookkeeping_timezone,
                 ),
                 "Ask the user which source, destination, income, or expense accounts they want. Create only the accounts they approve, then call get_entry_creation_context again.",
                 vec![
@@ -531,12 +565,19 @@ impl BalnMcp {
                     "bookkeeping_date": today,
                     "timezone": self.state.config.bookkeeping_timezone.to_string(),
                     "currency": "TWD",
+                    "foreign_currency_policy": foreign_currency_policy(),
                     "accounts_by_type": grouped
                 }),
             );
         }
         let summary = format!(
-            "Baln records whole TWD amounts. Today’s bookkeeping date is {today} in {}. Move money from the payment or source account to the destination account. For an expense, move from an asset or liability account to an expense account; for income, move from an income account to an asset account; for a transfer, move from the source asset to the destination asset; for a refund, move from the expense account back to the asset or liability account. Use these exact active account keys:\n{account_lines}",
+            "Baln records whole TWD amounts. Today’s bookkeeping date is {today} in {}. \
+             {FOREIGN_CURRENCY_POLICY} Move money from the payment or source account to the \
+             destination account. For an expense, move from an asset or liability account to an \
+             expense account; for income, move from an income account to an asset account; for a \
+             transfer, move from the source asset to the destination asset; for a refund, move from \
+             the expense account back to the asset or liability account. Use these exact active \
+             account keys:\n{account_lines}",
             self.state.config.bookkeeping_timezone
         );
         success(
@@ -546,6 +587,7 @@ impl BalnMcp {
                 "timezone": self.state.config.bookkeeping_timezone.to_string(),
                 "currency": "TWD",
                 "amount_rule": "positive whole TWD",
+                "foreign_currency_policy": foreign_currency_policy(),
                 "accounts_by_type": grouped,
                 "examples": [
                     {"kind": "expense", "direction": "payment account → expense account"},
@@ -776,13 +818,8 @@ impl BalnMcp {
 
 impl ServerHandler for BalnMcp {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
-            "Baln is a private TWD double-entry ledger. Before creating an entry, call \
-             get_entry_creation_context unless exact active account keys are already known. \
-             Never invent an account key. Creation tools accept positive semantic movements \
-             from a source account to a destination account and return natural-language next \
-             actions whenever more information is required.",
-        )
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_instructions(SERVER_INSTRUCTIONS)
     }
 
     async fn list_tools(
@@ -883,7 +920,10 @@ struct MovementInput {
     from_account_key: String,
     /// Exact active account key where the money goes.
     to_account_key: String,
-    /// Positive whole-TWD amount. Do not use a negative or signed debit/credit amount.
+    /// Positive whole-TWD amount. For a non-TWD source amount, automatically convert it under the
+    /// foreign-currency policy from get_entry_creation_context, round to whole TWD, and preserve
+    /// the disclosed conversion details in the entry note or movement memo. Do not use a negative
+    /// or signed debit/credit amount.
     amount_minor: i64,
     /// Optional explanation for this movement.
     memo: Option<String>,
@@ -896,7 +936,9 @@ struct EntryDraft {
     date: Option<NaiveDate>,
     /// Short user-facing description, such as “Lunch” or “July salary”.
     description: String,
-    /// Optional note applying to the whole entry.
+    /// Optional note applying to the whole entry. For a foreign-currency transaction, preserve the
+    /// original amount and currency, exchange rate, rate date, source, and rounding here or in the
+    /// movement memo.
     note: Option<String>,
     /// One or more positive money movements. Use multiple movements for splits.
     movements: Vec<MovementInput>,
@@ -965,7 +1007,7 @@ fn build_tools() -> Vec<Tool> {
         read_tool::<EmptyInput>(
             "get_entry_creation_context",
             "Get Entry Creation Context",
-            "Call this before creating entries unless you already know every exact active account key. It explains Baln’s whole-TWD movement model, today’s bookkeeping date, active accounts, and common transaction directions. If an intended account is still unclear after this call, ask the user which listed account they mean.",
+            "Call this before creating entries unless you already know every exact active account key. It explains Baln’s whole-TWD movement model, foreign-currency automatic-conversion policy, today’s bookkeeping date, active accounts, and common transaction directions. If an intended account is still unclear after this call, ask the user which listed account they mean.",
         ),
         read_tool::<ListAccountsInput>(
             "list_accounts",
@@ -1005,19 +1047,19 @@ fn build_tools() -> Vec<Tool> {
         write_tool::<EntryDraft>(
             "create_entry",
             "Create Ledger Entry",
-            "Create one balanced entry using only a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Do not send signed postings, totals, IDs, or deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
+            "Create one balanced entry using only a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
             false,
         ),
         write_tool::<CreateEntriesInput>(
             "create_entries",
             "Create Ledger Entries",
-            "Create 1–100 entries atomically using the same semantic movement shape as create_entry. Every item is validated before insertion; if any item is invalid, none are created and the response explains how to repair the complete batch.",
+            "Create 1–100 entries atomically using the same semantic movement shape and foreign-currency automatic-conversion policy as create_entry. Every item is validated before insertion; if any item is invalid, none are created and the response explains how to repair the complete batch.",
             false,
         ),
         write_tool::<UpdateEntryInput>(
             "update_entry",
             "Update Ledger Entry",
-            "Replace an existing entry’s description, date, note, and complete semantic movement list. Retrieve the entry first when the user has not supplied its exact ID or current meaning.",
+            "Replace an existing entry’s description, date, note, and complete semantic movement list, applying the same foreign-currency automatic-conversion and disclosure policy as create_entry. Retrieve the entry first when the user has not supplied its exact ID or current meaning.",
             false,
         ),
         write_tool::<CreateAccountInput>(
@@ -1554,6 +1596,49 @@ mod tests {
             create.meta.as_ref().unwrap().0["securitySchemes"][0]["scopes"][0],
             "ledger:write"
         );
+    }
+
+    #[test]
+    fn foreign_currency_policy_is_exposed_to_agents() {
+        assert!(SERVER_INSTRUCTIONS.contains("automatically convert"));
+        assert!(SERVER_INSTRUCTIONS.contains("get_entry_creation_context"));
+
+        let policy = foreign_currency_policy();
+        assert_eq!(policy["behavior"], "convert_automatically_when_reliable");
+        assert_eq!(policy["rounding"], "nearest whole TWD");
+        assert_eq!(policy["prohibited"], "guessing or silently converting");
+
+        let tools = build_tools();
+        let context = tools
+            .iter()
+            .find(|tool| tool.name == "get_entry_creation_context")
+            .unwrap();
+        assert!(
+            context
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("foreign-currency automatic-conversion policy")
+        );
+
+        for name in ["create_entry", "create_entries", "update_entry"] {
+            let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+            assert!(
+                tool.description
+                    .as_deref()
+                    .unwrap()
+                    .contains("foreign-currency"),
+                "{name} must expose the foreign-currency policy"
+            );
+        }
+
+        let create = tools
+            .iter()
+            .find(|tool| tool.name == "create_entry")
+            .unwrap();
+        let input_schema = serde_json::to_string(&create.input_schema).unwrap();
+        assert!(input_schema.contains("automatically convert"));
+        assert!(input_schema.contains("exchange rate"));
     }
 
     #[test]
