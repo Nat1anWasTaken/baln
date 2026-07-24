@@ -5,6 +5,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
   WalletCards,
 } from "lucide-react";
 import { useState } from "react";
@@ -71,6 +72,7 @@ export function AccountsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [changingArchive, setChangingArchive] = useState<Account | null>(null);
+  const [deleting, setDeleting] = useState<Account | null>(null);
 
   const accounts = useQuery({
     queryKey: ["accounts", includeArchived, debouncedSearch],
@@ -84,6 +86,17 @@ export function AccountsPage() {
       await queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success(updated.archived ? "帳戶已封存" : "帳戶已恢復");
       setChangingArchive(null);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: (account: Account) => accountsApi.delete(account.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      toast.success("帳戶已刪除");
+      setDeleting(null);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -164,6 +177,15 @@ export function AccountsPage() {
                     <Archive aria-hidden="true" />
                   )}
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`刪除 ${account.name}`}
+                  onClick={() => setDeleting(account)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -177,7 +199,7 @@ export function AccountsPage() {
               <TableHead>類型</TableHead>
               <TableHead>狀態</TableHead>
               <TableHead className="text-right">截至今日餘額</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-28" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -223,6 +245,15 @@ export function AccountsPage() {
                       ) : (
                         <Archive aria-hidden="true" />
                       )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`刪除 ${account.name}`}
+                      onClick={() => setDeleting(account)}
+                    >
+                      <Trash2 aria-hidden="true" />
                     </Button>
                   </div>
                 </TableCell>
@@ -309,6 +340,34 @@ export function AccountsPage() {
                 : changingArchive?.archived
                   ? "恢復"
                   : "封存"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除「{deleting?.name}」？</AlertDialogTitle>
+            <AlertDialogDescription>
+              只有沒有交易紀錄的帳戶可以刪除。刪除後無法復原；若要保留既有交易，請改為封存。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={!deleting || remove.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (deleting) remove.mutate(deleting);
+              }}
+            >
+              {remove.isPending ? "刪除中" : "確認刪除"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

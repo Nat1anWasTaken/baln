@@ -67,6 +67,7 @@ const entry = {
 };
 
 async function mockApi(page: Page) {
+  let visibleAccounts = [...accounts];
   let apiTokens: Array<{
     id: string;
     name: string;
@@ -177,8 +178,15 @@ async function mockApi(page: Page) {
         },
       });
     }
+    if (path.startsWith("/api/v1/accounts/") && method === "DELETE") {
+      const accountId = path.split("/").at(-1);
+      visibleAccounts = visibleAccounts.filter(
+        (account) => account.id !== accountId,
+      );
+      return route.fulfill({ status: 204 });
+    }
     if (path === "/api/v1/accounts") {
-      return route.fulfill({ json: accounts });
+      return route.fulfill({ json: visibleAccounts });
     }
     if (path === "/api/v1/entries") {
       return route.fulfill({ json: { items: [entry], next_cursor: null } });
@@ -220,6 +228,30 @@ test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.getByRole("tab", { name: "進階分錄" }).click();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
+});
+
+test("deletes an account after responsive destructive confirmation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/accounts");
+
+  await expect(page.getByRole("heading", { name: "帳戶" })).toBeVisible();
+  await page.getByRole("button", { name: "刪除 現金" }).click();
+  await expect(page.getByText("刪除「現金」？")).toBeVisible();
+  await page.getByRole("button", { name: "取消" }).click();
+  await page.getByRole("button", { name: "切換顯示模式" }).click();
+  await page.getByRole("menuitem", { name: "深色" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
+  await page.getByRole("button", { name: "刪除 現金" }).click();
+  await expect(page.getByText("刪除「現金」？")).toBeVisible();
+  await page.getByRole("button", { name: "確認刪除" }).click();
+  await expect(
+    page.getByRole("button", { name: "刪除 現金" }),
+  ).not.toBeVisible();
 });
 
 test("creates, reveals, and revokes a personal API token", async ({ page }) => {

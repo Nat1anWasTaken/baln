@@ -36,6 +36,7 @@ const localizedProblems: Record<string, string> = {
   not_found: "找不到指定的資料。",
   invalid_account_name: "帳戶名稱不可為空白。",
   invalid_account_key: "帳戶代碼格式不正確。",
+  account_in_use: "這個帳戶已有交易紀錄，請改為封存。",
   empty_update: "請至少修改一個欄位。",
   invalid_description: "交易說明不可為空白。",
   insufficient_postings: "一筆交易至少需要兩個分錄。",
@@ -237,6 +238,8 @@ export const accountsApi = {
       { method: "PATCH", body: JSON.stringify(body) },
       { schema: accountSchema },
     ),
+  delete: (id: string) =>
+    request<void>(`/accounts/${id}`, { method: "DELETE" }),
   balance: (id: string, asOf?: string) =>
     request(
       `/accounts/${id}/balance${queryString({ as_of: asOf })}`,

@@ -87,6 +87,35 @@ describe("API client", () => {
     await expect(reportsApi.monthly("bad")).rejects.toBeInstanceOf(ApiError);
   });
 
+  it("deletes accounts and localizes referenced-account failures", async () => {
+    const accountId = "01984dc2-132d-7ed2-b9d7-62e563f1ad89";
+    let attempts = 0;
+    server.use(
+      http.delete(`${API_BASE_URL}/accounts/${accountId}`, () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return new HttpResponse(null, { status: 204 });
+        }
+        return HttpResponse.json(
+          {
+            type: "https://baln.local/problems/account_in_use",
+            title: "Conflict",
+            status: 409,
+            code: "account_in_use",
+            detail: "archive this account instead",
+          },
+          { status: 409 },
+        );
+      }),
+    );
+
+    await expect(accountsApi.delete(accountId)).resolves.toBeUndefined();
+    await expect(accountsApi.delete(accountId)).rejects.toMatchObject({
+      message: "這個帳戶已有交易紀錄，請改為封存。",
+      status: 409,
+    });
+  });
+
   it("creates, lists, and revokes personal API tokens", async () => {
     const tokenId = "01984dc2-132d-7ed2-b9d7-62e563f1ad89";
     let revoked = false;
