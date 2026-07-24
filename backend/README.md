@@ -202,6 +202,7 @@ POST   /api/v1/accounts
 GET    /api/v1/accounts
 GET    /api/v1/accounts/{id}
 PATCH  /api/v1/accounts/{id}
+DELETE /api/v1/accounts/{id}
 GET    /api/v1/accounts/{id}/balance
 
 POST   /api/v1/entries

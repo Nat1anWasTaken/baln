@@ -7,6 +7,13 @@ use crate::{
     accounts::{Account, AccountType},
 };
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum DeleteAccountResult {
+    Deleted,
+    NotFound,
+    InUse,
+}
+
 pub async fn create(
     pool: &PgPool,
     user_id: Uuid,
@@ -89,6 +96,53 @@ pub async fn update(
     .bind(archived)
     .fetch_optional(pool)
     .await?)
+}
+
+pub async fn delete(
+    pool: &PgPool,
+    user_id: Uuid,
+    account_id: Uuid,
+) -> ApiResult<DeleteAccountResult> {
+    let mut transaction = pool.begin().await?;
+    let account_exists = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT id
+          FROM accounts
+         WHERE id = $1 AND user_id = $2
+         FOR UPDATE
+        "#,
+    )
+    .bind(account_id)
+    .bind(user_id)
+    .fetch_optional(&mut *transaction)
+    .await?
+    .is_some();
+
+    if !account_exists {
+        transaction.rollback().await?;
+        return Ok(DeleteAccountResult::NotFound);
+    }
+
+    let in_use = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM postings WHERE account_id = $1 AND user_id = $2)",
+    )
+    .bind(account_id)
+    .bind(user_id)
+    .fetch_one(&mut *transaction)
+    .await?;
+
+    if in_use {
+        transaction.rollback().await?;
+        return Ok(DeleteAccountResult::InUse);
+    }
+
+    sqlx::query("DELETE FROM accounts WHERE id = $1 AND user_id = $2")
+        .bind(account_id)
+        .bind(user_id)
+        .execute(&mut *transaction)
+        .await?;
+    transaction.commit().await?;
+    Ok(DeleteAccountResult::Deleted)
 }
 
 pub async fn raw_balance(

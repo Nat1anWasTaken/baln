@@ -4,7 +4,10 @@ use uuid::Uuid;
 
 use crate::{
     ApiError, ApiResult,
-    accounts::{Account, AccountBalance, CreateAccountRequest, UpdateAccountRequest, repository},
+    accounts::{
+        Account, AccountBalance, CreateAccountRequest, UpdateAccountRequest,
+        repository::{self, DeleteAccountResult},
+    },
 };
 
 pub async fn create(
@@ -72,6 +75,17 @@ pub async fn balance(
     })
 }
 
+pub async fn delete(pool: &PgPool, user_id: Uuid, account_id: Uuid) -> ApiResult<()> {
+    match repository::delete(pool, user_id, account_id).await? {
+        DeleteAccountResult::Deleted => Ok(()),
+        DeleteAccountResult::NotFound => Err(ApiError::not_found("account")),
+        DeleteAccountResult::InUse => Err(ApiError::conflict(
+            "account_in_use",
+            "accounts referenced by ledger postings must be archived instead of deleted",
+        )),
+    }
+}
+
 fn valid_key(key: &str, expected_type: &str) -> bool {
     let parts: Vec<_> = key.split('.').collect();
     (parts.len() == 2 || parts.len() == 3)
@@ -85,4 +99,109 @@ fn valid_key(key: &str, expected_type: &str) -> bool {
                     character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
                 })
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+
+    use super::*;
+    use crate::accounts::AccountType;
+
+    async fn seed_user(pool: &PgPool) -> Uuid {
+        let user_id = Uuid::now_v7();
+        sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Test User')")
+            .bind(user_id)
+            .bind(format!("{user_id}@example.com"))
+            .execute(pool)
+            .await
+            .unwrap();
+        user_id
+    }
+
+    async fn seed_account(
+        pool: &PgPool,
+        user_id: Uuid,
+        key: &str,
+        account_type: AccountType,
+    ) -> Account {
+        repository::create(pool, user_id, key, key, account_type)
+            .await
+            .unwrap()
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn deletion_only_removes_unused_tenant_owned_accounts(pool: PgPool) {
+        let user_id = seed_user(&pool).await;
+        let other_user_id = seed_user(&pool).await;
+        let unused = seed_account(&pool, user_id, "asset.savings", AccountType::Asset).await;
+        let cash = seed_account(&pool, user_id, "asset.cash", AccountType::Asset).await;
+        let expense =
+            seed_account(&pool, user_id, "expense.restaurant", AccountType::Expense).await;
+
+        let entry_id = Uuid::now_v7();
+        let mut transaction = pool.begin().await.unwrap();
+        sqlx::query(
+            "INSERT INTO entries (id, user_id, date, description) VALUES ($1, $2, '2026-07-25', '早餐')",
+        )
+        .bind(entry_id)
+        .bind(user_id)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        for (account_id, amount) in [(cash.id, -100_i64), (expense.id, 100_i64)] {
+            sqlx::query(
+                "INSERT INTO postings (id, user_id, entry_id, account_id, amount_minor) VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(user_id)
+            .bind(entry_id)
+            .bind(account_id)
+            .bind(amount)
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+        }
+        transaction.commit().await.unwrap();
+
+        delete(&pool, user_id, unused.id).await.unwrap();
+        assert!(
+            repository::get(&pool, user_id, unused.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let in_use = delete(&pool, user_id, cash.id).await.unwrap_err();
+        assert!(matches!(
+            in_use,
+            ApiError::Problem {
+                status: StatusCode::CONFLICT,
+                code: "account_in_use",
+                ..
+            }
+        ));
+        assert!(
+            repository::get(&pool, user_id, cash.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+
+        let wrong_user = delete(&pool, other_user_id, expense.id).await.unwrap_err();
+        assert!(matches!(
+            wrong_user,
+            ApiError::Problem {
+                status: StatusCode::NOT_FOUND,
+                code: "not_found",
+                ..
+            }
+        ));
+        assert!(
+            repository::get(&pool, user_id, expense.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
 }

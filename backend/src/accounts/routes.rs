@@ -19,7 +19,7 @@ use crate::{
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create).get(list))
-        .route("/{id}", get(get_one).patch(update))
+        .route("/{id}", get(get_one).patch(update).delete(delete))
         .route("/{id}/balance", get(balance))
 }
 
@@ -105,6 +105,23 @@ pub(crate) async fn update(
     Ok(Json(
         service::update(&state.pool, user.id, id, request).await?,
     ))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/accounts/{id}",
+    tag = "accounts",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path)),
+    responses((status = 204), (status = 404), (status = 409))
+)]
+pub(crate) async fn delete(
+    State(state): State<AppState>,
+    AuthenticatedUser(user): AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    service::delete(&state.pool, user.id, id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(

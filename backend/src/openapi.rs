@@ -30,6 +30,7 @@ use utoipa::{
         crate::accounts::routes::list,
         crate::accounts::routes::get_one,
         crate::accounts::routes::update,
+        crate::accounts::routes::delete,
         crate::accounts::routes::balance,
         crate::entries::routes::create,
         crate::entries::routes::list,

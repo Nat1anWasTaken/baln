@@ -1224,6 +1224,7 @@ POST   /accounts
 GET    /accounts
 GET    /accounts/{id}
 PATCH  /accounts/{id}
+DELETE /accounts/{id}
 GET    /accounts/{id}/balance
 
 POST   /entries
