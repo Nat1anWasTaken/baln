@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { CircleAlert, Inbox } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { CenteredCardHeader } from "@/components/centered-card-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,18 +30,15 @@ export function EmptyState({
 }) {
   return (
     <Card className="border-dashed">
-      <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-        <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-          <Icon className="size-5 text-muted-foreground" aria-hidden="true" />
-        </div>
-        <div className="grid gap-1">
-          <h2 className="font-medium">{title}</h2>
-          <p className="max-w-md text-sm text-muted-foreground">
-            {description}
-          </p>
-        </div>
-        {action}
-      </CardContent>
+      <CenteredCardHeader
+        icon={<Icon className="size-6" aria-hidden="true" />}
+        iconTone="muted"
+        title={title}
+        description={description}
+      />
+      {action ? (
+        <CardContent className="flex justify-center">{action}</CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -54,17 +52,19 @@ export function ErrorState({
 }) {
   return (
     <Card className="border-destructive/30">
-      <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
-        <CircleAlert className="size-6 text-destructive" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">
-          {message ?? "資料載入失敗，請稍後再試。"}
-        </p>
-        {onRetry ? (
+      <CenteredCardHeader
+        icon={<CircleAlert className="size-6" aria-hidden="true" />}
+        iconTone="destructive"
+        title="無法載入資料"
+        description={message ?? "資料載入失敗，請稍後再試。"}
+      />
+      {onRetry ? (
+        <CardContent className="flex justify-center">
           <Button type="button" variant="outline" onClick={onRetry}>
             重新載入
           </Button>
-        ) : null}
-      </CardContent>
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
