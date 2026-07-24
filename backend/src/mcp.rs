@@ -424,6 +424,31 @@ impl BalnMcp {
                     }
                 }
             }
+            "delete_account" => {
+                if let Err(result) = self.require(&principal, "ledger:delete") {
+                    result
+                } else {
+                    match parse_input::<AccountIdInput>(arguments) {
+                        Ok(input) => match account_service::delete(
+                            &self.state.pool,
+                            principal.user.id,
+                            input.account_id,
+                        )
+                        .await
+                        {
+                            Ok(()) => success(
+                                format!(
+                                    "Deleted account {}. This action cannot be undone through Baln.",
+                                    input.account_id
+                                ),
+                                json!({"deleted_account_id": input.account_id}),
+                            ),
+                            Err(error) => api_error(error),
+                        },
+                        Err(result) => result,
+                    }
+                }
+            }
             "delete_entry" => {
                 if let Err(result) = self.require(&principal, "ledger:delete") {
                     result
@@ -1079,6 +1104,11 @@ fn build_tools() -> Vec<Tool> {
             "Delete Ledger Entry",
             "Permanently delete one ledger entry by exact UUID. Retrieve and identify the entry before deletion when the user’s target is not already unambiguous.",
         ),
+        destructive_tool::<AccountIdInput>(
+            "delete_account",
+            "Delete Account",
+            "Permanently delete an unused account by exact UUID. Retrieve and identify the account first. Accounts referenced by ledger entries cannot be deleted and must be archived instead.",
+        ),
     ]
 }
 
@@ -1595,6 +1625,31 @@ mod tests {
         assert_eq!(
             create.meta.as_ref().unwrap().0["securitySchemes"][0]["scopes"][0],
             "ledger:write"
+        );
+    }
+
+    #[test]
+    fn account_deletion_is_destructive_and_requires_delete_scope() {
+        let tools = build_tools();
+        let delete = tools
+            .iter()
+            .find(|tool| tool.name == "delete_account")
+            .unwrap();
+        let annotations = delete.annotations.as_ref().unwrap();
+        assert_eq!(annotations.read_only_hint, Some(false));
+        assert_eq!(annotations.destructive_hint, Some(true));
+        assert_eq!(annotations.idempotent_hint, Some(true));
+        assert_eq!(annotations.open_world_hint, Some(false));
+        assert_eq!(
+            delete.meta.as_ref().unwrap().0["securitySchemes"][0]["scopes"][0],
+            "ledger:delete"
+        );
+        assert!(
+            delete
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("must be archived instead")
         );
     }
 
