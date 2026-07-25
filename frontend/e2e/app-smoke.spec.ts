@@ -68,6 +68,7 @@ const entry = {
 
 async function mockApi(page: Page) {
   let visibleAccounts = [...accounts];
+  let createdEntry: typeof entry | null = null;
   let apiTokens: Array<{
     id: string;
     name: string;
@@ -188,7 +189,75 @@ async function mockApi(page: Page) {
     if (path === "/api/v1/accounts") {
       return route.fulfill({ json: visibleAccounts });
     }
-    if (path === "/api/v1/entries") {
+    if (path === "/api/v1/entries" && method === "POST") {
+      const body = route.request().postDataJSON() as {
+        date: string;
+        description: string;
+        note: string | null;
+        postings: Array<{
+          account_key: string;
+          amount_minor: number;
+          memo: string | null;
+        }>;
+        confirmed_distinct?: boolean;
+      };
+      if (!body.confirmed_distinct) {
+        return route.fulfill({
+          status: 409,
+          contentType: "application/problem+json",
+          json: {
+            type: "https://baln.local/problems/possible_duplicate",
+            title: "Conflict",
+            status: 409,
+            code: "possible_duplicate",
+            detail: "one or more entries may already be recorded",
+            fields: {
+              matches: [
+                {
+                  pending_entry_number: 1,
+                  existing_entries: [entry],
+                  pending_entry_numbers: [],
+                },
+              ],
+            },
+          },
+        });
+      }
+      createdEntry = {
+        ...entry,
+        id: "01980000-0000-7000-8000-000000000020",
+        date: body.date,
+        description: body.description,
+        note: body.note,
+        dedup_key: null,
+        postings: body.postings.map((posting, index) => {
+          const account = accounts.find(
+            (candidate) => candidate.key === posting.account_key,
+          )!;
+          return {
+            id: `01980000-0000-7000-8000-${String(index + 21).padStart(12, "0")}`,
+            account: {
+              id: account.id,
+              key: account.key,
+              name: account.name,
+              type: account.type,
+            },
+            amount_minor: posting.amount_minor,
+            memo: posting.memo,
+            created_at: "2026-07-24T00:00:00Z",
+          };
+        }),
+      };
+      return route.fulfill({ status: 201, json: createdEntry });
+    }
+    if (
+      path === "/api/v1/entries/01980000-0000-7000-8000-000000000020" &&
+      method === "GET" &&
+      createdEntry
+    ) {
+      return route.fulfill({ json: createdEntry });
+    }
+    if (path === "/api/v1/entries" && method === "GET") {
       return route.fulfill({ json: { items: [entry], next_cursor: null } });
     }
     return route.fulfill({ status: 404, json: {} });
@@ -228,6 +297,45 @@ test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.getByRole("tab", { name: "進階分錄" }).click();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
+});
+
+test("reviews a possible duplicate across responsive themes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/entries/new");
+
+  await page.getByLabel("交易日期").fill("2026-07-24");
+  await page.getByLabel("交易說明").fill("Email receipt");
+  await page.getByLabel("金額（TWD）").fill("120");
+  await page.getByRole("combobox", { name: "支出分類" }).click();
+  await page.getByRole("option", { name: "餐飲" }).click();
+  await page.getByRole("combobox", { name: "付款帳戶" }).click();
+  await page.getByRole("option", { name: "現金" }).click();
+  await page.getByRole("button", { name: "建立交易" }).click();
+
+  const duplicateDialog = page.getByRole("alertdialog", {
+    name: "可能重複的交易",
+  });
+  await expect(duplicateDialog).toBeVisible();
+  await expect(duplicateDialog.getByText("早餐")).toBeVisible();
+  await duplicateDialog.getByRole("button", { name: "取消" }).click();
+  await expect(page.getByLabel("交易說明")).toHaveValue("Email receipt");
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.getByRole("button", { name: "切換顯示模式" }).click();
+  await page.getByRole("menuitem", { name: "深色" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.getByRole("button", { name: "建立交易" }).click();
+  const darkDuplicateDialog = page.getByRole("alertdialog", {
+    name: "可能重複的交易",
+  });
+  await darkDuplicateDialog.getByRole("button", { name: "仍要建立" }).click();
+
+  await expect(page).toHaveURL(
+    /\/entries\/01980000-0000-7000-8000-000000000020$/,
+  );
+  await expect(page.getByText("Email receipt")).toBeVisible();
 });
 
 test("deletes an account after responsive destructive confirmation", async ({
