@@ -290,6 +290,15 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  [data-vaul-drawer],
+  [data-vaul-overlay],
+  [data-vaul-drawer-wrapper] {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 /*
  * iOS 26 WebKit adds a date input's padding outside its declared width.
  * Move the horizontal spacing to WebKit's inner value element so the shared

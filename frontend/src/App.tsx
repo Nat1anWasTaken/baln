@@ -1,9 +1,11 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { type Location, Route, Routes, useLocation } from "react-router-dom";
 
 import { ProtectedRoute } from "@/auth/protected-route";
 import { AppLoading } from "@/components/app-loading";
 import { AppShell } from "@/components/app-shell";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { getEntryCreateBackground } from "@/lib/entry-navigation";
 
 const LoginPage = lazy(() =>
   import("@/pages/login-page").then((module) => ({
@@ -40,6 +42,11 @@ const EntryEditorPage = lazy(() =>
     default: module.EntryEditorPage,
   })),
 );
+const EntryEditorSheet = lazy(() =>
+  import("@/pages/entry-editor-page").then((module) => ({
+    default: module.EntryEditorSheet,
+  })),
+);
 const ReportsPage = lazy(() =>
   import("@/pages/reports-page").then((module) => ({
     default: module.ReportsPage,
@@ -67,9 +74,23 @@ const NotFoundPage = lazy(() =>
 );
 
 export default function App() {
+  const location = useLocation();
+  const isMobile = useIsMobile();
+  const isMobileCreate = isMobile && location.pathname === "/entries/new";
+  const fallbackBackground: Location = {
+    pathname: "/entries",
+    search: location.search,
+    hash: "",
+    state: null,
+    key: "direct-entry-create",
+  };
+  const backgroundLocation = isMobileCreate
+    ? (getEntryCreateBackground(location.state) ?? fallbackBackground)
+    : undefined;
+
   return (
     <Suspense fallback={<AppLoading />}>
-      <Routes>
+      <Routes location={backgroundLocation ?? location}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route element={<ProtectedRoute />}>
@@ -94,6 +115,18 @@ export default function App() {
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      {isMobileCreate ? (
+        <Routes>
+          <Route element={<ProtectedRoute />}>
+            <Route
+              path="/entries/new"
+              element={
+                <EntryEditorSheet backgroundLocation={backgroundLocation!} />
+              }
+            />
+          </Route>
+        </Routes>
+      ) : null}
     </Suspense>
   );
 }

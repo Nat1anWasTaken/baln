@@ -1,6 +1,6 @@
 import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
 import { ArrowLeft, CircleAlert, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,6 +39,7 @@ import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { ApiError, entriesApi } from "@/lib/api-client";
 import { formatMoney, todayTaipei } from "@/lib/format";
 import { possibleDuplicateFieldsSchema } from "@/lib/schemas";
+import { cn } from "@/lib/utils";
 import type {
   Account,
   AccountType,
@@ -283,9 +284,19 @@ function AccountCombobox({
 export function EntryEditor({
   accounts,
   entry,
+  presentation = "page",
+  onCancel,
+  onDirtyChange,
+  onPendingChange,
+  onSaved,
 }: {
   accounts: Account[];
   entry?: EntryResponse;
+  presentation?: "page" | "sheet";
+  onCancel?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onPendingChange?: (pending: boolean) => void;
+  onSaved?: (entry: EntryResponse) => void;
 }) {
   const { search } = useLocation();
   const navigate = useNavigate();
@@ -337,7 +348,14 @@ export function EntryEditor({
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries();
       toast.success(entry ? "交易已更新" : "交易已建立");
-      navigate({ pathname: `/entries/${saved.id}`, search }, { replace: true });
+      if (onSaved) {
+        onSaved(saved);
+      } else {
+        navigate(
+          { pathname: `/entries/${saved.id}`, search },
+          { replace: true },
+        );
+      }
     },
     onError: (error, submission) => {
       if (
@@ -358,6 +376,14 @@ export function EntryEditor({
       toast.error(error.message);
     },
   });
+
+  useEffect(() => {
+    onDirtyChange?.(form.formState.isDirty);
+  }, [form.formState.isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    onPendingChange?.(mutation.isPending);
+  }, [mutation.isPending, onPendingChange]);
 
   function changeMode(nextMode: string) {
     if (nextMode === mode) return;
@@ -483,295 +509,334 @@ export function EntryEditor({
 
   return (
     <form
-      className="grid gap-5"
+      data-presentation={presentation}
+      className={cn(
+        presentation === "page" ? "grid gap-5" : "flex min-h-0 flex-1 flex-col",
+      )}
       onSubmit={form.handleSubmit(validateAndSubmit)}
     >
-      <Button asChild variant="ghost" className="w-fit">
-        <Link
-          to={{
-            pathname: entry ? `/entries/${entry.id}` : "/entries",
-            search,
-          }}
-        >
-          <ArrowLeft aria-hidden="true" />
-          {entry ? "返回交易明細" : "返回交易"}
-        </Link>
-      </Button>
+      <div
+        className={cn(
+          presentation === "page"
+            ? "contents"
+            : "grid min-h-0 flex-1 gap-5 overflow-y-auto overscroll-contain px-4 pb-5",
+        )}
+      >
+        {presentation === "page" ? (
+          <Button asChild variant="ghost" className="w-fit">
+            <Link
+              to={{
+                pathname: entry ? `/entries/${entry.id}` : "/entries",
+                search,
+              }}
+            >
+              <ArrowLeft aria-hidden="true" />
+              {entry ? "返回交易明細" : "返回交易"}
+            </Link>
+          </Button>
+        ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{entry ? "編輯交易" : "新增交易"}</CardTitle>
-          <CardDescription>
-            使用引導模式處理常見交易，或用進階模式建立拆分分錄。
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
-            <Field>
-              <FieldLabel htmlFor="entry-date">交易日期</FieldLabel>
-              <Input id="entry-date" type="date" {...form.register("date")} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="entry-description">交易說明</FieldLabel>
-              <Input
-                id="entry-description"
-                placeholder="例如：麥當勞早餐"
-                {...form.register("description")}
-              />
-            </Field>
-          </div>
-          <Field>
-            <FieldLabel htmlFor="entry-note">交易備註</FieldLabel>
-            <Textarea
-              id="entry-note"
-              placeholder="選填，不用在備註中放結構化資料"
-              {...form.register("note")}
-            />
-          </Field>
-        </CardContent>
-      </Card>
-
-      <Tabs value={mode} onValueChange={changeMode}>
-        <TabsList className="grid w-full grid-cols-2 sm:w-80">
-          <TabsTrigger value="guided">引導模式</TabsTrigger>
-          <TabsTrigger value="advanced">進階分錄</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {mode === "guided" ? (
         <Card>
-          <CardHeader>
-            <CardTitle>交易類型</CardTitle>
-            <CardDescription>{configuration.description}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <Controller
-              control={form.control}
-              name="preset"
-              render={({ field }) => (
-                <Tabs
-                  value={field.value}
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    form.setValue("primaryAccountKey", "");
-                    form.setValue("secondaryAccountKey", "");
-                  }}
-                >
-                  <TabsList className="grid w-full grid-cols-2 gap-1 group-data-horizontal/tabs:h-auto sm:grid-cols-4">
-                    {(Object.keys(presetConfiguration) as GuidedPreset[]).map(
-                      (value) => (
-                        <TabsTrigger
-                          key={value}
-                          value={value}
-                          className="h-auto"
-                        >
-                          {presetConfiguration[value].label}
-                        </TabsTrigger>
-                      ),
-                    )}
-                  </TabsList>
-                </Tabs>
-              )}
-            />
-            <Field>
-              <FieldLabel htmlFor="guided-amount">金額（TWD）</FieldLabel>
-              <Input
-                id="guided-amount"
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                {...form.register("amount", { valueAsNumber: true })}
-              />
-              <FieldDescription>請輸入整數金額，不含小數。</FieldDescription>
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
+          {presentation === "page" ? (
+            <CardHeader>
+              <CardTitle>{entry ? "編輯交易" : "新增交易"}</CardTitle>
+              <CardDescription>
+                使用引導模式處理常見交易，或用進階模式建立拆分分錄。
+              </CardDescription>
+            </CardHeader>
+          ) : null}
+          <CardContent className="grid gap-4">
+            <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
               <Field>
-                <FieldLabel htmlFor="guided-primary">
-                  {configuration.primaryLabel}
-                </FieldLabel>
-                <Controller
-                  control={form.control}
-                  name="primaryAccountKey"
-                  render={({ field }) => (
-                    <AccountCombobox
-                      id="guided-primary"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      accounts={selectableAccounts}
-                      types={configuration.primaryTypes}
-                    />
-                  )}
-                />
+                <FieldLabel htmlFor="entry-date">交易日期</FieldLabel>
+                <Input id="entry-date" type="date" {...form.register("date")} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="guided-secondary">
-                  {configuration.secondaryLabel}
-                </FieldLabel>
-                <Controller
-                  control={form.control}
-                  name="secondaryAccountKey"
-                  render={({ field }) => (
-                    <AccountCombobox
-                      id="guided-secondary"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      accounts={selectableAccounts}
-                      types={configuration.secondaryTypes}
-                    />
-                  )}
+                <FieldLabel htmlFor="entry-description">交易說明</FieldLabel>
+                <Input
+                  id="entry-description"
+                  placeholder="例如：麥當勞早餐"
+                  {...form.register("description")}
                 />
               </Field>
             </div>
+            <Field>
+              <FieldLabel htmlFor="entry-note">交易備註</FieldLabel>
+              <Textarea
+                id="entry-note"
+                placeholder="選填，不用在備註中放結構化資料"
+                {...form.register("note")}
+              />
+            </Field>
           </CardContent>
         </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>分錄明細</CardTitle>
-            <CardDescription>
-              正數借方與負數貸方會由方向自動轉換；借貸合計必須相等。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {fields.map((field, index) => (
-              <div key={field.id} className="grid gap-3 rounded-lg border p-3">
-                <div className="grid gap-3 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end">
-                  <Field>
-                    <FieldLabel htmlFor={`posting-account-${index}`}>
-                      帳戶
-                    </FieldLabel>
-                    <Controller
-                      control={form.control}
-                      name={`postings.${index}.accountKey`}
-                      render={({ field: accountField }) => (
-                        <AccountCombobox
-                          id={`posting-account-${index}`}
-                          value={accountField.value}
-                          onValueChange={accountField.onChange}
-                          accounts={selectableAccounts}
-                        />
-                      )}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`posting-direction-${index}`}>
-                      方向
-                    </FieldLabel>
-                    <Controller
-                      control={form.control}
-                      name={`postings.${index}.direction`}
-                      render={({ field: directionField }) => (
-                        <Combobox
-                          id={`posting-direction-${index}`}
-                          value={directionField.value}
-                          onValueChange={directionField.onChange}
-                          options={[
-                            { value: "debit", label: "借方" },
-                            { value: "credit", label: "貸方" },
-                          ]}
-                          searchPlaceholder="搜尋方向…"
-                          emptyText="找不到方向。"
-                        />
-                      )}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`posting-amount-${index}`}>
-                      金額
-                    </FieldLabel>
-                    <Input
-                      id={`posting-amount-${index}`}
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      {...form.register(`postings.${index}.amount`, {
-                        valueAsNumber: true,
-                      })}
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`移除第 ${index + 1} 筆分錄`}
-                    disabled={fields.length <= 2}
-                    onClick={() => remove(index)}
+
+        <Tabs value={mode} onValueChange={changeMode}>
+          <TabsList className="grid w-full grid-cols-2 sm:w-80">
+            <TabsTrigger value="guided">引導模式</TabsTrigger>
+            <TabsTrigger value="advanced">進階分錄</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {mode === "guided" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>交易類型</CardTitle>
+              <CardDescription>{configuration.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-5">
+              <Controller
+                control={form.control}
+                name="preset"
+                render={({ field }) => (
+                  <Tabs
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      form.setValue("primaryAccountKey", "");
+                      form.setValue("secondaryAccountKey", "");
+                    }}
                   >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
+                    <TabsList className="grid w-full grid-cols-2 gap-1 group-data-horizontal/tabs:h-auto sm:grid-cols-4">
+                      {(Object.keys(presetConfiguration) as GuidedPreset[]).map(
+                        (value) => (
+                          <TabsTrigger
+                            key={value}
+                            value={value}
+                            className="h-auto"
+                          >
+                            {presetConfiguration[value].label}
+                          </TabsTrigger>
+                        ),
+                      )}
+                    </TabsList>
+                  </Tabs>
+                )}
+              />
+              <Field>
+                <FieldLabel htmlFor="guided-amount">金額（TWD）</FieldLabel>
+                <Input
+                  id="guided-amount"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  {...form.register("amount", { valueAsNumber: true })}
+                />
+                <FieldDescription>請輸入整數金額，不含小數。</FieldDescription>
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor={`posting-memo-${index}`}>
-                    分錄備註
+                  <FieldLabel htmlFor="guided-primary">
+                    {configuration.primaryLabel}
                   </FieldLabel>
-                  <Input
-                    id={`posting-memo-${index}`}
-                    placeholder="選填"
-                    {...form.register(`postings.${index}.memo`)}
+                  <Controller
+                    control={form.control}
+                    name="primaryAccountKey"
+                    render={({ field }) => (
+                      <AccountCombobox
+                        id="guided-primary"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        accounts={selectableAccounts}
+                        types={configuration.primaryTypes}
+                      />
+                    )}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="guided-secondary">
+                    {configuration.secondaryLabel}
+                  </FieldLabel>
+                  <Controller
+                    control={form.control}
+                    name="secondaryAccountKey"
+                    render={({ field }) => (
+                      <AccountCombobox
+                        id="guided-secondary"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        accounts={selectableAccounts}
+                        types={configuration.secondaryTypes}
+                      />
+                    )}
                   />
                 </Field>
               </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-fit"
-              onClick={() => append(emptyPosting("debit"))}
-            >
-              <Plus aria-hidden="true" />
-              新增分錄
-            </Button>
-          </CardContent>
-          <CardFooter className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground">借方合計</p>
-              <p className="font-medium tabular-nums">
-                {formatMoney(debitTotal)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">貸方合計</p>
-              <p className="font-medium tabular-nums">
-                {formatMoney(creditTotal)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">未平衡</p>
-              <p
-                className={`font-medium tabular-nums ${
-                  imbalance === 0 ? "" : "text-destructive"
-                }`}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>分錄明細</CardTitle>
+              <CardDescription>
+                正數借方與負數貸方會由方向自動轉換；借貸合計必須相等。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {fields.map((field, index) => (
+                <div
+                  key={field.id}
+                  className="grid gap-3 rounded-lg border p-3"
+                >
+                  <div className="grid gap-3 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end">
+                    <Field>
+                      <FieldLabel htmlFor={`posting-account-${index}`}>
+                        帳戶
+                      </FieldLabel>
+                      <Controller
+                        control={form.control}
+                        name={`postings.${index}.accountKey`}
+                        render={({ field: accountField }) => (
+                          <AccountCombobox
+                            id={`posting-account-${index}`}
+                            value={accountField.value}
+                            onValueChange={accountField.onChange}
+                            accounts={selectableAccounts}
+                          />
+                        )}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor={`posting-direction-${index}`}>
+                        方向
+                      </FieldLabel>
+                      <Controller
+                        control={form.control}
+                        name={`postings.${index}.direction`}
+                        render={({ field: directionField }) => (
+                          <Combobox
+                            id={`posting-direction-${index}`}
+                            value={directionField.value}
+                            onValueChange={directionField.onChange}
+                            options={[
+                              { value: "debit", label: "借方" },
+                              { value: "credit", label: "貸方" },
+                            ]}
+                            searchPlaceholder="搜尋方向…"
+                            emptyText="找不到方向。"
+                          />
+                        )}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor={`posting-amount-${index}`}>
+                        金額
+                      </FieldLabel>
+                      <Input
+                        id={`posting-amount-${index}`}
+                        type="number"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        {...form.register(`postings.${index}.amount`, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </Field>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`移除第 ${index + 1} 筆分錄`}
+                      disabled={fields.length <= 2}
+                      onClick={() => remove(index)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </div>
+                  <Field>
+                    <FieldLabel htmlFor={`posting-memo-${index}`}>
+                      分錄備註
+                    </FieldLabel>
+                    <Input
+                      id={`posting-memo-${index}`}
+                      placeholder="選填"
+                      {...form.register(`postings.${index}.memo`)}
+                    />
+                  </Field>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-fit"
+                onClick={() => append(emptyPosting("debit"))}
               >
-                {formatMoney(imbalance)}
-              </p>
-            </div>
-          </CardFooter>
-        </Card>
-      )}
+                <Plus aria-hidden="true" />
+                新增分錄
+              </Button>
+            </CardContent>
+            <CardFooter className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">借方合計</p>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(debitTotal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">貸方合計</p>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(creditTotal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">未平衡</p>
+                <p
+                  className={`font-medium tabular-nums ${
+                    imbalance === 0 ? "" : "text-destructive"
+                  }`}
+                >
+                  {formatMoney(imbalance)}
+                </p>
+              </div>
+            </CardFooter>
+          </Card>
+        )}
 
-      {form.formState.errors.root?.message ? (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-        >
-          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <FieldError>{form.formState.errors.root.message}</FieldError>
-        </div>
-      ) : null}
+        {form.formState.errors.root?.message ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          >
+            <CircleAlert
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
+            <FieldError>{form.formState.errors.root.message}</FieldError>
+          </div>
+        ) : null}
+      </div>
 
-      <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4">
-        <Button asChild type="button" variant="outline">
-          <Link
-            to={{
-              pathname: entry ? `/entries/${entry.id}` : "/entries",
-              search,
-            }}
+      <div
+        className={cn(
+          "flex shrink-0 justify-end gap-2",
+          presentation === "page"
+            ? "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4"
+            : "border-t bg-popover/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur",
+        )}
+      >
+        {presentation === "page" ? (
+          <Button asChild type="button" variant="outline">
+            <Link
+              to={{
+                pathname: entry ? `/entries/${entry.id}` : "/entries",
+                search,
+              }}
+            >
+              取消
+            </Link>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={mutation.isPending}
+            onClick={onCancel}
           >
             取消
-          </Link>
-        </Button>
+          </Button>
+        )}
         <Button type="submit" loading={mutation.isPending}>
           {entry ? "儲存變更" : "建立交易"}
         </Button>

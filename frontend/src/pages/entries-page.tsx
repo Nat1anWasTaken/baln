@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Filter, Plus, Search, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
@@ -21,8 +21,10 @@ import {
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { toExclusiveDate } from "@/lib/format";
+import { entryCreateRouteState } from "@/lib/entry-navigation";
 
 export function EntriesPage() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const debouncedSearch = useDebouncedValue(search);
@@ -147,7 +149,7 @@ export function EntriesPage() {
               </Button>
             ) : null}
             <Button asChild>
-              <Link to="/entries/new">
+              <Link to="/entries/new" state={entryCreateRouteState(location)}>
                 <Plus aria-hidden="true" />
                 新增交易
               </Link>
@@ -179,7 +181,7 @@ export function EntriesPage() {
               </Button>
             ) : (
               <Button asChild>
-                <Link to="/entries/new">
+                <Link to="/entries/new" state={entryCreateRouteState(location)}>
                   <Plus aria-hidden="true" />
                   新增第一筆交易
                 </Link>

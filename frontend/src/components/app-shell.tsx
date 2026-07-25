@@ -24,6 +24,7 @@ import { useAuth } from "@/auth/auth-context";
 import { BrandIcon } from "@/components/brand-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { entryCreateRouteState } from "@/lib/entry-navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,7 +168,7 @@ export function AppShell() {
   };
 
   return (
-    <SidebarProvider>
+    <SidebarProvider data-vaul-drawer-wrapper>
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex h-10 items-center gap-2 px-2">
@@ -218,7 +219,7 @@ export function AppShell() {
           </div>
           <ThemeToggle />
           <Button asChild size="sm" className="hidden sm:inline-flex">
-            <NavLink to="/entries/new">
+            <NavLink to="/entries/new" state={entryCreateRouteState(location)}>
               <Plus aria-hidden="true" />
               新增交易
             </NavLink>
@@ -240,6 +241,11 @@ export function AppShell() {
             <Link
               key={item.to}
               to={item.to}
+              state={
+                item.to === "/entries/new"
+                  ? entryCreateRouteState(location)
+                  : undefined
+              }
               aria-label={item.primary ? "新增交易" : undefined}
               aria-current={isActive ? "page" : undefined}
               className={`touch-press touch-press-frameless flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
