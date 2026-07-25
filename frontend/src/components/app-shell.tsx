@@ -5,12 +5,19 @@ import {
   CircleUserRound,
   LayoutDashboard,
   KeyRound,
+  type LucideIcon,
   PlugZap,
   LogOut,
   Plus,
   WalletCards,
 } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/auth-context";
@@ -40,11 +47,33 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
-const navigation = [
+type NavigationItem = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+  primary?: boolean;
+};
+
+const navigation: NavigationItem[] = [
   { to: "/", label: "總覽", icon: LayoutDashboard, end: true },
   { to: "/entries", label: "交易", icon: ArrowLeftRight },
   { to: "/accounts", label: "帳戶", icon: WalletCards },
   { to: "/reports", label: "報表", icon: BarChart3 },
+];
+
+const mobileNavigation: NavigationItem[] = [
+  navigation[0],
+  navigation[1],
+  {
+    to: "/entries/new",
+    label: "新增",
+    icon: Plus,
+    end: true,
+    primary: true,
+  },
+  navigation[2],
+  navigation[3],
 ];
 
 const pageNames: Record<string, string> = {
@@ -125,6 +154,17 @@ export function AppShell() {
   const pageName =
     pageNames[location.pathname] ??
     (location.pathname.endsWith("/edit") ? "編輯交易" : "交易明細");
+  const isMobileNavigationActive = (to: string) => {
+    if (to === "/") return location.pathname === "/";
+    if (to === "/entries/new") return location.pathname === "/entries/new";
+    if (to === "/entries") {
+      return (
+        location.pathname.startsWith("/entries") &&
+        location.pathname !== "/entries/new"
+      );
+    }
+    return location.pathname === to;
+  };
 
   return (
     <SidebarProvider>
@@ -167,7 +207,7 @@ export function AppShell() {
           <UserMenu />
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="min-w-0 pb-20 md:pb-0">
+      <SidebarInset className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
           <SidebarTrigger className="hidden md:inline-flex" />
           <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-semibold">
@@ -191,60 +231,34 @@ export function AppShell() {
 
       <nav
         aria-label="主要導覽"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-background/95 px-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 items-center border-t bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 backdrop-blur md:hidden"
       >
-        {navigation.slice(0, 2).map((item) => (
-          <Button
-            key={item.to}
-            asChild
-            variant="ghost"
-            className="h-12 flex-col gap-0.5 rounded-md px-1 text-xs"
-          >
-            <NavLink
+        {mobileNavigation.map((item) => {
+          const isActive = isMobileNavigationActive(item.to);
+
+          return (
+            <Link
+              key={item.to}
               to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
+              aria-label={item.primary ? "新增交易" : undefined}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 isActive
-                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground ring-1 ring-inset ring-sidebar-border"
-                  : ""
-              }
+                  ? "font-semibold text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              }`}
             >
-              <item.icon aria-hidden="true" />
-              {item.label}
-            </NavLink>
-          </Button>
-        ))}
-        <Button
-          asChild
-          size="icon"
-          className="mx-auto size-11 rounded-full"
-          aria-label="新增交易"
-        >
-          <NavLink to="/entries/new">
-            <Plus className="size-5" aria-hidden="true" />
-          </NavLink>
-        </Button>
-        {navigation.slice(2).map((item) => (
-          <Button
-            key={item.to}
-            asChild
-            variant="ghost"
-            className="h-12 flex-col gap-0.5 rounded-md px-1 text-xs"
-          >
-            <NavLink
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                isActive
-                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground ring-1 ring-inset ring-sidebar-border"
-                  : ""
-              }
-            >
-              <item.icon aria-hidden="true" />
-              {item.label}
-            </NavLink>
-          </Button>
-        ))}
+              {item.primary ? (
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                  <item.icon className="size-4" aria-hidden="true" />
+                </span>
+              ) : (
+                <item.icon className="size-5" aria-hidden="true" />
+              )}
+              <span className="truncate">{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
     </SidebarProvider>
   );

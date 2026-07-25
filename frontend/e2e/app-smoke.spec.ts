@@ -285,9 +285,20 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await expect(
     page.getByRole("navigation", { name: "主要導覽" }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "總覽" })).toHaveClass(
-    /ring-sidebar-border/,
+  await expect(page.getByRole("link", { name: "總覽" })).toHaveAttribute(
+    "aria-current",
+    "page",
   );
+
+  await page.getByRole("link", { name: "新增交易" }).click();
+  await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "新增交易" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(
+    page.getByRole("link", { name: "交易", exact: true }),
+  ).not.toHaveAttribute("aria-current");
 });
 
 test("opens the advanced balanced-postings editor", async ({ page }) => {

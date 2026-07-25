@@ -751,7 +751,7 @@ export function EntryEditor({
         </div>
       ) : null}
 
-      <div className="sticky bottom-16 z-20 flex justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4">
+      <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4">
         <Button asChild type="button" variant="outline">
           <Link to={entry ? `/entries/${entry.id}` : "/entries"}>取消</Link>
         </Button>
