@@ -318,15 +318,9 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
     )
     .toBe("26");
 
-  await page.getByRole("link", { name: "新增交易" }).click();
-  await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "新增交易" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await expect(
-    page.getByRole("link", { name: "交易", exact: true }),
-  ).not.toHaveAttribute("aria-current");
+  await page.getByLabel("新增交易").click();
+  await expect(page.getByRole("dialog", { name: "新增交易" })).toBeVisible();
+  await expect(page).toHaveURL(/\/entries\/new$/);
 });
 
 test("keeps long transaction summaries inside mobile cards", async ({
@@ -482,12 +476,13 @@ test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.goto("/entries/new");
 
   await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
+  await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
   await page.getByRole("tab", { name: "進階分錄" }).click();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
 });
 
-test("reviews a possible duplicate across responsive themes", async ({
+test("reviews a possible duplicate from the mobile transaction sheet", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -512,20 +507,76 @@ test("reviews a possible duplicate across responsive themes", async ({
   await duplicateDialog.getByRole("button", { name: "取消" }).click();
   await expect(page.getByLabel("交易說明")).toHaveValue("Email receipt");
 
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.getByRole("button", { name: "切換顯示模式" }).click();
-  await page.getByRole("menuitem", { name: "深色" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
   await page.getByRole("button", { name: "建立交易" }).click();
-  const darkDuplicateDialog = page.getByRole("alertdialog", {
+  const repeatedDuplicateDialog = page.getByRole("alertdialog", {
     name: "可能重複的交易",
   });
-  await darkDuplicateDialog.getByRole("button", { name: "仍要建立" }).click();
+  await repeatedDuplicateDialog
+    .getByRole("button", { name: "仍要建立" })
+    .click();
 
   await expect(page).toHaveURL(
     /\/entries\/01980000-0000-7000-8000-000000000020$/,
   );
   await expect(page.getByText("Email receipt")).toBeVisible();
+});
+
+test("opens create as a route-backed mobile sheet and protects dirty drafts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/entries");
+
+  const entriesSearch = page.getByLabel("搜尋交易");
+  await page.getByLabel("新增交易").click();
+  await expect(page).toHaveURL(/\/entries\/new$/);
+
+  const sheet = page.getByRole("dialog", { name: "新增交易" });
+  await expect(sheet).toBeVisible();
+  await expect(entriesSearch).toBeAttached();
+  await expect(sheet).toHaveAttribute("data-size", "near-full");
+
+  await expect
+    .poll(async () => {
+      const bounds = await sheet.boundingBox();
+      return bounds ? bounds.y + bounds.height : null;
+    })
+    .toBeCloseTo(844, 0);
+  const sheetGeometry = await sheet.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      top: bounds.top,
+      width: bounds.width,
+      borderTopLeftRadius: Number.parseFloat(style.borderTopLeftRadius),
+    };
+  });
+  expect(sheetGeometry.top).toBeGreaterThan(0);
+  expect(sheetGeometry.width).toBeCloseTo(390, 0);
+  expect(sheetGeometry.borderTopLeftRadius).toBeGreaterThan(0);
+
+  await page.getByLabel("交易說明").fill("保留這份草稿");
+  await page.getByRole("button", { name: "關閉新增交易" }).click();
+
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "捨棄這筆交易草稿？",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
+  await expect(page.getByLabel("交易說明")).toHaveValue("保留這份草稿");
+
+  await page.evaluate(() => history.back());
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "捨棄變更" }).click();
+  await expect(page).toHaveURL(/\/entries$/);
+  await expect(sheet).not.toBeVisible();
+
+  await page.goto("/entries/new");
+  const directSheet = page.getByRole("dialog", { name: "新增交易" });
+  await expect(directSheet).toBeVisible();
+  await page.getByRole("button", { name: "關閉新增交易" }).click();
+  await expect(page).toHaveURL(/\/entries$/);
+  await expect(directSheet).not.toBeVisible();
 });
 
 test("deletes an account after responsive destructive confirmation", async ({
@@ -669,7 +720,7 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     expect(amountLabelBox).not.toBeNull();
     expect(tabsBox!.y + tabsBox!.height).toBeLessThan(amountLabelBox!.y);
 
-    await expectTouchTarget(page.getByRole("button", { name: "切換顯示模式" }));
+    await expectTouchTarget(page.getByRole("button", { name: "關閉新增交易" }));
 
     await page.goto("/accounts");
     await expectTouchTarget(page.getByRole("button", { name: "編輯 現金" }));
