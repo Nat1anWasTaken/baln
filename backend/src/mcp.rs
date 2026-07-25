@@ -401,27 +401,39 @@ impl BalnMcp {
                     result
                 } else {
                     match parse_input::<UpdateAccountInput>(arguments) {
-                        Ok(input) => match account_service::update(
-                            &self.state.pool,
-                            principal.user.id,
-                            input.account_id,
-                            UpdateAccountRequest {
-                                name: input.name,
-                                note: input.note,
-                                archived: input.archived,
-                            },
-                        )
-                        .await
-                        {
-                            Ok(account) => success(
-                                format!(
-                                    "Updated account “{}” ({}). No further action is required.",
-                                    account.name, account.key
+                        Ok(input) => {
+                            let account_type = match input.account_type.as_deref() {
+                                Some(value) => match parse_account_type(value) {
+                                    Ok(account_type) => Some(account_type),
+                                    Err(result) => return result,
+                                },
+                                None => None,
+                            };
+                            match account_service::update(
+                                &self.state.pool,
+                                principal.user.id,
+                                input.account_id,
+                                UpdateAccountRequest {
+                                    key: input.key,
+                                    name: input.name,
+                                    note: input.note,
+                                    r#type: account_type,
+                                    archived: input.archived,
+                                    expected_updated_at: input.expected_updated_at,
+                                },
+                            )
+                            .await
+                            {
+                                Ok(account) => success(
+                                    format!(
+                                        "Updated account “{}” ({}). All ledger views now use its current key and type.",
+                                        account.name, account.key
+                                    ),
+                                    json!({"account": account}),
                                 ),
-                                json!({"account": account}),
-                            ),
-                            Err(error) => api_error(error),
-                        },
+                                Err(error) => api_error(error),
+                            }
+                        }
                         Err(result) => result,
                     }
                 }
@@ -1098,13 +1110,20 @@ struct CreateAccountInput {
 struct UpdateAccountInput {
     /// Exact Baln account UUID.
     account_id: Uuid,
+    /// Complete replacement key. Supply this together with account_type and expected_updated_at.
+    key: Option<String>,
     /// New user-facing name, if it should change.
     name: Option<String>,
     /// New account note of up to 2000 characters, if it should change. Use null to clear it.
     #[serde(default, deserialize_with = "deserialize_nullable_field")]
     note: Option<Option<String>>,
+    /// New asset, liability, income, expense, or equity type. Supply this together with key and
+    /// expected_updated_at.
+    account_type: Option<String>,
     /// Set true to archive or false to restore the account.
     archived: Option<bool>,
+    /// Exact updated_at value from the account being changed. Required for key or type changes.
+    expected_updated_at: Option<DateTime<Utc>>,
 }
 
 fn deserialize_nullable_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -1192,7 +1211,7 @@ fn build_tools() -> Vec<Tool> {
         write_tool::<UpdateAccountInput>(
             "update_account",
             "Update Account",
-            "Rename, annotate, archive, or restore an account. At least one of name, note, or archived must be supplied; use a null note to clear it.",
+            "Rename, annotate, archive, restore, or explicitly change an account key and type. Retrieve the current account first. Key and account_type changes must be supplied together with its exact expected_updated_at value. Changing the key invalidates the old key immediately; changing the type reclassifies every historical balance, report, and ledger view for that account. Use a null note to clear it.",
             false,
         ),
         destructive_tool::<DeleteEntriesInput>(
@@ -2193,6 +2212,28 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(cleared.note, Some(None));
+
+        let identity = parse_input::<UpdateAccountInput>(json!({
+            "account_id": account_id,
+            "key": "liability.card",
+            "account_type": "liability",
+            "expected_updated_at": "2026-07-25T00:00:00Z"
+        }))
+        .unwrap();
+        assert_eq!(identity.key.as_deref(), Some("liability.card"));
+        assert_eq!(identity.account_type.as_deref(), Some("liability"));
+        assert_eq!(
+            identity.expected_updated_at,
+            Some("2026-07-25T00:00:00Z".parse().unwrap())
+        );
+
+        let tool = build_tools()
+            .into_iter()
+            .find(|tool| tool.name == "update_account")
+            .unwrap();
+        let description = tool.description.as_deref().unwrap();
+        assert!(description.contains("expected_updated_at"));
+        assert!(description.contains("historical"));
     }
 
     #[test]

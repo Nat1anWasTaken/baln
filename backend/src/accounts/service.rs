@@ -6,7 +6,7 @@ use crate::{
     ApiError, ApiResult,
     accounts::{
         Account, AccountBalance, CreateAccountRequest, UpdateAccountRequest,
-        repository::{self, DeleteAccountResult},
+        repository::{self, AccountUpdate, DeleteAccountResult},
     },
 };
 
@@ -41,10 +41,33 @@ pub async fn update(
     account_id: Uuid,
     request: UpdateAccountRequest,
 ) -> ApiResult<Account> {
-    if request.name.is_none() && request.note.is_none() && request.archived.is_none() {
+    let identity_requested = request.key.is_some() || request.r#type.is_some();
+    if request.key.is_none() != request.r#type.is_none()
+        || (identity_requested && request.expected_updated_at.is_none())
+    {
+        return Err(ApiError::bad_request(
+            "invalid_account_identity_update",
+            "key, type, and expected_updated_at are required together",
+        ));
+    }
+    if request.key.is_none()
+        && request.name.is_none()
+        && request.note.is_none()
+        && request.r#type.is_none()
+        && request.archived.is_none()
+    {
         return Err(ApiError::bad_request(
             "empty_update",
             "at least one mutable field is required",
+        ));
+    }
+    let key = request.key.as_deref().map(str::trim);
+    if let (Some(key), Some(account_type)) = (key, request.r#type)
+        && !valid_key(key, account_type.as_str())
+    {
+        return Err(ApiError::bad_request(
+            "invalid_account_key",
+            "account key must match its type and contain two or three snake_case segments",
         ));
     }
     let name = request.name.as_deref().map(str::trim);
@@ -59,9 +82,30 @@ pub async fn update(
         .as_ref()
         .map(|note| clean_note(note.as_deref()))
         .transpose()?;
-    repository::update(pool, user_id, account_id, name, request.archived, note)
-        .await?
-        .ok_or_else(|| ApiError::not_found("account"))
+    let updated = repository::update(
+        pool,
+        user_id,
+        account_id,
+        AccountUpdate {
+            expected_updated_at: request.expected_updated_at,
+            key,
+            name,
+            note,
+            account_type: request.r#type,
+            archived: request.archived,
+        },
+    )
+    .await?;
+    if let Some(account) = updated {
+        return Ok(account);
+    }
+    if identity_requested && repository::get(pool, user_id, account_id).await?.is_some() {
+        return Err(ApiError::conflict(
+            "stale_account_update",
+            "account changed after it was loaded; refresh it before changing its key or type",
+        ));
+    }
+    Err(ApiError::not_found("account"))
 }
 
 fn clean_note(note: Option<&str>) -> ApiResult<Option<&str>> {
@@ -187,9 +231,12 @@ mod tests {
             user_id,
             account.id,
             UpdateAccountRequest {
+                key: None,
                 name: Some("中華郵政".to_owned()),
                 note: None,
+                r#type: None,
                 archived: None,
+                expected_updated_at: None,
             },
         )
         .await
@@ -201,9 +248,12 @@ mod tests {
             user_id,
             account.id,
             UpdateAccountRequest {
+                key: None,
                 name: None,
                 note: Some(None),
+                r#type: None,
                 archived: None,
+                expected_updated_at: None,
             },
         )
         .await
@@ -245,6 +295,226 @@ mod tests {
         .execute(&pool)
         .await;
         assert!(database_error.is_err());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn identity_changes_flow_through_historical_ledger_views(pool: PgPool) {
+        let user_id = seed_user(&pool).await;
+        let cash = seed_account(&pool, user_id, "asset.cash", AccountType::Asset).await;
+        let expense =
+            seed_account(&pool, user_id, "expense.restaurant", AccountType::Expense).await;
+        let entry_id = Uuid::now_v7();
+        let mut transaction = pool.begin().await.unwrap();
+        sqlx::query(
+            "INSERT INTO entries (id, user_id, date, description) \
+             VALUES ($1, $2, '2026-07-24', '早餐')",
+        )
+        .bind(entry_id)
+        .bind(user_id)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        for (account_id, amount) in [(cash.id, -320_i64), (expense.id, 320_i64)] {
+            sqlx::query(
+                "INSERT INTO postings (id, user_id, entry_id, account_id, amount_minor) \
+                 VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(user_id)
+            .bind(entry_id)
+            .bind(account_id)
+            .bind(amount)
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+        }
+        transaction.commit().await.unwrap();
+
+        let cash = update(
+            &pool,
+            user_id,
+            cash.id,
+            UpdateAccountRequest {
+                key: Some("liability.card".to_owned()),
+                name: Some("信用卡".to_owned()),
+                note: None,
+                r#type: Some(AccountType::Liability),
+                archived: None,
+                expected_updated_at: Some(cash.updated_at),
+            },
+        )
+        .await
+        .unwrap();
+        let expense = update(
+            &pool,
+            user_id,
+            expense.id,
+            UpdateAccountRequest {
+                key: Some("income.refund".to_owned()),
+                name: None,
+                note: None,
+                r#type: Some(AccountType::Income),
+                archived: None,
+                expected_updated_at: Some(expense.updated_at),
+            },
+        )
+        .await
+        .unwrap();
+
+        let posting_account_ids = sqlx::query_scalar::<_, Uuid>(
+            "SELECT account_id FROM postings WHERE entry_id = $1 ORDER BY amount_minor",
+        )
+        .bind(entry_id)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(posting_account_ids, vec![cash.id, expense.id]);
+
+        let entry = crate::entries::repository::get(&pool, user_id, entry_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(entry.postings.iter().any(|posting| {
+            posting.account.id == cash.id
+                && posting.account.key == "liability.card"
+                && posting.account.r#type == AccountType::Liability
+        }));
+        assert!(entry.postings.iter().any(|posting| {
+            posting.account.id == expense.id
+                && posting.account.key == "income.refund"
+                && posting.account.r#type == AccountType::Income
+        }));
+
+        let old_key_results = crate::entries::service::list(
+            &pool,
+            user_id,
+            crate::entries::ListEntriesQuery {
+                date_from: None,
+                date_to: None,
+                account_key: Some("asset.cash".to_owned()),
+                q: None,
+                cursor: None,
+                limit: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(old_key_results.items.is_empty());
+        let new_key_results = crate::entries::service::list(
+            &pool,
+            user_id,
+            crate::entries::ListEntriesQuery {
+                date_from: None,
+                date_to: None,
+                account_key: Some("liability.card".to_owned()),
+                q: None,
+                cursor: None,
+                limit: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(new_key_results.items.len(), 1);
+
+        let balance = balance(&pool, user_id, cash.id, None).await.unwrap();
+        assert_eq!(balance.account_key, "liability.card");
+        assert_eq!(balance.ledger_balance_minor, -320);
+        assert_eq!(balance.display_balance_minor, 320);
+
+        let report = crate::reports::repository::summary(
+            &pool,
+            user_id,
+            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert!(report.expense_accounts.is_empty());
+        assert_eq!(report.income_accounts.len(), 1);
+        assert_eq!(report.income_accounts[0].account_key, "income.refund");
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn identity_updates_reject_stale_versions_and_roll_back_conflicts(pool: PgPool) {
+        let user_id = seed_user(&pool).await;
+        let cash = seed_account(&pool, user_id, "asset.cash", AccountType::Asset).await;
+        seed_account(&pool, user_id, "asset.savings", AccountType::Asset).await;
+
+        let incomplete = update(
+            &pool,
+            user_id,
+            cash.id,
+            UpdateAccountRequest {
+                key: Some("asset.wallet".to_owned()),
+                name: None,
+                note: None,
+                r#type: None,
+                archived: None,
+                expected_updated_at: Some(cash.updated_at),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            incomplete,
+            ApiError::Problem {
+                status: StatusCode::BAD_REQUEST,
+                code: "invalid_account_identity_update",
+                ..
+            }
+        ));
+
+        let conflict = update(
+            &pool,
+            user_id,
+            cash.id,
+            UpdateAccountRequest {
+                key: Some("asset.savings".to_owned()),
+                name: Some("不應儲存".to_owned()),
+                note: None,
+                r#type: Some(AccountType::Asset),
+                archived: None,
+                expected_updated_at: Some(cash.updated_at),
+            },
+        )
+        .await;
+        assert!(matches!(conflict, Err(ApiError::Database(_))));
+        let unchanged = repository::get(&pool, user_id, cash.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(unchanged.key, "asset.cash");
+        assert_eq!(unchanged.name, "asset.cash");
+
+        let stale = update(
+            &pool,
+            user_id,
+            cash.id,
+            UpdateAccountRequest {
+                key: Some("liability.card".to_owned()),
+                name: Some("也不應儲存".to_owned()),
+                note: None,
+                r#type: Some(AccountType::Liability),
+                archived: None,
+                expected_updated_at: Some(cash.updated_at - chrono::Duration::seconds(1)),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            stale,
+            ApiError::Problem {
+                status: StatusCode::CONFLICT,
+                code: "stale_account_update",
+                ..
+            }
+        ));
+        let unchanged = repository::get(&pool, user_id, cash.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(unchanged.key, "asset.cash");
+        assert_eq!(unchanged.name, "asset.cash");
     }
 
     #[sqlx::test(migrations = "./migrations")]

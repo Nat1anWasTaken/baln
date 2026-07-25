@@ -37,7 +37,7 @@
 | 欄位 | 分類 | Convention | Agent 使用規則 |
 | --- | --- | --- | --- |
 | `id`、`entry_id`、`account_id` | 永久識別碼 | UUID opaque value；不得自行解析、產生可讀語意或替換 | 只用於資料關聯與精確更新；不可當作顯示文字 |
-| `accounts.key`、API 的 `account_key` | 穩定程式識別碼 | ASCII 小寫；以 `.` 分隔階層；每個 segment 使用 `snake_case`；格式為 `{type}.{identifier}` 或 `{type}.{group}.{identifier}` | 精確指定 Account 時優先使用；建立後不得因顯示名稱改變而修改 |
+| `accounts.key`、API 的 `account_key` | 穩定程式識別碼 | ASCII 小寫；以 `.` 分隔階層；每個 segment 使用 `snake_case`；格式為 `{type}.{identifier}` 或 `{type}.{group}.{identifier}` | 精確指定 Account 時優先使用；不得因顯示名稱改變而自動修改，只有使用者明確要求時才能連同 `type` 安全變更 |
 | `accounts.name` | 顯示名稱 | 可使用中文及其他 Unicode；供人閱讀；應簡短清楚；允許修改；不要求唯一 | 可顯示與模糊搜尋；不可作為唯一識別、外部關聯或精確寫入依據 |
 | `entries.description` | 事件標題／主要搜尋文字 | 人類可讀的單行文字；可包含商家、用途與必要上下文；不要求固定格式或唯一 | 用於顯示與全文搜尋；不可當作 dedup key 或穩定識別碼 |
 | `entries.note`、`postings.memo` | 自由文字 | 可使用自然語言與 Unicode；補充上下文；可為 `null`；不得承載需要程式解析的結構 | 只作補充顯示與搜尋；不可依賴其內容建立關聯或判斷唯一性 |
@@ -53,6 +53,7 @@
 4. 顯示文字的語言、大小寫與空白應保留原意；不要為了符合 machine-key 規則而轉換 `name`、`description`、`note` 或 `memo`。
 5. 跨表或跨請求引用 Account 時使用 `account_id` 或 `account_key`，不可使用 `account.name`。
 6. `account_key` 是 API 對 `accounts.key` 的引用名稱，兩者必須使用完全相同的值與比對規則。
+7. Entry 與 Posting 以 `account_id` 關聯 Account。明確變更 Account key 或 type 後，所有歷史查詢會透過該關聯立即顯示新值；舊 key 不保留 alias，也不可再用於精確查詢或寫入。
 
 核心資料結構只包含：
 
@@ -578,6 +579,9 @@ account.id
 ```
 
 不得依賴 `name` 進行精確寫入。
+
+Account key 只能在使用者明確要求時修改，且必須與 Account type 在同一個原子操作中更新。
+修改後，所有透過 `account_id` 關聯的歷史 Entry 與 Posting 會解析成新 key；舊 key 立即失效。
 
 ---
 

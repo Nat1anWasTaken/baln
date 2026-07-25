@@ -61,12 +61,18 @@ pub struct CreateAccountRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateAccountRequest {
+    /// Replacement stable key. Key and type must be changed together.
+    pub key: Option<String>,
     pub name: Option<String>,
     /// Replacement note. Omit to preserve it; use null or blank text to clear it.
     #[schema(max_length = 2000)]
     #[serde(default, deserialize_with = "deserialize_nullable_field")]
     pub note: Option<Option<String>>,
+    /// Replacement account type. Key and type must be changed together.
+    pub r#type: Option<AccountType>,
     pub archived: Option<bool>,
+    /// Current account version, required when changing the key or type.
+    pub expected_updated_at: Option<DateTime<Utc>>,
 }
 
 fn deserialize_nullable_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>

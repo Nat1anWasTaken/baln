@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -12,6 +12,15 @@ pub enum DeleteAccountResult {
     Deleted,
     NotFound,
     InUse,
+}
+
+pub struct AccountUpdate<'a> {
+    pub expected_updated_at: Option<DateTime<Utc>>,
+    pub key: Option<&'a str>,
+    pub name: Option<&'a str>,
+    pub note: Option<Option<&'a str>>,
+    pub account_type: Option<AccountType>,
+    pub archived: Option<bool>,
 }
 
 pub async fn create(
@@ -85,26 +94,23 @@ pub async fn update(
     pool: &PgPool,
     user_id: Uuid,
     account_id: Uuid,
-    name: Option<&str>,
-    archived: Option<bool>,
-    note: Option<Option<&str>>,
+    update: AccountUpdate<'_>,
 ) -> ApiResult<Option<Account>> {
     Ok(sqlx::query_as::<_, Account>(
         r#"
-        UPDATE accounts
-           SET name = COALESCE($3, name),
-               archived = COALESCE($4, archived),
-               note = CASE WHEN $5 THEN $6 ELSE note END
-         WHERE id = $1 AND user_id = $2
-        RETURNING id, user_id, key, name, note, type, archived, created_at, updated_at
+        SELECT id, user_id, key, name, note, type, archived, created_at, updated_at
+          FROM update_account_safely($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
     )
-    .bind(account_id)
     .bind(user_id)
-    .bind(name)
-    .bind(archived)
-    .bind(note.is_some())
-    .bind(note.flatten())
+    .bind(account_id)
+    .bind(update.expected_updated_at)
+    .bind(update.key)
+    .bind(update.name)
+    .bind(update.note.is_some())
+    .bind(update.note.flatten())
+    .bind(update.account_type)
+    .bind(update.archived)
     .fetch_optional(pool)
     .await?)
 }

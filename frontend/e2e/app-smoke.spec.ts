@@ -182,6 +182,28 @@ async function mockApi(page: Page) {
         },
       });
     }
+    if (path.startsWith("/api/v1/accounts/") && method === "PATCH") {
+      const accountId = path.split("/").at(-1);
+      const body = route.request().postDataJSON() as {
+        key?: string;
+        name?: string;
+        note?: string | null;
+        type?: string;
+      };
+      const current = visibleAccounts.find(
+        (account) => account.id === accountId,
+      );
+      if (!current) return route.fulfill({ status: 404, json: {} });
+      const updated = {
+        ...current,
+        ...body,
+        updated_at: "2026-07-25T01:00:00Z",
+      };
+      visibleAccounts = visibleAccounts.map((account) =>
+        account.id === accountId ? updated : account,
+      );
+      return route.fulfill({ json: updated });
+    }
     if (path.startsWith("/api/v1/accounts/") && method === "DELETE") {
       const accountId = path.split("/").at(-1);
       visibleAccounts = visibleAccounts.filter(
@@ -370,6 +392,54 @@ test("shows account notes in responsive lists and the edit dialog", async ({
     .locator('[data-slot="card"]:visible')
     .filter({ hasText: "現金" });
   await expect(mobileCard.getByText("連結到郵局金融卡")).toBeVisible();
+});
+
+test("confirms account key and type changes before updating ledger views", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/accounts");
+
+  const row = page.getByRole("row").filter({ hasText: "現金" });
+  await row.getByRole("button", { name: "編輯 現金" }).click();
+  await page.getByRole("combobox", { name: "帳戶類型" }).click();
+  await page.getByRole("option", { name: "負債" }).click();
+  await page.getByRole("textbox", { name: "帳戶代碼" }).fill("card.cathay");
+  await page.getByRole("button", { name: "儲存" }).click();
+
+  const confirmation = page.getByRole("alertdialog", {
+    name: "變更帳戶代碼或類型？",
+  });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText(
+    "asset.cash 變更為 liability.card.cathay",
+  );
+  await confirmation.getByRole("button", { name: "返回編輯" }).click();
+  await expect(page.getByRole("dialog", { name: "編輯帳戶" })).toBeVisible();
+
+  await page.getByRole("button", { name: "儲存" }).click();
+  await confirmation.getByRole("button", { name: "確認變更" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "編輯帳戶" }),
+  ).not.toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "現金" })).toContainText(
+    "liability.card.cathay",
+  );
+
+  await page.getByRole("button", { name: "切換顯示模式" }).click();
+  await page.getByRole("menuitem", { name: "深色" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileCard = page
+    .locator('[data-slot="card"]:visible')
+    .filter({ hasText: "現金" });
+  await mobileCard.getByRole("button", { name: "編輯 現金" }).click();
+  const mobileDialog = page.getByRole("dialog", { name: "編輯帳戶" });
+  await expect(mobileDialog).toBeVisible();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  const bounds = await mobileDialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
 });
 
 test("groups the responsive transaction account pills by account type", async ({

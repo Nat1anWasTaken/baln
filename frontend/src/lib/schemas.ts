@@ -201,9 +201,12 @@ export type CreateAccountRequest = {
 };
 
 export type UpdateAccountRequest = {
+  key?: string;
   name?: string;
   note?: string | null;
+  type?: AccountType;
   archived?: boolean;
+  expected_updated_at?: string;
 };
 
 export type EntryWriteRequest = {

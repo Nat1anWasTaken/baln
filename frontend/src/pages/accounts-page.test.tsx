@@ -122,6 +122,103 @@ describe("account notes", () => {
   });
 });
 
+describe("account identity editing", () => {
+  it("confirms a type-prefixed key change before updating the account", async () => {
+    const user = userEvent.setup();
+    let patchBody: unknown = null;
+    let currentAccount = account;
+    mockBalance();
+    server.use(
+      http.get(`${API_BASE_URL}/accounts`, () =>
+        HttpResponse.json([currentAccount]),
+      ),
+      http.patch(`${API_BASE_URL}/accounts/:id`, async ({ request }) => {
+        patchBody = await request.json();
+        currentAccount = {
+          ...currentAccount,
+          key: "liability.card.cathay",
+          type: "liability",
+          updated_at: "2026-07-25T01:00:00Z",
+        };
+        return HttpResponse.json(currentAccount);
+      }),
+    );
+
+    renderPage();
+    await screen.findAllByText("現金");
+    await user.click(screen.getAllByRole("button", { name: "編輯 現金" })[0]);
+    expect(screen.getByRole("textbox", { name: "帳戶代碼" })).toHaveValue(
+      "cash",
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "帳戶類型" }));
+    await user.click(screen.getByRole("option", { name: "負債" }));
+    const keyInput = screen.getByRole("textbox", { name: "帳戶代碼" });
+    await user.clear(keyInput);
+    await user.type(keyInput, "card.cathay");
+    await user.click(screen.getByRole("button", { name: "儲存" }));
+
+    expect(screen.getByText("變更帳戶代碼或類型？")).toBeInTheDocument();
+    expect(
+      screen.getByText(/asset\.cash.*liability\.card\.cathay/),
+    ).toBeInTheDocument();
+    expect(patchBody).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "返回編輯" }));
+    expect(
+      screen.getByRole("dialog", { name: "編輯帳戶" }),
+    ).toBeInTheDocument();
+    expect(patchBody).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "儲存" }));
+    await user.click(screen.getByRole("button", { name: "確認變更" }));
+
+    await waitFor(() =>
+      expect(patchBody).toEqual({
+        key: "liability.card.cathay",
+        name: "現金",
+        note: "連結到郵局金融卡",
+        type: "liability",
+        expected_updated_at: "2026-07-24T00:00:00Z",
+      }),
+    );
+  });
+
+  it("keeps the confirmation open when the account version is stale", async () => {
+    const user = userEvent.setup();
+    mockBalance();
+    server.use(
+      http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([account])),
+      http.patch(`${API_BASE_URL}/accounts/:id`, () =>
+        HttpResponse.json(
+          {
+            type: "https://baln.local/problems/stale_account_update",
+            title: "Conflict",
+            status: 409,
+            code: "stale_account_update",
+            detail: "refresh the account",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    renderPage();
+    await screen.findAllByText("現金");
+    await user.click(screen.getAllByRole("button", { name: "編輯 現金" })[0]);
+    const keyInput = screen.getByRole("textbox", { name: "帳戶代碼" });
+    await user.clear(keyInput);
+    await user.type(keyInput, "wallet");
+    await user.click(screen.getByRole("button", { name: "儲存" }));
+    await user.click(screen.getByRole("button", { name: "確認變更" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("變更帳戶代碼或類型？")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "確認變更" })).toBeEnabled();
+  });
+});
+
 describe("accounts page deletion", () => {
   it("cancels or confirms permanent deletion", async () => {
     const user = userEvent.setup();
