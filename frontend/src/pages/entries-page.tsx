@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { toExclusiveDate } from "@/lib/format";
 
@@ -127,14 +128,17 @@ export function EntriesPage() {
               id="entry-account"
               value={accountKey}
               onValueChange={(value) => setFilter("account", value)}
-              options={[
-                { value: "all", label: "所有帳戶" },
-                ...(accounts.data ?? []).map((account) => ({
-                  value: account.key,
-                  label: `${account.name}${account.archived ? "（已封存）" : ""}`,
-                  keywords: [account.key],
-                })),
-              ]}
+              options={[{ value: "all", label: "所有帳戶" }]}
+              groups={accountTypes.map((type) => ({
+                label: accountTypeLabels[type],
+                options: (accounts.data ?? [])
+                  .filter((account) => account.type === type)
+                  .map((account) => ({
+                    value: account.key,
+                    label: `${account.name}${account.archived ? "（已封存）" : ""}`,
+                    keywords: [account.key, accountTypeLabels[type]],
+                  })),
+              }))}
               searchPlaceholder="搜尋帳戶…"
               emptyText="找不到帳戶。"
             />
