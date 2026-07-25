@@ -33,7 +33,7 @@ const accounts = [
 const entry = {
   id: "01980000-0000-7000-8000-000000000010",
   date: "2026-07-24",
-  description: "早餐",
+  description: "全家便利商店 — 藍—成人加長不黏身雨衣",
   note: null,
   dedup_key: null,
   created_at: "2026-07-24T00:00:00Z",
@@ -278,7 +278,11 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await expect(
     page.getByText(/TWD\s+50,000/, { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByText("早餐", { exact: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByText("全家便利商店 — 藍—成人加長不黏身雨衣", { exact: true })
+      .first(),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "開啟使用者選單" }),
   ).toBeVisible();
@@ -299,6 +303,34 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await expect(
     page.getByRole("link", { name: "交易", exact: true }),
   ).not.toHaveAttribute("aria-current");
+});
+
+test("keeps long transaction summaries inside mobile cards", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/entries");
+
+  const description = page
+    .locator('[data-slot="card-title"]')
+    .getByText("全家便利商店 — 藍—成人加長不黏身雨衣", {
+      exact: true,
+    });
+  const card = page.locator('[data-slot="card"]').filter({ has: description });
+  const amount = card.getByText(/TWD\s+120/, { exact: true });
+
+  await expect(description).toBeVisible();
+  await expect(amount).toBeVisible();
+
+  const [cardBox, amountBox] = await Promise.all([
+    card.boundingBox(),
+    amount.boundingBox(),
+  ]);
+  expect(cardBox).not.toBeNull();
+  expect(amountBox).not.toBeNull();
+  expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(
+    cardBox!.x + cardBox!.width,
+  );
 });
 
 test("opens the advanced balanced-postings editor", async ({ page }) => {
@@ -329,7 +361,9 @@ test("reviews a possible duplicate across responsive themes", async ({
     name: "可能重複的交易",
   });
   await expect(duplicateDialog).toBeVisible();
-  await expect(duplicateDialog.getByText("早餐")).toBeVisible();
+  await expect(
+    duplicateDialog.getByText("全家便利商店 — 藍—成人加長不黏身雨衣"),
+  ).toBeVisible();
   await duplicateDialog.getByRole("button", { name: "取消" }).click();
   await expect(page.getByLabel("交易說明")).toHaveValue("Email receipt");
 

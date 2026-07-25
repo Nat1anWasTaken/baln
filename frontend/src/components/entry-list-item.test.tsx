@@ -52,4 +52,24 @@ describe("EntryCard", () => {
     expect(screen.getByText("支出 · 餐飲")).toBeInTheDocument();
     expect(screen.getByText("資產 · 現金")).toBeInTheDocument();
   });
+
+  it("truncates long descriptions alongside the fixed amount action", () => {
+    render(
+      <MemoryRouter>
+        <EntryCard
+          entry={{
+            ...entry,
+            description: "全家便利商店 — 藍—成人加長不黏身雨衣",
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const title = screen.getByText("全家便利商店 — 藍—成人加長不黏身雨衣");
+
+    expect(title).toHaveClass("truncate");
+    expect(title.parentElement).toHaveClass(
+      "has-data-[slot=card-action]:grid-cols-[1fr_auto]",
+    );
+  });
 });
