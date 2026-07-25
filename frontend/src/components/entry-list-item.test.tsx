@@ -53,6 +53,21 @@ describe("EntryCard", () => {
     expect(screen.getByText("資產 · 現金")).toBeInTheDocument();
   });
 
+  it("uses the whole card as one transaction detail link", () => {
+    render(
+      <MemoryRouter>
+        <EntryCard entry={entry} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "查看 午餐" })).toHaveAttribute(
+      "href",
+      "/entries/00000000-0000-4000-8000-000000000001",
+    );
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("truncates long descriptions alongside the fixed amount action", () => {
     render(
       <MemoryRouter>

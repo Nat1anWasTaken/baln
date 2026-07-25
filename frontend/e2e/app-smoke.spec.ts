@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { devices, expect, test, type Page } from "@playwright/test";
 
 const accounts = [
   {
@@ -432,4 +432,68 @@ test("creates, reveals, and revokes a personal API token", async ({ page }) => {
   await page.getByRole("button", { name: "撤銷" }).click();
   await page.getByRole("button", { name: "撤銷權杖" }).click();
   await expect(page.getByText("還沒有 API 權杖")).toBeVisible();
+});
+
+test("provides touch-sized controls and feedback on coarse pointers", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ ...devices["Pixel 7"] });
+  const page = await context.newPage();
+  await mockApi(page);
+
+  const expectTouchTarget = async (locator: ReturnType<Page["locator"]>) => {
+    const box = await locator.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  };
+
+  try {
+    await page.goto("/entries");
+
+    const search = page.getByLabel("搜尋交易");
+    const accountPicker = page.getByRole("combobox", { name: "帳戶" });
+    const transaction = page.getByRole("link", {
+      name: "查看 全家便利商店 — 藍—成人加長不黏身雨衣",
+    });
+    const mobileNavigation = page.getByRole("navigation", {
+      name: "主要導覽",
+    });
+
+    await expectTouchTarget(search);
+    await expectTouchTarget(accountPicker);
+    await expectTouchTarget(
+      mobileNavigation.getByRole("link", { name: "交易", exact: true }),
+    );
+    await expectTouchTarget(transaction);
+    await expect(transaction).toHaveCSS("touch-action", "manipulation");
+
+    await accountPicker.click();
+    await expect(page.locator('[data-slot="popover-content"]')).toHaveCSS(
+      "transform",
+      "none",
+    );
+    await expectTouchTarget(page.getByRole("option", { name: "所有帳戶" }));
+
+    await page.goto("/entries/new");
+    await expectTouchTarget(page.getByRole("tab", { name: "引導模式" }));
+    await expectTouchTarget(page.getByRole("button", { name: "切換顯示模式" }));
+
+    await page.goto("/accounts");
+    await expectTouchTarget(page.getByRole("button", { name: "編輯 現金" }));
+
+    const switchHitArea = await page
+      .getByRole("switch", { name: "顯示已封存" })
+      .evaluate((element) => {
+        const style = getComputedStyle(element, "::after");
+        return {
+          width: Number.parseFloat(style.width),
+          height: Number.parseFloat(style.height),
+        };
+      });
+    expect(switchHitArea.width).toBeGreaterThanOrEqual(44);
+    expect(switchHitArea.height).toBeGreaterThanOrEqual(44);
+  } finally {
+    await context.close();
+  }
 });

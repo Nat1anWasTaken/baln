@@ -150,6 +150,89 @@
   }
 }
 
+@layer components {
+  .touch-press {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition-duration: 100ms;
+    transition-property:
+      color, background-color, border-color, box-shadow, filter, transform;
+    transition-timing-function: ease-out;
+  }
+
+  .touch-press:active:not(:disabled):not([aria-disabled="true"]) {
+    filter: brightness(0.94);
+    transform: scale(0.98);
+  }
+
+  .touch-surface {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition-duration: 100ms;
+    transition-property:
+      color, background-color, border-color, box-shadow, filter, transform;
+    transition-timing-function: ease-out;
+  }
+
+  .touch-surface:active:not([aria-disabled="true"]) {
+    filter: brightness(0.96);
+    transform: scale(0.995);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .touch-press,
+    .touch-surface {
+      transition-property: color, background-color, border-color, box-shadow;
+    }
+
+    .touch-press:active:not(:disabled):not([aria-disabled="true"]),
+    .touch-surface:active:not([aria-disabled="true"]) {
+      filter: none;
+      transform: none;
+    }
+  }
+}
+
+@media (pointer: coarse) {
+  .touch-press,
+  .touch-surface,
+  [data-slot="button"],
+  [data-slot="toggle"],
+  [data-slot="toggle-group-item"],
+  [data-slot="tabs-list"],
+  [data-slot="tabs-trigger"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-checkbox-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-sub-trigger"],
+  [data-slot="command-item"],
+  [data-slot="sidebar-menu-button"],
+  [data-slot="sidebar-menu-sub-button"],
+  [data-slot="entry-link"],
+  input[data-slot="input"],
+  [data-slot="input-group"] {
+    min-height: 2.75rem;
+  }
+
+  .touch-press[data-size^="icon"],
+  [data-slot="button"][data-size^="icon"],
+  [data-slot="toggle"],
+  [data-slot="toggle-group-item"],
+  [data-slot="sidebar-menu-button"],
+  [data-slot="sidebar-menu-action"],
+  [data-slot="sidebar-group-action"] {
+    min-width: 2.75rem;
+  }
+
+  [data-slot="checkbox"]::after,
+  [data-slot="switch"]::after {
+    inset: 50% auto auto 50%;
+    width: 2.75rem;
+    height: 2.75rem;
+    transform: translate(-50%, -50%);
+  }
+}
+
 /*
  * iOS 26 WebKit adds a date input's padding outside its declared width.
  * Move the horizontal spacing to WebKit's inner value element so the shared

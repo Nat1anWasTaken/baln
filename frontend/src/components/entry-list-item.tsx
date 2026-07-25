@@ -67,23 +67,22 @@ export function EntrySummary({
 
 export function EntryCard({ entry }: { entry: EntryResponse }) {
   return (
-    <Card>
-      <EntrySummary
-        entry={entry}
-        action={
-          <Button
-            asChild
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`查看 ${entry.description}`}
-          >
-            <Link to={`/entries/${entry.id}`}>
+    <Link
+      to={`/entries/${entry.id}`}
+      aria-label={`查看 ${entry.description}`}
+      className="touch-surface block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <Card className="transition-colors group-active:bg-muted/40">
+        <EntrySummary
+          entry={entry}
+          action={
+            <span className="flex size-7 items-center justify-center text-muted-foreground">
               <ChevronRight aria-hidden="true" />
-            </Link>
-          </Button>
-        }
-      />
-    </Card>
+            </span>
+          }
+        />
+      </Card>
+    </Link>
   );
 }
 
@@ -96,7 +95,8 @@ export function EntryTableRow({ entry }: { entry: EntryResponse }) {
       <TableCell>
         <Link
           to={`/entries/${entry.id}`}
-          className="font-medium hover:underline"
+          data-slot="entry-link"
+          className="touch-press inline-flex items-center rounded-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {entry.description}
         </Link>
