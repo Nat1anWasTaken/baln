@@ -52,7 +52,9 @@ a destination account and return natural-language next actions whenever more inf
 required. When a user supplies a non-TWD amount, automatically convert it under the foreign-currency \
 policy returned by get_entry_creation_context before writing the entry. For each distinct create \
 operation, generate a new UUID v4 or v7 operation_key and retain it for retries; reuse a key only \
-for the exact same operation.";
+for the exact same operation. Baln checks new entries for matching dates, accounts, and amounts. \
+When it reports a possible duplicate, ask whether the pending entry is separate and set \
+confirmed_distinct only after explicit user confirmation.";
 
 fn foreign_currency_policy() -> Value {
     json!({
@@ -729,6 +731,7 @@ impl BalnMcp {
                     &operation,
                     entry_index,
                 )),
+                confirmed_distinct: draft.confirmed_distinct,
                 postings: postings_from_movements(&draft.movements),
             })
             .collect();
@@ -806,6 +809,7 @@ impl BalnMcp {
             description: input.description,
             note: input.note,
             movements: input.movements,
+            confirmed_distinct: false,
         };
         let accounts =
             match account_repository::list(&self.state.pool, principal.user.id, true, None).await {
@@ -985,6 +989,10 @@ struct EntryDraft {
     note: Option<String>,
     /// One or more positive money movements. Use multiple movements for splits.
     movements: Vec<MovementInput>,
+    /// Set this to true only after Baln reports a possible duplicate for this exact draft and the
+    /// user explicitly confirms that it is a separate transaction.
+    #[serde(default)]
+    confirmed_distinct: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -1006,6 +1014,10 @@ struct CreateEntryInput {
     note: Option<String>,
     /// One or more positive money movements. Use multiple movements for splits.
     movements: Vec<MovementInput>,
+    /// Set this to true only after Baln reports a possible duplicate for this exact operation and
+    /// the user explicitly confirms that it is a separate transaction. Never set it proactively.
+    #[serde(default)]
+    confirmed_distinct: bool,
 }
 
 impl From<CreateEntryInput> for EntryDraft {
@@ -1015,6 +1027,7 @@ impl From<CreateEntryInput> for EntryDraft {
             description: input.description,
             note: input.note,
             movements: input.movements,
+            confirmed_distinct: input.confirmed_distinct,
         }
     }
 }
@@ -1128,13 +1141,13 @@ fn build_tools() -> Vec<Tool> {
         write_tool::<CreateEntryInput>(
             "create_entry",
             "Create Ledger Entry",
-            "Create one balanced entry using a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Generate a new UUID v4 or v7 operation_key for each distinct operation and reuse it only to retry that same operation, including after reconnects; the same UUID with changed content is a conflict. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
+            "Create one balanced entry using a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Generate a new UUID v4 or v7 operation_key for each distinct operation and reuse it only to retry that same operation, including after reconnects; the same UUID with changed content is a conflict. Baln checks the date, accounts, and amounts against existing entries. If it reports a possible duplicate, ask the user whether this is a separate transaction; retry with the same operation_key and confirmed_distinct=true only after explicit confirmation. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
             false,
         ),
         write_tool::<CreateEntriesInput>(
             "create_entries",
             "Create Ledger Entries",
-            "Create 1–100 entries atomically using the same semantic movement shape and foreign-currency automatic-conversion policy as create_entry. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch.",
+            "Create 1–100 entries atomically using the same semantic movement shape, possible-duplicate confirmation behavior, and foreign-currency automatic-conversion policy as create_entry. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch.",
             false,
         ),
         write_tool::<UpdateEntryInput>(
@@ -1529,7 +1542,26 @@ fn merge_result(mut base: Value, details: Value) -> Value {
 
 fn api_error(error: ApiError) -> CallToolResult {
     let (code, detail, next_action) = match error {
-        ApiError::Problem { code, detail, .. } => {
+        ApiError::Problem {
+            code,
+            detail,
+            fields,
+            ..
+        } => {
+            if code == "possible_duplicate" {
+                return action_error(
+                    "needs_user_input",
+                    detail,
+                    "Show the matching entries to the user and ask whether each pending entry is a separate transaction. If confirmed, retry the exact same operation_key with confirmed_distinct=true only on the confirmed entries. Otherwise, do not create them.",
+                    vec![
+                        "Baln found a transaction with the same date, accounts, and amounts. Is this a separate transaction that should also be recorded?".to_owned(),
+                    ],
+                    merge_result(
+                        json!({"code": code}),
+                        fields.unwrap_or_else(|| json!({})),
+                    ),
+                );
+            }
             let next = match code {
                 "not_found" => {
                     "Retrieve the current list and select an existing item. If the intended item is unclear, ask the user which one they mean."
@@ -1821,6 +1853,34 @@ mod tests {
     }
 
     #[test]
+    fn possible_duplicates_are_returned_as_user_input_actions() {
+        let result = atomic_api_error(ApiError::conflict_with_fields(
+            "possible_duplicate",
+            "one entry may already be recorded",
+            json!({
+                "matches": [{
+                    "pending_entry_number": 1,
+                    "existing_entries": [{"id": "018f0000-0000-7000-8000-000000000001"}],
+                    "pending_entry_numbers": []
+                }]
+            }),
+        ));
+        let structured = result.structured_content.unwrap();
+
+        assert_eq!(structured["status"], "needs_user_input");
+        assert_eq!(structured["code"], "possible_duplicate");
+        assert_eq!(structured["atomic"], true);
+        assert_eq!(structured["created_count"], 0);
+        assert_eq!(structured["matches"][0]["pending_entry_number"], 1);
+        assert!(
+            structured["next_action"]
+                .as_str()
+                .unwrap()
+                .contains("confirmed_distinct=true")
+        );
+    }
+
+    #[test]
     fn account_deletion_is_destructive_and_requires_delete_scope() {
         let tools = build_tools();
         let delete = tools
@@ -1887,6 +1947,7 @@ mod tests {
         assert!(input_schema.contains("automatically convert"));
         assert!(input_schema.contains("exchange rate"));
         assert!(input_schema.contains("operation_key"));
+        assert!(input_schema.contains("confirmed_distinct"));
         assert!(input_schema.contains("\"format\":\"uuid\""));
         assert!(
             create
@@ -1895,6 +1956,14 @@ mod tests {
                 .unwrap()
                 .contains("including after reconnects")
         );
+        assert!(
+            create
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("possible duplicate")
+        );
+        assert!(SERVER_INSTRUCTIONS.contains("confirmed_distinct"));
     }
 
     #[test]

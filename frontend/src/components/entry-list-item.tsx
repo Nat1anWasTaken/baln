@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,9 +32,15 @@ export function entryDisplayAmount(entry: EntryResponse) {
   );
 }
 
-export function EntryCard({ entry }: { entry: EntryResponse }) {
+export function EntrySummary({
+  entry,
+  action,
+}: {
+  entry: EntryResponse;
+  action?: ReactNode;
+}) {
   return (
-    <Card>
+    <>
       <CardHeader className="gap-1 pb-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -53,17 +60,30 @@ export function EntryCard({ entry }: { entry: EntryResponse }) {
             </Badge>
           ))}
         </div>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`查看 ${entry.description}`}
-        >
-          <Link to={`/entries/${entry.id}`}>
-            <ChevronRight aria-hidden="true" />
-          </Link>
-        </Button>
+        {action}
       </CardContent>
+    </>
+  );
+}
+
+export function EntryCard({ entry }: { entry: EntryResponse }) {
+  return (
+    <Card>
+      <EntrySummary
+        entry={entry}
+        action={
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`查看 ${entry.description}`}
+          >
+            <Link to={`/entries/${entry.id}`}>
+              <ChevronRight aria-hidden="true" />
+            </Link>
+          </Button>
+        }
+      />
     </Card>
   );
 }

@@ -1,9 +1,21 @@
 import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
 import { ArrowLeft, CircleAlert, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { EntrySummary } from "@/components/entry-list-item";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,18 +36,25 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
-import { entriesApi } from "@/lib/api-client";
+import { ApiError, entriesApi } from "@/lib/api-client";
 import { formatMoney, todayTaipei } from "@/lib/format";
+import { possibleDuplicateFieldsSchema } from "@/lib/schemas";
 import type {
   Account,
   AccountType,
+  EntryWriteRequest,
   EntryResponse,
+  PossibleDuplicateFields,
   PostingInput,
 } from "@/lib/schemas";
 
 type EditorMode = "guided" | "advanced";
 type GuidedPreset = "expense" | "income" | "transfer" | "refund";
 type Direction = "debit" | "credit";
+type EntrySubmission = {
+  body: EntryWriteRequest;
+  confirmedDistinct: boolean;
+};
 
 type EditorPosting = {
   accountKey: string;
@@ -270,6 +289,10 @@ export function EntryEditor({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [duplicateReview, setDuplicateReview] = useState<{
+    submission: EntrySubmission;
+    fields: PossibleDuplicateFields;
+  } | null>(null);
   const originalKeys = new Set(
     entry?.postings.map((posting) => posting.account.key) ?? [],
   );
@@ -301,24 +324,35 @@ export function EntryEditor({
   const configuration = presetConfiguration[preset];
 
   const mutation = useMutation({
-    mutationFn: (postings: PostingInput[]) => {
-      const values = form.getValues();
-      const body = {
-        date: values.date,
-        description: values.description.trim(),
-        note: values.note.trim() || null,
-        postings,
-      };
+    mutationFn: ({ body, confirmedDistinct }: EntrySubmission) => {
       return entry
         ? entriesApi.update(entry.id, body)
-        : entriesApi.create({ ...body, dedup_key: null });
+        : entriesApi.create({
+            ...body,
+            dedup_key: null,
+            confirmed_distinct: confirmedDistinct,
+          });
     },
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries();
       toast.success(entry ? "交易已更新" : "交易已建立");
       navigate(`/entries/${saved.id}`, { replace: true });
     },
-    onError: (error) => {
+    onError: (error, submission) => {
+      if (
+        !entry &&
+        !submission.confirmedDistinct &&
+        error instanceof ApiError &&
+        error.problem.code === "possible_duplicate"
+      ) {
+        const fields = possibleDuplicateFieldsSchema.safeParse(
+          error.problem.fields,
+        );
+        if (fields.success) {
+          setDuplicateReview({ submission, fields: fields.data });
+          return;
+        }
+      }
       form.setError("root", { message: error.message });
       toast.error(error.message);
     },
@@ -419,7 +453,15 @@ export function EntryEditor({
         return;
       }
     }
-    mutation.mutate(postings);
+    mutation.mutate({
+      body: {
+        date: values.date,
+        description: values.description.trim(),
+        note: values.note.trim() || null,
+        postings,
+      },
+      confirmedDistinct: false,
+    });
   }
 
   const signedPostings = (watchedPostings ?? []).map(signedPosting);
@@ -430,6 +472,13 @@ export function EntryEditor({
     .filter((posting) => posting.amount_minor < 0)
     .reduce((sum, posting) => sum - posting.amount_minor, 0);
   const imbalance = debitTotal - creditTotal;
+  const duplicateEntries =
+    duplicateReview?.fields.matches
+      .flatMap((match) => match.existing_entries)
+      .filter(
+        (candidate, index, candidates) =>
+          candidates.findIndex((entry) => entry.id === candidate.id) === index,
+      ) ?? [];
 
   return (
     <form
@@ -710,6 +759,50 @@ export function EntryEditor({
           {mutation.isPending ? "儲存中" : entry ? "儲存變更" : "建立交易"}
         </Button>
       </div>
+
+      <AlertDialog
+        open={duplicateReview !== null}
+        onOpenChange={(open) => {
+          if (!open && !mutation.isPending) setDuplicateReview(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>可能重複的交易</AlertDialogTitle>
+            <AlertDialogDescription>
+              已找到日期、帳戶與金額相同的交易。請確認這是否為另一筆交易。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid max-h-72 gap-2 overflow-y-auto">
+            {duplicateEntries.map((candidate) => (
+              <Card key={candidate.id}>
+                <EntrySummary entry={candidate} />
+              </Card>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button" disabled={mutation.isPending}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              disabled={!duplicateReview || mutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (duplicateReview) {
+                  form.clearErrors("root");
+                  mutation.mutate({
+                    ...duplicateReview.submission,
+                    confirmedDistinct: true,
+                  });
+                }
+              }}
+            >
+              {mutation.isPending ? "建立中" : "仍要建立"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

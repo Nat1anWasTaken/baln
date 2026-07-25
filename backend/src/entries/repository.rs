@@ -29,28 +29,6 @@ pub async fn get(pool: &PgPool, user_id: Uuid, entry_id: Uuid) -> ApiResult<Opti
     }
 }
 
-pub async fn get_by_dedup(
-    pool: &PgPool,
-    user_id: Uuid,
-    dedup_key: &str,
-) -> ApiResult<Option<EntryResponse>> {
-    let row = sqlx::query_as::<_, EntryRow>(
-        r#"
-        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
-          FROM entries
-         WHERE user_id = $1 AND dedup_key = $2
-        "#,
-    )
-    .bind(user_id)
-    .bind(dedup_key)
-    .fetch_optional(pool)
-    .await?;
-    match row {
-        Some(row) => Ok(Some(hydrate(pool, row).await?)),
-        None => Ok(None),
-    }
-}
-
 pub(crate) async fn get_by_dedup_in_transaction(
     transaction: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
@@ -72,6 +50,31 @@ pub(crate) async fn get_by_dedup_in_transaction(
         Some(row) => Ok(Some(hydrate_in_transaction(transaction, row).await?)),
         None => Ok(None),
     }
+}
+
+pub(crate) async fn list_on_date_in_transaction(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    date: NaiveDate,
+) -> ApiResult<Vec<EntryResponse>> {
+    let rows = sqlx::query_as::<_, EntryRow>(
+        r#"
+        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+          FROM entries
+         WHERE user_id = $1 AND date = $2
+         ORDER BY id DESC
+        "#,
+    )
+    .bind(user_id)
+    .bind(date)
+    .fetch_all(&mut **transaction)
+    .await?;
+
+    let mut entries = Vec::with_capacity(rows.len());
+    for row in rows {
+        entries.push(hydrate_in_transaction(transaction, row).await?);
+    }
+    Ok(entries)
 }
 
 pub async fn hydrate(pool: &PgPool, row: EntryRow) -> ApiResult<EntryResponse> {

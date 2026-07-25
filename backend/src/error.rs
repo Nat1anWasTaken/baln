@@ -63,6 +63,19 @@ impl ApiError {
         Self::problem(StatusCode::CONFLICT, code, detail)
     }
 
+    pub fn conflict_with_fields(
+        code: &'static str,
+        detail: impl Into<String>,
+        fields: Value,
+    ) -> Self {
+        Self::Problem {
+            status: StatusCode::CONFLICT,
+            code,
+            detail: detail.into(),
+            fields: Some(fields),
+        }
+    }
+
     pub fn service_unavailable(detail: impl Into<String>) -> Self {
         Self::problem(
             StatusCode::SERVICE_UNAVAILABLE,

@@ -46,6 +46,7 @@ const localizedProblems: Record<string, string> = {
   archived_account: "已封存的帳戶不能加入新交易。",
   invalid_date_range: "結束日期必須晚於開始日期。",
   invalid_cursor: "分頁資訊已失效，請重新載入。",
+  possible_duplicate: "可能已有日期、帳戶與金額相同的交易。",
   invalid_api_token_name: "權杖名稱必須為 1 至 100 個字元。",
   invalid_api_token_expiry: "權杖到期時間必須晚於現在。",
   unique_constraint: "已有相同代碼的資料。",

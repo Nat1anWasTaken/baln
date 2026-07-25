@@ -1,8 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, hash_map::Entry};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -10,8 +11,8 @@ use crate::{
     ApiError, ApiResult,
     accounts::Account,
     entries::{
-        CreateEntryRequest, EntryPage, EntryResponse, ListEntriesQuery, PostingInput,
-        UpdateEntryRequest, repository,
+        CreateEntryRequest, EntryPage, EntryResponse, ListEntriesQuery, PossibleDuplicateMatch,
+        PostingInput, UpdateEntryRequest, repository,
     },
 };
 
@@ -20,68 +21,10 @@ pub async fn create(
     user_id: Uuid,
     request: CreateEntryRequest,
 ) -> ApiResult<(EntryResponse, bool)> {
-    validate_entry(
-        &request.description,
-        request.dedup_key.as_deref(),
-        &request.postings,
-    )?;
-    if let Some(key) = request.dedup_key.as_deref()
-        && let Some(existing) = repository::get_by_dedup(pool, user_id, key).await?
-    {
-        return compare_idempotent(existing, &request);
-    }
-
-    let mut transaction = pool.begin().await?;
-    let accounts = resolve_and_validate_accounts(
-        &mut transaction,
-        user_id,
-        &request.postings,
-        &HashSet::new(),
-    )
-    .await?;
-    let entry_id = Uuid::now_v7();
-    let inserted = sqlx::query(
-        r#"
-        INSERT INTO entries (id, user_id, date, description, note, dedup_key)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        "#,
-    )
-    .bind(entry_id)
-    .bind(user_id)
-    .bind(request.date)
-    .bind(&request.description)
-    .bind(&request.note)
-    .bind(&request.dedup_key)
-    .execute(&mut *transaction)
-    .await;
-
-    if let Err(error) = inserted {
-        let duplicate = error
-            .as_database_error()
-            .and_then(|error| error.code())
-            .is_some_and(|code| code == "23505");
-        transaction.rollback().await?;
-        if duplicate
-            && let Some(key) = request.dedup_key.as_deref()
-            && let Some(existing) = repository::get_by_dedup(pool, user_id, key).await?
-        {
-            return compare_idempotent(existing, &request);
-        }
-        return Err(error.into());
-    }
-    insert_postings(
-        &mut transaction,
-        user_id,
-        entry_id,
-        &request.postings,
-        &accounts,
-    )
-    .await?;
-    transaction.commit().await?;
-    let entry = repository::get(pool, user_id, entry_id)
+    create_batch(pool, user_id, vec![request])
         .await?
-        .ok_or_else(|| ApiError::internal("created entry disappeared"))?;
-    Ok((entry, false))
+        .pop()
+        .ok_or_else(|| ApiError::internal("single-entry batch returned no result"))
 }
 
 /// Creates or idempotently replays a complete batch in one database
@@ -118,13 +61,95 @@ pub async fn create_batch(
     }
 
     let mut transaction = pool.begin().await?;
-    let mut results = Vec::with_capacity(requests.len());
-    for request in requests {
+    let mut dates = requests
+        .iter()
+        .map(|request| request.date)
+        .collect::<Vec<_>>();
+    dates.sort_unstable();
+    dates.dedup();
+    for date in dates {
+        let lock_key = format!("entry-create:{user_id}:{date}");
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(lock_key)
+            .execute(&mut *transaction)
+            .await?;
+    }
+
+    let mut replayed = Vec::with_capacity(requests.len());
+    for request in &requests {
         if let Some(key) = request.dedup_key.as_deref()
             && let Some(existing) =
                 repository::get_by_dedup_in_transaction(&mut transaction, user_id, key).await?
         {
-            results.push(compare_idempotent(existing, &request)?);
+            replayed.push(Some(compare_idempotent(existing, request)?));
+        } else {
+            replayed.push(None);
+        }
+    }
+
+    let mut entries_by_date = HashMap::new();
+    for (index, request) in requests.iter().enumerate() {
+        if replayed[index].is_some() {
+            continue;
+        }
+        if let Entry::Vacant(vacant) = entries_by_date.entry(request.date) {
+            let entries =
+                repository::list_on_date_in_transaction(&mut transaction, user_id, request.date)
+                    .await?;
+            vacant.insert(entries);
+        }
+    }
+
+    let mut possible_duplicates = Vec::new();
+    for (index, request) in requests.iter().enumerate() {
+        if replayed[index].is_some() || request.confirmed_distinct {
+            continue;
+        }
+        let signature = posting_signature(&request.postings);
+        let existing_entries = entries_by_date
+            .get(&request.date)
+            .into_iter()
+            .flatten()
+            .filter(|entry| {
+                !request.dedup_key.as_deref().is_some_and(|key| {
+                    entry
+                        .dedup_key
+                        .as_deref()
+                        .is_some_and(|entry_key| entry_key == key)
+                }) && response_posting_signature(entry) == signature
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let pending_entry_numbers = requests[..index]
+            .iter()
+            .enumerate()
+            .filter(|(earlier_index, earlier)| {
+                replayed[*earlier_index].is_none()
+                    && earlier.date == request.date
+                    && posting_signature(&earlier.postings) == signature
+            })
+            .map(|(earlier_index, _)| earlier_index + 1)
+            .collect::<Vec<_>>();
+        if !existing_entries.is_empty() || !pending_entry_numbers.is_empty() {
+            possible_duplicates.push(PossibleDuplicateMatch {
+                pending_entry_number: index + 1,
+                existing_entries,
+                pending_entry_numbers,
+            });
+        }
+    }
+    if !possible_duplicates.is_empty() {
+        return Err(ApiError::conflict_with_fields(
+            "possible_duplicate",
+            "one or more entries may already be recorded",
+            json!({"matches": possible_duplicates}),
+        ));
+    }
+
+    let mut results = Vec::with_capacity(requests.len());
+    for (request, replay) in requests.into_iter().zip(replayed) {
+        if let Some(replay) = replay {
+            results.push(replay);
             continue;
         }
         let accounts = resolve_and_validate_accounts(
@@ -165,6 +190,22 @@ pub async fn create_batch(
     }
     transaction.commit().await?;
     Ok(results)
+}
+
+fn posting_signature(postings: &[PostingInput]) -> Vec<(String, i128)> {
+    let mut totals = BTreeMap::<String, i128>::new();
+    for posting in postings {
+        *totals.entry(posting.account_key.clone()).or_default() += i128::from(posting.amount_minor);
+    }
+    totals.into_iter().collect()
+}
+
+fn response_posting_signature(entry: &EntryResponse) -> Vec<(String, i128)> {
+    let mut totals = BTreeMap::<String, i128>::new();
+    for posting in &entry.postings {
+        *totals.entry(posting.account.key.clone()).or_default() += i128::from(posting.amount_minor);
+    }
+    totals.into_iter().collect()
 }
 
 pub async fn update(
@@ -509,6 +550,7 @@ mod tests {
             description: "麥當勞 早餐".to_owned(),
             note: None,
             dedup_key: Some("manual-message:test".to_owned()),
+            confirmed_distinct: false,
             postings: vec![
                 PostingInput {
                     account_key: "expense.restaurant".to_owned(),
@@ -554,15 +596,106 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn identical_content_with_different_operation_keys_creates_both(pool: PgPool) {
+    async fn possible_duplicate_requires_confirmation_for_a_distinct_operation(pool: PgPool) {
         let user_id = seed(&pool).await;
-        let (first, first_replayed) = create(&pool, user_id, request()).await.unwrap();
+        let mut original_request = request();
+        original_request.dedup_key = None;
+        original_request.postings = vec![
+            PostingInput {
+                account_key: "expense.restaurant".to_owned(),
+                amount_minor: 100,
+                memo: Some("food".to_owned()),
+            },
+            PostingInput {
+                account_key: "asset.cash".to_owned(),
+                amount_minor: -100,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "expense.restaurant".to_owned(),
+                amount_minor: 220,
+                memo: Some("drink".to_owned()),
+            },
+            PostingInput {
+                account_key: "asset.cash".to_owned(),
+                amount_minor: -220,
+                memo: None,
+            },
+        ];
+        let (first, first_replayed) = create(&pool, user_id, original_request).await.unwrap();
         let mut second_request = request();
-        second_request.dedup_key = Some("manual-message:distinct-operation".to_owned());
+        second_request.description = "Apple Pay 午餐".to_owned();
+        second_request.dedup_key = None;
+        second_request.postings.reverse();
+
+        let error = create(&pool, user_id, second_request.clone())
+            .await
+            .unwrap_err();
+        match error {
+            ApiError::Problem {
+                code,
+                fields: Some(fields),
+                ..
+            } => {
+                assert_eq!(code, "possible_duplicate");
+                assert_eq!(fields["matches"][0]["pending_entry_number"], 1);
+                assert_eq!(
+                    fields["matches"][0]["existing_entries"][0]["id"],
+                    first.id.to_string()
+                );
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+
+        second_request.confirmed_distinct = true;
         let (second, second_replayed) = create(&pool, user_id, second_request).await.unwrap();
 
         assert!(!first_replayed);
         assert!(!second_replayed);
+        assert_ne!(first.id, second.id);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn concurrent_matching_creates_cannot_both_pass_unconfirmed(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = request();
+        let mut second = request();
+        second.description = "Email receipt".to_owned();
+        second.dedup_key = Some("manual-message:concurrent".to_owned());
+
+        let (first_result, second_result) = tokio::join!(
+            create(&pool, user_id, first),
+            create(&pool, user_id, second)
+        );
+        let results = [first_result, second_result];
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert!(results.iter().any(|result| {
+            matches!(
+                result,
+                Err(ApiError::Problem {
+                    code: "possible_duplicate",
+                    ..
+                })
+            )
+        }));
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM entries WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn same_postings_on_a_different_date_are_not_duplicates(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let (first, _) = create(&pool, user_id, request()).await.unwrap();
+        let mut next_day = request();
+        next_day.date = NaiveDate::from_ymd_opt(2026, 7, 25).unwrap();
+        next_day.dedup_key = Some("manual-message:next-day".to_owned());
+
+        let (second, replayed) = create(&pool, user_id, next_day).await.unwrap();
+        assert!(!replayed);
         assert_ne!(first.id, second.id);
     }
 
@@ -599,6 +732,7 @@ mod tests {
         let mut second = request();
         second.description = "晚餐".to_owned();
         second.dedup_key = Some("manual-message:dinner".to_owned());
+        second.confirmed_distinct = true;
         let requests = vec![request(), second];
 
         let first = create_batch(&pool, user_id, requests.clone())
@@ -613,6 +747,36 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn matching_entries_inside_a_batch_are_rejected_atomically(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let mut second = request();
+        second.description = "Email receipt".to_owned();
+        second.dedup_key = Some("manual-message:email".to_owned());
+
+        let error = create_batch(&pool, user_id, vec![request(), second])
+            .await
+            .unwrap_err();
+        match error {
+            ApiError::Problem {
+                code,
+                fields: Some(fields),
+                ..
+            } => {
+                assert_eq!(code, "possible_duplicate");
+                assert_eq!(fields["matches"][0]["pending_entry_number"], 2);
+                assert_eq!(fields["matches"][0]["pending_entry_numbers"], json!([1]));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM entries WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[sqlx::test(migrations = "./migrations")]

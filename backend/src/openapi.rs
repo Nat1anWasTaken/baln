@@ -59,6 +59,7 @@ use utoipa::{
         crate::entries::AccountSummary,
         crate::entries::PostingResponse,
         crate::entries::EntryResponse,
+        crate::entries::PossibleDuplicateMatch,
         crate::entries::EntryPage,
         crate::reports::ReportAccountTotal,
         crate::reports::PeriodSummary

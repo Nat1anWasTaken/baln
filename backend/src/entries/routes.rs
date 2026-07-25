@@ -29,7 +29,11 @@ pub fn router() -> Router<AppState> {
     tag = "entries",
     security(("bearer_auth" = [])),
     request_body = CreateEntryRequest,
-    responses((status = 201, body = EntryResponse), (status = 200, body = EntryResponse))
+    responses(
+        (status = 201, body = EntryResponse),
+        (status = 200, body = EntryResponse),
+        (status = 409, description = "Possible duplicate or idempotency conflict")
+    )
 )]
 pub(crate) async fn create(
     State(state): State<AppState>,

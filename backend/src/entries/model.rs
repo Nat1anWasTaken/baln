@@ -19,6 +19,8 @@ pub struct CreateEntryRequest {
     pub description: String,
     pub note: Option<String>,
     pub dedup_key: Option<String>,
+    #[serde(default)]
+    pub confirmed_distinct: bool,
     pub postings: Vec<PostingInput>,
 }
 
@@ -57,6 +59,13 @@ pub struct EntryResponse {
     pub postings: Vec<PostingResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct PossibleDuplicateMatch {
+    pub pending_entry_number: usize,
+    pub existing_entries: Vec<EntryResponse>,
+    pub pending_entry_numbers: Vec<usize>,
 }
 
 #[derive(Debug, Deserialize, IntoParams)]

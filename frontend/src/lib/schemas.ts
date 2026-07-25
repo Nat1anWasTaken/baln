@@ -151,6 +151,20 @@ export const entryResponseSchema = z.object({
 
 export type EntryResponse = z.infer<typeof entryResponseSchema>;
 
+export const possibleDuplicateMatchSchema = z.object({
+  pending_entry_number: z.number().int().positive(),
+  existing_entries: z.array(entryResponseSchema),
+  pending_entry_numbers: z.array(z.number().int().positive()),
+});
+
+export const possibleDuplicateFieldsSchema = z.object({
+  matches: z.array(possibleDuplicateMatchSchema).min(1),
+});
+
+export type PossibleDuplicateFields = z.infer<
+  typeof possibleDuplicateFieldsSchema
+>;
+
 export const entryPageSchema = z.object({
   items: z.array(entryResponseSchema),
   next_cursor: z.string().nullable(),
@@ -198,4 +212,5 @@ export type EntryWriteRequest = {
 
 export type CreateEntryRequest = EntryWriteRequest & {
   dedup_key: string | null;
+  confirmed_distinct?: boolean;
 };
