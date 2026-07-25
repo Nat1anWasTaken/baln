@@ -145,6 +145,13 @@ signed amounts, debit/credit labels, totals, user IDs, posting IDs, or
 database deduplication keys. `create_entries` accepts up to 100 entries and
 commits the whole batch atomically.
 
+MCP updates and deletes are also plural and atomic. `update_entries` accepts an
+`entries` array of 1–100 complete replacements, while `delete_entries` accepts
+an `entry_ids` array of 1–100 distinct exact UUIDs. If any item is invalid,
+missing, or belongs to another user, the complete batch is rolled back. Use
+these plural tools for one-entry MCP operations as well. The singular REST
+entry routes remain available.
+
 `create_entry` and `create_entries` accept an optional caller-generated
 `operation_key`. Clients should generate a new UUID v4 or v7 for every distinct
 operation, retain it, and reuse it only when retrying the exact same operation.
@@ -196,7 +203,11 @@ OAuth consent flow, and verify:
    `confirmed_distinct: true`.
 6. A batch containing an invalid account creates zero entries and explains the
    required correction.
-7. Revoking the connection under **已連接的應用程式** makes the access and
+7. `update_entries` updates multiple entries together; an invalid or missing
+   target leaves every entry unchanged.
+8. `delete_entries` deletes multiple exact IDs together; an invalid or missing
+   target leaves every entry intact.
+9. Revoking the connection under **已連接的應用程式** makes the access and
    refresh tokens unusable.
 
 ### ChatGPT web
@@ -208,6 +219,8 @@ least these prompts:
 ```text
 Record lunch for NT$320 paid in cash.
 Record this list of 20 transactions as one batch.
+Update these three transactions as one batch.
+Delete these two transactions.
 Record a purchase using my card.
 ```
 

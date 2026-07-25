@@ -59,6 +59,19 @@ impl ApiError {
         )
     }
 
+    pub fn not_found_with_fields(
+        resource: &'static str,
+        detail: impl Into<String>,
+        fields: Value,
+    ) -> Self {
+        Self::Problem {
+            status: StatusCode::NOT_FOUND,
+            code: "not_found",
+            detail: detail.into(),
+            fields: Some(json_fields(resource, fields)),
+        }
+    }
+
     pub fn conflict(code: &'static str, detail: impl Into<String>) -> Self {
         Self::problem(StatusCode::CONFLICT, code, detail)
     }
@@ -100,6 +113,13 @@ impl ApiError {
             fields: None,
         }
     }
+}
+
+fn json_fields(resource: &'static str, mut fields: Value) -> Value {
+    if let Some(object) = fields.as_object_mut() {
+        object.insert("resource".to_owned(), Value::String(resource.to_owned()));
+    }
+    fields
 }
 
 impl IntoResponse for ApiError {

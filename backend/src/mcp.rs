@@ -36,7 +36,7 @@ use crate::{
     reports::repository as report_repository,
 };
 
-const MAX_BATCH_ENTRIES: usize = 100;
+const MAX_BATCH_ENTRIES: usize = entry_service::MAX_BATCH_ENTRIES;
 const MAX_MOVEMENTS_PER_ENTRY: usize = 50;
 const FOREIGN_CURRENCY_POLICY: &str = "When the user gives a non-TWD amount, automatically \
 convert it to whole TWD before calling an entry creation or update tool. Prefer the actual \
@@ -54,7 +54,10 @@ policy returned by get_entry_creation_context before writing the entry. For each
 operation, generate a new UUID v4 or v7 operation_key and retain it for retries; reuse a key only \
 for the exact same operation. Baln checks new entries for matching dates, accounts, and amounts. \
 When it reports a possible duplicate, ask whether the pending entry is separate and set \
-confirmed_distinct only after explicit user confirmation.";
+confirmed_distinct only after explicit user confirmation. Updates and deletions are available only \
+through the plural update_entries and delete_entries tools, including for one entry. Retrieve and \
+identify every exact target first. Both tools are atomic: if any batch item is invalid or missing, \
+no entries in that batch are changed.";
 
 fn foreign_currency_policy() -> Value {
     json!({
@@ -371,12 +374,12 @@ impl BalnMcp {
                     }
                 }
             }
-            "update_entry" => {
+            "update_entries" => {
                 if let Err(result) = self.require(&principal, "ledger:write") {
                     result
                 } else {
-                    match parse_input::<UpdateEntryInput>(arguments) {
-                        Ok(input) => self.update_entry(principal, input).await,
+                    match parse_input::<UpdateEntriesInput>(arguments) {
+                        Ok(input) => self.update_entries(principal, input.entries).await,
                         Err(result) => result,
                     }
                 }
@@ -467,26 +470,32 @@ impl BalnMcp {
                     }
                 }
             }
-            "delete_entry" => {
+            "delete_entries" => {
                 if let Err(result) = self.require(&principal, "ledger:delete") {
                     result
                 } else {
-                    match parse_input::<EntryIdInput>(arguments) {
-                        Ok(input) => match entry_service::delete(
+                    match parse_input::<DeleteEntriesInput>(arguments) {
+                        Ok(input) => match entry_service::delete_batch(
                             &self.state.pool,
                             principal.user.id,
-                            input.entry_id,
+                            input.entry_ids,
                         )
                         .await
                         {
-                            Ok(()) => success(
+                            Ok(entry_ids) => success(
                                 format!(
-                                    "Deleted ledger entry {}. This action cannot be undone through Baln.",
-                                    input.entry_id
+                                    "Deleted {} ledger entries atomically. This action cannot be undone through Baln.",
+                                    entry_ids.len()
                                 ),
-                                json!({"deleted_entry_id": input.entry_id}),
+                                json!({
+                                    "atomic": true,
+                                    "deleted_count": entry_ids.len(),
+                                    "deleted_entry_ids": entry_ids
+                                }),
                             ),
-                            Err(error) => api_error(error),
+                            Err(error) => {
+                                atomic_operation_api_error(error, "deleted", "deleted_count")
+                            }
                         },
                         Err(result) => result,
                     }
@@ -799,18 +808,46 @@ impl BalnMcp {
         )
     }
 
-    async fn update_entry(
+    async fn update_entries(
         &self,
         principal: OAuthPrincipal,
-        input: UpdateEntryInput,
+        inputs: Vec<UpdateEntryInput>,
     ) -> CallToolResult {
-        let draft = EntryDraft {
-            date: input.date,
-            description: input.description,
-            note: input.note,
-            movements: input.movements,
-            confirmed_distinct: false,
-        };
+        if inputs.is_empty() || inputs.len() > MAX_BATCH_ENTRIES {
+            return action_error(
+                "needs_agent_action",
+                format!(
+                    "No entries were updated. A batch must contain between 1 and {MAX_BATCH_ENTRIES} entries."
+                ),
+                format!(
+                    "Split the request into batches of at most {MAX_BATCH_ENTRIES} entries, then retry."
+                ),
+                Vec::new(),
+                json!({
+                    "code": "invalid_batch_size",
+                    "atomic": true,
+                    "updated_count": 0
+                }),
+            );
+        }
+        let unique_ids = inputs
+            .iter()
+            .map(|input| input.entry_id)
+            .collect::<std::collections::HashSet<_>>();
+        if unique_ids.len() != inputs.len() {
+            return action_error(
+                "needs_agent_action",
+                "No entries were updated. Every entry_id in the batch must be distinct.",
+                "Remove duplicate entry IDs, then retry the complete batch.",
+                Vec::new(),
+                json!({
+                    "code": "duplicate_batch_entry_id",
+                    "atomic": true,
+                    "updated_count": 0
+                }),
+            );
+        }
+
         let accounts =
             match account_repository::list(&self.state.pool, principal.user.id, true, None).await {
                 Ok(accounts) => accounts,
@@ -821,44 +858,79 @@ impl BalnMcp {
             .map(|account| (account.key.as_str(), account))
             .collect();
         let mut errors = Vec::new();
-        validate_draft(0, &draft, &account_map, &accounts, &mut errors);
+        for (entry_index, input) in inputs.iter().enumerate() {
+            let draft = EntryDraft {
+                date: input.date,
+                description: input.description.clone(),
+                note: input.note.clone(),
+                movements: input.movements.clone(),
+                confirmed_distinct: false,
+            };
+            validate_draft(entry_index, &draft, &account_map, &accounts, &mut errors);
+        }
         if !errors.is_empty() {
             return action_error(
                 "needs_agent_action",
-                format!("The entry was not updated. {}", errors[0].message),
-                "Review the listed fields or call get_entry_creation_context for current account keys, then retry.",
+                format!(
+                    "No entries were updated. Entry {} has a problem: {}",
+                    errors[0].entry_number, errors[0].message
+                ),
+                "Review the listed fields or call get_entry_creation_context for current account keys, then retry the complete batch.",
                 errors
                     .iter()
                     .filter_map(|error| error.question_for_user.clone())
                     .collect(),
-                json!({"code": "entry_validation_failed", "errors": errors}),
+                json!({
+                    "code": "batch_validation_failed",
+                    "atomic": true,
+                    "updated_count": 0,
+                    "errors": errors
+                }),
             );
         }
-        let date = draft.date.unwrap_or_else(|| {
-            bookkeeping_date(Utc::now(), self.state.config.bookkeeping_timezone)
-        });
-        let postings = postings_from_movements(&draft.movements);
-        match entry_service::update(
-            &self.state.pool,
-            principal.user.id,
-            input.entry_id,
-            UpdateEntryRequest {
-                date,
-                description: draft.description.trim().to_owned(),
-                note: draft.note,
-                postings,
-            },
-        )
-        .await
-        {
-            Ok(entry) => success(
-                format!(
-                    "Updated “{}” dated {}. No further action is required.",
-                    entry.description, entry.date
-                ),
-                json!({"entry": entry, "movements": draft.movements}),
-            ),
-            Err(error) => api_error(error),
+        let default_date = bookkeeping_date(Utc::now(), self.state.config.bookkeeping_timezone);
+        let requests = inputs
+            .iter()
+            .map(|input| {
+                (
+                    input.entry_id,
+                    UpdateEntryRequest {
+                        date: input.date.unwrap_or(default_date),
+                        description: input.description.trim().to_owned(),
+                        note: input.note.clone(),
+                        postings: postings_from_movements(&input.movements),
+                    },
+                )
+            })
+            .collect();
+        match entry_service::update_batch(&self.state.pool, principal.user.id, requests).await {
+            Ok(entries) => {
+                let items = entries
+                    .into_iter()
+                    .zip(inputs)
+                    .map(|(entry, input)| {
+                        json!({
+                            "id": entry.id,
+                            "date": entry.date,
+                            "description": entry.description,
+                            "movements": input.movements
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                success(
+                    format!(
+                        "Updated {} ledger entries atomically. No further action is required.",
+                        items.len()
+                    ),
+                    json!({
+                        "atomic": true,
+                        "default_date": default_date,
+                        "updated_count": items.len(),
+                        "entries": items
+                    }),
+                )
+            }
+            Err(error) => atomic_operation_api_error(error, "updated", "updated_count"),
         }
     }
 }
@@ -1062,6 +1134,22 @@ struct UpdateEntryInput {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+struct UpdateEntriesInput {
+    /// Complete atomic batch containing 1 through 100 replacement entries. Every entry_id must be
+    /// distinct. If any item is invalid or missing, no entries are updated.
+    entries: Vec<UpdateEntryInput>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct DeleteEntriesInput {
+    /// Complete atomic batch of 1 through 100 distinct exact entry UUIDs. If any ID is missing, no
+    /// entries are deleted.
+    entry_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 struct CreateAccountInput {
     /// Stable snake_case key with the type prefix, for example expense.transport.
     key: String,
@@ -1150,10 +1238,10 @@ fn build_tools() -> Vec<Tool> {
             "Create 1–100 entries atomically using the same semantic movement shape, possible-duplicate confirmation behavior, and foreign-currency automatic-conversion policy as create_entry. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch.",
             false,
         ),
-        write_tool::<UpdateEntryInput>(
-            "update_entry",
-            "Update Ledger Entry",
-            "Replace an existing entry’s description, date, note, and complete semantic movement list, applying the same foreign-currency automatic-conversion and disclosure policy as create_entry. Retrieve the entry first when the user has not supplied its exact ID or current meaning.",
+        write_tool::<UpdateEntriesInput>(
+            "update_entries",
+            "Update Ledger Entries",
+            "Atomically replace 1–100 existing entries using exact distinct entry UUIDs and complete descriptions, dates, notes, and semantic movement lists. The whole batch is validated before writing; if any item is invalid or missing, no entries are updated. Apply the same foreign-currency automatic-conversion and disclosure policy as create_entries. Retrieve entries first when the user has not supplied their exact IDs or current meaning.",
             false,
         ),
         write_tool::<CreateAccountInput>(
@@ -1168,10 +1256,10 @@ fn build_tools() -> Vec<Tool> {
             "Rename, archive, or restore an account. At least one of name or archived must be supplied.",
             false,
         ),
-        destructive_tool::<EntryIdInput>(
-            "delete_entry",
-            "Delete Ledger Entry",
-            "Permanently delete one ledger entry by exact UUID. Retrieve and identify the entry before deletion when the user’s target is not already unambiguous.",
+        destructive_tool::<DeleteEntriesInput>(
+            "delete_entries",
+            "Delete Ledger Entries",
+            "Permanently delete 1–100 ledger entries atomically using distinct exact UUIDs. If any ID is missing, none are deleted. Retrieve and identify every entry before deletion when the user’s targets are not already unambiguous.",
         ),
         destructive_tool::<AccountIdInput>(
             "delete_account",
@@ -1613,6 +1701,14 @@ fn api_error(error: ApiError) -> CallToolResult {
 }
 
 fn atomic_api_error(error: ApiError) -> CallToolResult {
+    atomic_operation_api_error(error, "created", "created_count")
+}
+
+fn atomic_operation_api_error(
+    error: ApiError,
+    operation: &'static str,
+    count_field: &'static str,
+) -> CallToolResult {
     let mut result = api_error(error);
     let mut natural_summary = None;
     let mut natural_next_action = None;
@@ -1620,9 +1716,9 @@ fn atomic_api_error(error: ApiError) -> CallToolResult {
         && let Some(object) = structured.as_object_mut()
     {
         object.insert("atomic".to_owned(), json!(true));
-        object.insert("created_count".to_owned(), json!(0));
+        object.insert(count_field.to_owned(), json!(0));
         if let Some(summary) = object.get("summary").and_then(Value::as_str) {
-            let summary = format!("No entries were created. {summary}");
+            let summary = format!("No entries were {operation}. {summary}");
             object.insert("summary".to_owned(), json!(summary.clone()));
             natural_summary = Some(summary);
         }
@@ -1906,6 +2002,115 @@ mod tests {
     }
 
     #[test]
+    fn entry_mutation_tools_are_plural_only_and_have_safe_annotations() {
+        assert!(SERVER_INSTRUCTIONS.contains("plural update_entries and delete_entries"));
+        assert!(SERVER_INSTRUCTIONS.contains("if any batch item is invalid or missing"));
+
+        let tools = build_tools();
+        assert!(tools.iter().all(|tool| tool.name != "update_entry"));
+        assert!(tools.iter().all(|tool| tool.name != "delete_entry"));
+
+        let update = tools
+            .iter()
+            .find(|tool| tool.name == "update_entries")
+            .unwrap();
+        let update_annotations = update.annotations.as_ref().unwrap();
+        assert_eq!(update_annotations.read_only_hint, Some(false));
+        assert_eq!(update_annotations.destructive_hint, Some(false));
+        assert_eq!(update_annotations.idempotent_hint, Some(true));
+        assert_eq!(update_annotations.open_world_hint, Some(false));
+        assert_eq!(
+            update.meta.as_ref().unwrap().0["securitySchemes"][0]["scopes"][0],
+            "ledger:write"
+        );
+        assert!(
+            update
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("if any item is invalid or missing, no entries are updated")
+        );
+
+        let delete = tools
+            .iter()
+            .find(|tool| tool.name == "delete_entries")
+            .unwrap();
+        let delete_annotations = delete.annotations.as_ref().unwrap();
+        assert_eq!(delete_annotations.read_only_hint, Some(false));
+        assert_eq!(delete_annotations.destructive_hint, Some(true));
+        assert_eq!(delete_annotations.idempotent_hint, Some(true));
+        assert_eq!(delete_annotations.open_world_hint, Some(false));
+        assert_eq!(
+            delete.meta.as_ref().unwrap().0["securitySchemes"][0]["scopes"][0],
+            "ledger:delete"
+        );
+        assert!(
+            delete
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("If any ID is missing, none are deleted")
+        );
+    }
+
+    #[test]
+    fn batch_entry_inputs_reject_malformed_ids_and_unknown_fields() {
+        let malformed = parse_input::<DeleteEntriesInput>(json!({
+            "entry_ids": ["not-a-uuid"]
+        }))
+        .unwrap_err();
+        assert_eq!(
+            malformed.structured_content.unwrap()["code"],
+            "invalid_tool_input"
+        );
+
+        let unknown = parse_input::<UpdateEntriesInput>(json!({
+            "entries": [{
+                "entry_id": "018f0000-0000-7000-8000-000000000001",
+                "description": "Lunch",
+                "movements": [{
+                    "from_account_key": "asset.cash",
+                    "to_account_key": "expense.restaurant",
+                    "amount_minor": 320
+                }],
+                "unexpected": true
+            }]
+        }))
+        .unwrap_err();
+        assert_eq!(
+            unknown.structured_content.unwrap()["code"],
+            "invalid_tool_input"
+        );
+    }
+
+    #[test]
+    fn atomic_mutation_errors_report_operation_specific_zero_counts() {
+        let update =
+            atomic_operation_api_error(ApiError::not_found("entry"), "updated", "updated_count");
+        let update = update.structured_content.unwrap();
+        assert_eq!(update["atomic"], true);
+        assert_eq!(update["updated_count"], 0);
+        assert!(
+            update["summary"]
+                .as_str()
+                .unwrap()
+                .starts_with("No entries were updated.")
+        );
+
+        let delete =
+            atomic_operation_api_error(ApiError::not_found("entry"), "deleted", "deleted_count");
+        let delete = delete.structured_content.unwrap();
+        assert_eq!(delete["atomic"], true);
+        assert_eq!(delete["deleted_count"], 0);
+        assert!(
+            delete["summary"]
+                .as_str()
+                .unwrap()
+                .starts_with("No entries were deleted.")
+        );
+    }
+
+    #[test]
     fn foreign_currency_policy_is_exposed_to_agents() {
         assert!(SERVER_INSTRUCTIONS.contains("automatically convert"));
         assert!(SERVER_INSTRUCTIONS.contains("get_entry_creation_context"));
@@ -1928,7 +2133,7 @@ mod tests {
                 .contains("foreign-currency automatic-conversion policy")
         );
 
-        for name in ["create_entry", "create_entries", "update_entry"] {
+        for name in ["create_entry", "create_entries", "update_entries"] {
             let tool = tools.iter().find(|tool| tool.name == name).unwrap();
             assert!(
                 tool.description

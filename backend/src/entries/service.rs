@@ -16,6 +16,8 @@ use crate::{
     },
 };
 
+pub const MAX_BATCH_ENTRIES: usize = 100;
+
 pub async fn create(
     pool: &PgPool,
     user_id: Uuid,
@@ -214,69 +216,157 @@ pub async fn update(
     entry_id: Uuid,
     request: UpdateEntryRequest,
 ) -> ApiResult<EntryResponse> {
-    validate_entry(&request.description, None, &request.postings)?;
-    let mut transaction = pool.begin().await?;
-    repository::lock_entry(&mut transaction, user_id, entry_id)
+    update_batch(pool, user_id, vec![(entry_id, request)])
         .await?
-        .ok_or_else(|| ApiError::not_found("entry"))?;
-    let old_postings = repository::existing_postings(&mut transaction, user_id, entry_id).await?;
-    let old_account_ids: HashSet<_> = old_postings
-        .iter()
-        .map(|(_, account_id)| *account_id)
-        .collect();
-    let accounts = resolve_and_validate_accounts(
+        .pop()
+        .ok_or_else(|| ApiError::internal("single-entry update batch returned no result"))
+}
+
+/// Replaces a complete batch of entries in one transaction. All targets are
+/// locked before the first mutation, so a missing or inaccessible entry leaves
+/// every requested entry unchanged.
+pub async fn update_batch(
+    pool: &PgPool,
+    user_id: Uuid,
+    requests: Vec<(Uuid, UpdateEntryRequest)>,
+) -> ApiResult<Vec<EntryResponse>> {
+    validate_batch_ids(requests.iter().map(|(entry_id, _)| *entry_id))?;
+    for (_, request) in &requests {
+        validate_entry(&request.description, None, &request.postings)?;
+    }
+
+    let mut transaction = pool.begin().await?;
+    lock_batch_targets(
         &mut transaction,
         user_id,
-        &request.postings,
-        &old_account_ids,
+        requests.iter().map(|(entry_id, _)| *entry_id),
     )
     .await?;
 
-    // New rows are inserted before old rows are removed so the database trigger can
-    // recognize grandfathered archived accounts from the original entry.
-    insert_postings(
-        &mut transaction,
-        user_id,
-        entry_id,
-        &request.postings,
-        &accounts,
-    )
-    .await?;
-    let old_ids: Vec<_> = old_postings.into_iter().map(|(id, _)| id).collect();
-    sqlx::query("DELETE FROM postings WHERE user_id = $1 AND entry_id = $2 AND id = ANY($3)")
-        .bind(user_id)
+    for (entry_id, request) in &requests {
+        let old_postings =
+            repository::existing_postings(&mut transaction, user_id, *entry_id).await?;
+        let old_account_ids: HashSet<_> = old_postings
+            .iter()
+            .map(|(_, account_id)| *account_id)
+            .collect();
+        let accounts = resolve_and_validate_accounts(
+            &mut transaction,
+            user_id,
+            &request.postings,
+            &old_account_ids,
+        )
+        .await?;
+
+        // New rows are inserted before old rows are removed so the database trigger can
+        // recognize grandfathered archived accounts from the original entry.
+        insert_postings(
+            &mut transaction,
+            user_id,
+            *entry_id,
+            &request.postings,
+            &accounts,
+        )
+        .await?;
+        let old_ids: Vec<_> = old_postings.into_iter().map(|(id, _)| id).collect();
+        sqlx::query("DELETE FROM postings WHERE user_id = $1 AND entry_id = $2 AND id = ANY($3)")
+            .bind(user_id)
+            .bind(entry_id)
+            .bind(&old_ids)
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query(
+            r#"
+            UPDATE entries
+               SET date = $3, description = $4, note = $5
+             WHERE id = $1 AND user_id = $2
+            "#,
+        )
         .bind(entry_id)
-        .bind(&old_ids)
+        .bind(user_id)
+        .bind(request.date)
+        .bind(&request.description)
+        .bind(&request.note)
         .execute(&mut *transaction)
         .await?;
-    sqlx::query(
-        r#"
-        UPDATE entries
-           SET date = $3, description = $4, note = $5
-         WHERE id = $1 AND user_id = $2
-        "#,
-    )
-    .bind(entry_id)
-    .bind(user_id)
-    .bind(request.date)
-    .bind(request.description)
-    .bind(request.note)
-    .execute(&mut *transaction)
-    .await?;
+    }
+
+    let mut results = Vec::with_capacity(requests.len());
+    for (entry_id, _) in &requests {
+        let row = repository::lock_entry(&mut transaction, user_id, *entry_id)
+            .await?
+            .ok_or_else(|| ApiError::internal("updated batch entry disappeared"))?;
+        results.push(repository::hydrate_in_transaction(&mut transaction, row).await?);
+    }
     transaction.commit().await?;
-    repository::get(pool, user_id, entry_id)
-        .await?
-        .ok_or_else(|| ApiError::internal("updated entry disappeared"))
+    Ok(results)
 }
 
 pub async fn delete(pool: &PgPool, user_id: Uuid, entry_id: Uuid) -> ApiResult<()> {
-    let result = sqlx::query("DELETE FROM entries WHERE id = $1 AND user_id = $2")
-        .bind(entry_id)
+    delete_batch(pool, user_id, vec![entry_id]).await?;
+    Ok(())
+}
+
+/// Deletes a complete batch in one transaction after locking and authorizing
+/// every target. Postings are removed by the existing foreign-key cascade.
+pub async fn delete_batch(
+    pool: &PgPool,
+    user_id: Uuid,
+    entry_ids: Vec<Uuid>,
+) -> ApiResult<Vec<Uuid>> {
+    validate_batch_ids(entry_ids.iter().copied())?;
+    let mut transaction = pool.begin().await?;
+    lock_batch_targets(&mut transaction, user_id, entry_ids.iter().copied()).await?;
+    let result = sqlx::query("DELETE FROM entries WHERE user_id = $1 AND id = ANY($2)")
         .bind(user_id)
-        .execute(pool)
+        .bind(&entry_ids)
+        .execute(&mut *transaction)
         .await?;
-    if result.rows_affected() == 0 {
-        return Err(ApiError::not_found("entry"));
+    if result.rows_affected() != entry_ids.len() as u64 {
+        return Err(ApiError::internal(
+            "deleted batch entry count did not match locked targets",
+        ));
+    }
+    transaction.commit().await?;
+    Ok(entry_ids)
+}
+
+fn validate_batch_ids(entry_ids: impl IntoIterator<Item = Uuid>) -> ApiResult<()> {
+    let entry_ids = entry_ids.into_iter().collect::<Vec<_>>();
+    if entry_ids.is_empty() || entry_ids.len() > MAX_BATCH_ENTRIES {
+        return Err(ApiError::bad_request(
+            "invalid_batch_size",
+            format!("a batch must contain between 1 and {MAX_BATCH_ENTRIES} entries"),
+        ));
+    }
+    let unique_ids = entry_ids.iter().collect::<HashSet<_>>();
+    if unique_ids.len() != entry_ids.len() {
+        return Err(ApiError::bad_request(
+            "duplicate_batch_entry_id",
+            "each entry in a batch must have a distinct entry_id",
+        ));
+    }
+    Ok(())
+}
+
+async fn lock_batch_targets(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: Uuid,
+    entry_ids: impl IntoIterator<Item = Uuid>,
+) -> ApiResult<()> {
+    let mut sorted_ids = entry_ids.into_iter().collect::<Vec<_>>();
+    sorted_ids.sort_unstable();
+    for entry_id in sorted_ids {
+        if repository::lock_entry(transaction, user_id, entry_id)
+            .await?
+            .is_none()
+        {
+            return Err(ApiError::not_found_with_fields(
+                "entry",
+                format!("entry {entry_id} was not found"),
+                json!({"entry_id": entry_id}),
+            ));
+        }
     }
     Ok(())
 }
@@ -514,6 +604,8 @@ fn clean(value: Option<&str>) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use chrono::NaiveDate;
     use sqlx::PgPool;
 
@@ -564,6 +656,72 @@ mod tests {
                 },
             ],
         }
+    }
+
+    async fn create_named(
+        pool: &PgPool,
+        user_id: Uuid,
+        description: &str,
+        dedup_key: &str,
+        amount_minor: i64,
+    ) -> EntryResponse {
+        let mut request = request();
+        request.description = description.to_owned();
+        request.dedup_key = Some(dedup_key.to_owned());
+        request.confirmed_distinct = true;
+        request.postings[0].amount_minor = amount_minor;
+        request.postings[1].amount_minor = -amount_minor;
+        create(pool, user_id, request).await.unwrap().0
+    }
+
+    fn replacement(
+        entry: &EntryResponse,
+        description: &str,
+        amount_minor: i64,
+    ) -> UpdateEntryRequest {
+        UpdateEntryRequest {
+            date: entry.date,
+            description: description.to_owned(),
+            note: Some(format!("replacement for {}", entry.id)),
+            postings: vec![
+                PostingInput {
+                    account_key: "expense.restaurant".to_owned(),
+                    amount_minor,
+                    memo: None,
+                },
+                PostingInput {
+                    account_key: "asset.cash".to_owned(),
+                    amount_minor: -amount_minor,
+                    memo: None,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn batch_id_validation_enforces_size_and_uniqueness() {
+        assert!(matches!(
+            validate_batch_ids(Vec::<Uuid>::new()),
+            Err(ApiError::Problem {
+                code: "invalid_batch_size",
+                ..
+            })
+        ));
+        assert!(matches!(
+            validate_batch_ids((0..=MAX_BATCH_ENTRIES).map(|_| Uuid::now_v7())),
+            Err(ApiError::Problem {
+                code: "invalid_batch_size",
+                ..
+            })
+        ));
+        let duplicate = Uuid::now_v7();
+        assert!(matches!(
+            validate_batch_ids([duplicate, duplicate]),
+            Err(ApiError::Problem {
+                code: "duplicate_batch_entry_id",
+                ..
+            })
+        ));
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -846,6 +1004,370 @@ mod tests {
                 .map(|posting| posting.amount_minor)
                 .sum::<i64>(),
             0
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_update_rolls_back_every_entry_when_one_target_is_missing(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = create_named(&pool, user_id, "Breakfast", "batch-update:first", 320).await;
+        let before =
+            serde_json::to_value(repository::get(&pool, user_id, first.id).await.unwrap()).unwrap();
+
+        let error = update_batch(
+            &pool,
+            user_id,
+            vec![
+                (first.id, replacement(&first, "Changed", 450)),
+                (Uuid::now_v7(), replacement(&first, "Missing target", 500)),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "not_found",
+                ..
+            }
+        ));
+        let after =
+            serde_json::to_value(repository::get(&pool, user_id, first.id).await.unwrap()).unwrap();
+        assert_eq!(after, before);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_update_treats_cross_user_targets_as_missing_and_rolls_back(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let other_user_id = seed(&pool).await;
+        let own = create_named(&pool, user_id, "Own", "batch-update:own", 100).await;
+        let other = create_named(&pool, other_user_id, "Other", "batch-update:other", 200).await;
+
+        let error = update_batch(
+            &pool,
+            user_id,
+            vec![
+                (own.id, replacement(&own, "Own changed", 300)),
+                (other.id, replacement(&other, "Other changed", 400)),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "not_found",
+                ..
+            }
+        ));
+        assert_eq!(
+            repository::get(&pool, user_id, own.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .description,
+            "Own"
+        );
+        assert_eq!(
+            repository::get(&pool, other_user_id, other.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .description,
+            "Other"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_update_rolls_back_prior_work_when_later_account_validation_fails(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = create_named(&pool, user_id, "First safe", "rollback:first", 100).await;
+        let second = create_named(&pool, user_id, "Second safe", "rollback:second", 200).await;
+        sqlx::query(
+            "INSERT INTO accounts (id, user_id, key, name, type, archived) \
+             VALUES ($1, $2, 'expense.archived', 'Archived', 'expense', true)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut invalid_replacement = replacement(&second, "Invalid archived", 500);
+        invalid_replacement.postings[0].account_key = "expense.archived".to_owned();
+
+        let error = update_batch(
+            &pool,
+            user_id,
+            vec![
+                (first.id, replacement(&first, "Must roll back", 400)),
+                (second.id, invalid_replacement),
+            ],
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "archived_account",
+                ..
+            }
+        ));
+        assert_eq!(
+            repository::get(&pool, user_id, first.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .description,
+            "First safe"
+        );
+        assert_eq!(
+            repository::get(&pool, user_id, second.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .description,
+            "Second safe"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_update_preserves_input_order_and_balanced_postings(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = create_named(&pool, user_id, "First", "batch-order:first", 100).await;
+        let second = create_named(&pool, user_id, "Second", "batch-order:second", 200).await;
+
+        let updated = update_batch(
+            &pool,
+            user_id,
+            vec![
+                (second.id, replacement(&second, "Second updated", 350)),
+                (first.id, replacement(&first, "First updated", 450)),
+            ],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            updated.iter().map(|entry| entry.id).collect::<Vec<_>>(),
+            vec![second.id, first.id]
+        );
+        assert!(updated.iter().all(|entry| {
+            entry
+                .postings
+                .iter()
+                .map(|posting| posting.amount_minor)
+                .sum::<i64>()
+                == 0
+        }));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn overlapping_batch_updates_complete_without_deadlock_or_mixed_state(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = create_named(&pool, user_id, "Concurrent first", "concurrent:first", 100).await;
+        let second = create_named(
+            &pool,
+            user_id,
+            "Concurrent second",
+            "concurrent:second",
+            200,
+        )
+        .await;
+        let first_batch = vec![
+            (first.id, replacement(&first, "First A", 301)),
+            (second.id, replacement(&second, "Second A", 302)),
+        ];
+        let second_batch = vec![
+            (second.id, replacement(&second, "Second B", 402)),
+            (first.id, replacement(&first, "First B", 401)),
+        ];
+
+        let results = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(
+                update_batch(&pool, user_id, first_batch),
+                update_batch(&pool, user_id, second_batch)
+            )
+        })
+        .await
+        .expect("overlapping update batches must not deadlock");
+        assert!(results.0.is_ok());
+        assert!(results.1.is_ok());
+
+        let final_first = repository::get(&pool, user_id, first.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let final_second = repository::get(&pool, user_id, second.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            (final_first.description == "First A" && final_second.description == "Second A")
+                || (final_first.description == "First B" && final_second.description == "Second B")
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_delete_cascades_target_postings_and_preserves_unrelated_entries(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = create_named(&pool, user_id, "Delete first", "delete:first", 100).await;
+        let second = create_named(&pool, user_id, "Keep", "delete:keep", 200).await;
+        let third = create_named(&pool, user_id, "Delete third", "delete:third", 300).await;
+
+        let deleted = delete_batch(&pool, user_id, vec![third.id, first.id])
+            .await
+            .unwrap();
+
+        assert_eq!(deleted, vec![third.id, first.id]);
+        assert!(
+            repository::get(&pool, user_id, first.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            repository::get(&pool, user_id, third.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            repository::get(&pool, user_id, second.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let deleted_postings: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM postings WHERE entry_id = ANY($1)")
+                .bind(vec![first.id, third.id])
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(deleted_postings, 0);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_delete_rolls_back_when_any_target_is_missing_or_cross_user(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let other_user_id = seed(&pool).await;
+        let own = create_named(&pool, user_id, "Own delete", "delete:own", 100).await;
+        let other = create_named(&pool, other_user_id, "Other delete", "delete:other", 200).await;
+
+        let error = delete_batch(&pool, user_id, vec![own.id, other.id])
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "not_found",
+                ..
+            }
+        ));
+        assert!(
+            repository::get(&pool, user_id, own.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            repository::get(&pool, other_user_id, other.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_services_reject_duplicate_ids_without_mutation(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let entry = create_named(&pool, user_id, "Duplicate", "duplicate:id", 100).await;
+
+        let update_error = update_batch(
+            &pool,
+            user_id,
+            vec![
+                (entry.id, replacement(&entry, "First", 200)),
+                (entry.id, replacement(&entry, "Second", 300)),
+            ],
+        )
+        .await
+        .unwrap_err();
+        let delete_error = delete_batch(&pool, user_id, vec![entry.id, entry.id])
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            update_error,
+            ApiError::Problem {
+                code: "duplicate_batch_entry_id",
+                ..
+            }
+        ));
+        assert!(matches!(
+            delete_error,
+            ApiError::Problem {
+                code: "duplicate_batch_entry_id",
+                ..
+            }
+        ));
+        assert_eq!(
+            repository::get(&pool, user_id, entry.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .description,
+            "Duplicate"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn overlapping_batch_deletes_are_serialized_and_never_partial(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let first = create_named(
+            &pool,
+            user_id,
+            "Concurrent delete 1",
+            "concurrent-delete:1",
+            100,
+        )
+        .await;
+        let second = create_named(
+            &pool,
+            user_id,
+            "Concurrent delete 2",
+            "concurrent-delete:2",
+            200,
+        )
+        .await;
+
+        let results = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::join!(
+                delete_batch(&pool, user_id, vec![first.id, second.id]),
+                delete_batch(&pool, user_id, vec![second.id, first.id])
+            )
+        })
+        .await
+        .expect("overlapping delete batches must not deadlock");
+
+        assert_eq!(
+            usize::from(results.0.is_ok()) + usize::from(results.1.is_ok()),
+            1
+        );
+        assert!(
+            repository::get(&pool, user_id, first.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            repository::get(&pool, user_id, second.id)
+                .await
+                .unwrap()
+                .is_none()
         );
     }
 
