@@ -528,6 +528,8 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   await page.goto("/entries");
 
   const entriesSearch = page.getByLabel("搜尋交易");
+  const mobileNavigation = page.locator('nav[aria-label="主要導覽"]');
+  const navigationBeforeOpen = await mobileNavigation.boundingBox();
   await page.getByLabel("新增交易").click();
   await expect(page).toHaveURL(/\/entries\/new$/);
 
@@ -535,6 +537,11 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   await expect(sheet).toBeVisible();
   await expect(entriesSearch).toBeAttached();
   await expect(sheet).toHaveAttribute("data-size", "near-full");
+  const navigationWhileOpen = await mobileNavigation.boundingBox();
+  expect(navigationBeforeOpen).not.toBeNull();
+  expect(navigationWhileOpen).not.toBeNull();
+  expect(navigationWhileOpen!.y).toBeCloseTo(navigationBeforeOpen!.y, 0);
+  await expect(mobileNavigation).toHaveCSS("transform", "none");
 
   await expect
     .poll(async () => {

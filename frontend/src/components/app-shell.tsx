@@ -168,7 +168,7 @@ export function AppShell() {
   };
 
   return (
-    <SidebarProvider data-vaul-drawer-wrapper>
+    <SidebarProvider>
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex h-10 items-center gap-2 px-2">
@@ -208,7 +208,10 @@ export function AppShell() {
           <UserMenu />
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+      <SidebarInset
+        data-vaul-drawer-wrapper
+        className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
+      >
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
           <SidebarTrigger className="hidden md:inline-flex" />
           <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-semibold">
