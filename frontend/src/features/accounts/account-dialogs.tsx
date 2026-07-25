@@ -137,8 +137,8 @@ export function CreateAccountDialog({
             >
               取消
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "建立中" : "建立帳戶"}
+            <Button type="submit" loading={create.isPending}>
+              建立帳戶
             </Button>
           </DialogFooter>
         </form>
@@ -202,8 +202,12 @@ export function EditAccountDialog({
             >
               取消
             </Button>
-            <Button type="submit" disabled={!name.trim() || update.isPending}>
-              {update.isPending ? "儲存中" : "儲存"}
+            <Button
+              type="submit"
+              disabled={!name.trim()}
+              loading={update.isPending}
+            >
+              儲存
             </Button>
           </DialogFooter>
         </form>

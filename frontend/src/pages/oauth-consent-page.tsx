@@ -80,6 +80,7 @@ export function OAuthConsentPage() {
             type="button"
             variant="outline"
             disabled={decision.isPending}
+            loading={decision.isPending && decision.variables === false}
             onClick={() => decision.mutate(false)}
           >
             拒絕
@@ -87,9 +88,10 @@ export function OAuthConsentPage() {
           <Button
             type="button"
             disabled={decision.isPending}
+            loading={decision.isPending && decision.variables === true}
             onClick={() => decision.mutate(true)}
           >
-            {decision.isPending ? "處理中" : "允許連線"}
+            允許連線
           </Button>
         </CardFooter>
       </Card>

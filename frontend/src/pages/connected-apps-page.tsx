@@ -152,10 +152,10 @@ export function ConnectedAppsPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={revoke.isPending}
+              loading={revoke.isPending}
               onClick={() => revoking && revoke.mutate(revoking)}
             >
-              {revoke.isPending ? "撤銷中" : "撤銷連線"}
+              撤銷連線
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

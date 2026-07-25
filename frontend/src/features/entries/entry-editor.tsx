@@ -755,8 +755,8 @@ export function EntryEditor({
         <Button asChild type="button" variant="outline">
           <Link to={entry ? `/entries/${entry.id}` : "/entries"}>取消</Link>
         </Button>
-        <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending ? "儲存中" : entry ? "儲存變更" : "建立交易"}
+        <Button type="submit" loading={mutation.isPending}>
+          {entry ? "儲存變更" : "建立交易"}
         </Button>
       </div>
 
@@ -786,7 +786,8 @@ export function EntryEditor({
             </AlertDialogCancel>
             <AlertDialogAction
               type="button"
-              disabled={!duplicateReview || mutation.isPending}
+              disabled={!duplicateReview}
+              loading={mutation.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (duplicateReview) {
@@ -798,7 +799,7 @@ export function EntryEditor({
                 }
               }}
             >
-              {mutation.isPending ? "建立中" : "仍要建立"}
+              仍要建立
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

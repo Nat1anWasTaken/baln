@@ -329,17 +329,14 @@ export function AccountsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!changingArchive || archive.isPending}
+              disabled={!changingArchive}
+              loading={archive.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (changingArchive) archive.mutate(changingArchive);
               }}
             >
-              {archive.isPending
-                ? "處理中"
-                : changingArchive?.archived
-                  ? "恢復"
-                  : "封存"}
+              {changingArchive?.archived ? "恢復" : "封存"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -361,13 +358,14 @@ export function AccountsPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={!deleting || remove.isPending}
+              disabled={!deleting}
+              loading={remove.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (deleting) remove.mutate(deleting);
               }}
             >
-              {remove.isPending ? "刪除中" : "確認刪除"}
+              確認刪除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

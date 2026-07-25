@@ -209,13 +209,13 @@ export function EntryDetailPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={remove.isPending}
+              loading={remove.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 remove.mutate();
               }}
             >
-              {remove.isPending ? "刪除中" : "確認刪除"}
+              確認刪除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

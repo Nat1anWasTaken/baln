@@ -187,8 +187,8 @@ function CreateTokenDialog({
             >
               取消
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "建立中" : "建立權杖"}
+            <Button type="submit" loading={create.isPending}>
+              建立權杖
             </Button>
           </DialogFooter>
         </form>
@@ -386,10 +386,10 @@ export function ApiTokensPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={revoke.isPending}
+              loading={revoke.isPending}
               onClick={() => revoking && revoke.mutate(revoking)}
             >
-              {revoke.isPending ? "撤銷中" : "撤銷權杖"}
+              撤銷權杖
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

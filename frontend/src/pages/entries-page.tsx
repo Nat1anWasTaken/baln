@@ -217,10 +217,10 @@ export function EntriesPage() {
               type="button"
               variant="outline"
               className="mx-auto"
-              disabled={entries.isFetchingNextPage}
+              loading={entries.isFetchingNextPage}
               onClick={() => void entries.fetchNextPage()}
             >
-              {entries.isFetchingNextPage ? "載入中" : "載入更多"}
+              載入更多
             </Button>
           ) : (
             <p className="text-center text-xs text-muted-foreground">
