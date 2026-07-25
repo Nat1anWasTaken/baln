@@ -214,6 +214,14 @@
     min-height: 2.75rem;
   }
 
+  /*
+   * Segmented controls keep a padded track around their 44px touch targets.
+   * Include that inset in the track height so triggers do not overflow it.
+   */
+  [data-slot="tabs-list"][data-orientation="horizontal"] {
+    min-height: calc(2.75rem + 6px);
+  }
+
   .touch-press[data-size^="icon"],
   [data-slot="button"][data-size^="icon"],
   [data-slot="toggle"],

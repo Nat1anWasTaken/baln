@@ -448,6 +448,35 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     expect(box!.height).toBeGreaterThanOrEqual(44);
   };
 
+  const expectContainedTab = async (locator: ReturnType<Page["locator"]>) => {
+    await expectTouchTarget(locator);
+    const bounds = await locator.evaluate((element) => {
+      const list = element.closest('[data-slot="tabs-list"]');
+      if (!list) {
+        return null;
+      }
+
+      const triggerBox = element.getBoundingClientRect();
+      const listBox = list.getBoundingClientRect();
+      return {
+        triggerTop: triggerBox.top,
+        triggerRight: triggerBox.right,
+        triggerBottom: triggerBox.bottom,
+        triggerLeft: triggerBox.left,
+        listTop: listBox.top,
+        listRight: listBox.right,
+        listBottom: listBox.bottom,
+        listLeft: listBox.left,
+      };
+    });
+
+    expect(bounds).not.toBeNull();
+    expect(bounds!.triggerTop).toBeGreaterThanOrEqual(bounds!.listTop);
+    expect(bounds!.triggerRight).toBeLessThanOrEqual(bounds!.listRight);
+    expect(bounds!.triggerBottom).toBeLessThanOrEqual(bounds!.listBottom);
+    expect(bounds!.triggerLeft).toBeGreaterThanOrEqual(bounds!.listLeft);
+  };
+
   try {
     await page.goto("/entries");
 
@@ -476,7 +505,13 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await expectTouchTarget(page.getByRole("option", { name: "所有帳戶" }));
 
     await page.goto("/entries/new");
-    await expectTouchTarget(page.getByRole("tab", { name: "引導模式" }));
+    await expectContainedTab(page.getByRole("tab", { name: "引導模式" }));
+    await expectContainedTab(page.getByRole("tab", { name: "支出" }));
+
+    await page.setViewportSize({ width: 320, height: 844 });
+    await expectContainedTab(page.getByRole("tab", { name: "引導模式" }));
+    await expectContainedTab(page.getByRole("tab", { name: "支出" }));
+
     await expectTouchTarget(page.getByRole("button", { name: "切換顯示模式" }));
 
     await page.goto("/accounts");
