@@ -516,10 +516,12 @@ export function EntryEditor({
       onSubmit={form.handleSubmit(validateAndSubmit)}
     >
       <div
+        data-slot={presentation === "sheet" ? "entry-editor-scroll" : undefined}
+        data-vaul-no-drag={presentation === "sheet" ? "" : undefined}
         className={cn(
           presentation === "page"
             ? "contents"
-            : "grid min-h-0 flex-1 gap-5 overflow-y-auto overscroll-contain px-4 pb-5",
+            : "grid min-h-0 flex-1 auto-rows-max content-start touch-pan-y gap-5 overflow-y-auto overscroll-contain px-4 pb-5",
         )}
       >
         {presentation === "page" ? (

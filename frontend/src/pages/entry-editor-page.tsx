@@ -238,6 +238,7 @@ export function EntryEditorSheet({
         open={open}
         dismissible={!isPending}
         fixed
+        handleOnly
         preventScrollRestoration
         shouldScaleBackground
         onOpenChange={(nextOpen) => {

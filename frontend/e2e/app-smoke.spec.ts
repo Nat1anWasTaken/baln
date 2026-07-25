@@ -524,7 +524,7 @@ test("reviews a possible duplicate from the mobile transaction sheet", async ({
 test("opens create as a route-backed mobile sheet and protects dirty drafts", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 390, height: 667 });
   await page.goto("/entries");
 
   const entriesSearch = page.getByLabel("搜尋交易");
@@ -548,7 +548,7 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
       const bounds = await sheet.boundingBox();
       return bounds ? bounds.y + bounds.height : null;
     })
-    .toBeCloseTo(844, 0);
+    .toBeCloseTo(667, 0);
   const sheetGeometry = await sheet.evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     const style = getComputedStyle(element);
@@ -561,6 +561,21 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   expect(sheetGeometry.top).toBeGreaterThan(0);
   expect(sheetGeometry.width).toBeCloseTo(390, 0);
   expect(sheetGeometry.borderTopLeftRadius).toBeGreaterThan(0);
+
+  const sheetScroller = sheet.locator('[data-slot="entry-editor-scroll"]');
+  await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
+  await expect(sheetScroller).toHaveAttribute("data-vaul-no-drag", "");
+  expect(
+    await sheetScroller.evaluate(
+      (element) => element.scrollHeight > element.clientHeight,
+    ),
+  ).toBe(true);
+
+  await sheetScroller.hover();
+  await page.mouse.wheel(0, 500);
+  await expect
+    .poll(() => sheetScroller.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
 
   await page.getByLabel("交易說明").fill("保留這份草稿");
   await page.getByRole("button", { name: "關閉新增交易" }).click();
