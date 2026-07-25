@@ -333,6 +333,22 @@ test("keeps long transaction summaries inside mobile cards", async ({
   );
 });
 
+test("groups the transaction account filter by account type", async ({
+  page,
+}) => {
+  await page.goto("/entries");
+  await page.getByRole("combobox", { name: "帳戶" }).click();
+
+  const popover = page.locator('[data-slot="popover-content"]');
+  await expect(popover.getByText("資產", { exact: true })).toBeVisible();
+  await expect(popover.getByText("收入", { exact: true })).toBeVisible();
+  await expect(popover.getByText("支出", { exact: true })).toBeVisible();
+
+  await popover.getByPlaceholder("搜尋帳戶…").fill("支出");
+  await expect(popover.getByRole("option", { name: "餐飲" })).toBeVisible();
+  await expect(popover.getByRole("option", { name: "現金" })).not.toBeVisible();
+});
+
 test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.goto("/entries/new");
 
