@@ -8,16 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useMonthStartDay } from "@/hooks/use-month-start-day";
 import { reportsApi } from "@/lib/api-client";
 import {
-  currentMonthTaipei,
-  monthBounds,
+  currentPeriodMonth,
+  monthPeriodBounds,
   toExclusiveDate,
   toInclusiveDate,
 } from "@/lib/format";
 
 export function ReportsPage() {
-  const currentBounds = monthBounds(currentMonthTaipei());
+  const { startDay } = useMonthStartDay();
+  const currentBounds = monthPeriodBounds(
+    currentPeriodMonth(startDay),
+    startDay,
+  );
   const [dateFrom, setDateFrom] = useState(currentBounds.dateFrom);
   const [dateTo, setDateTo] = useState(toInclusiveDate(currentBounds.dateTo));
   const [applied, setApplied] = useState({
@@ -36,8 +41,8 @@ export function ReportsPage() {
     setApplied({ from: dateFrom, to: toExclusiveDate(dateTo) });
   }
 
-  function setCurrentMonth() {
-    const bounds = monthBounds(currentMonthTaipei());
+  function setCurrentPeriod() {
+    const bounds = monthPeriodBounds(currentPeriodMonth(startDay), startDay);
     setDateFrom(bounds.dateFrom);
     setDateTo(toInclusiveDate(bounds.dateTo));
     setApplied({ from: bounds.dateFrom, to: bounds.dateTo });
@@ -70,8 +75,8 @@ export function ReportsPage() {
             />
           </Field>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={setCurrentMonth}>
-              本月
+            <Button type="button" variant="outline" onClick={setCurrentPeriod}>
+              本期
             </Button>
             <Button type="button" disabled={!isValid} onClick={applyRange}>
               套用

@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DayOfMonthPicker } from "@/components/ui/day-of-month-picker";
 import { MonthPicker } from "@/components/ui/month-picker";
 import {
   Table,
@@ -23,13 +24,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useMonthStartDay } from "@/hooks/use-month-start-day";
 import { accountTypeLabels } from "@/lib/account";
 import { accountsApi, entriesApi, reportsApi } from "@/lib/api-client";
 import {
-  currentMonthTaipei,
+  currentPeriodMonth,
   formatMoney,
+  formatShortDate,
+  monthPeriodBounds,
   monthLabel,
   todayTaipei,
+  toInclusiveDate,
 } from "@/lib/format";
 import type { Account } from "@/lib/schemas";
 import { useState } from "react";
@@ -97,10 +102,12 @@ function BalanceGrid({ accounts }: { accounts: Account[] }) {
 }
 
 export function DashboardPage() {
-  const [month, setMonth] = useState(currentMonthTaipei());
+  const { startDay, setStartDay } = useMonthStartDay();
+  const [month, setMonth] = useState(() => currentPeriodMonth(startDay));
+  const bounds = monthPeriodBounds(month, startDay);
   const report = useQuery({
-    queryKey: ["report-monthly", month],
-    queryFn: () => reportsApi.monthly(month),
+    queryKey: ["report-summary", bounds.dateFrom, bounds.dateTo],
+    queryFn: () => reportsApi.summary(bounds.dateFrom, bounds.dateTo),
   });
   const accounts = useQuery({
     queryKey: ["accounts", false, ""],
@@ -111,18 +118,34 @@ export function DashboardPage() {
     queryFn: () => entriesApi.list({ limit: 5 }),
   });
 
+  function changeStartDay(day: number) {
+    setStartDay(day);
+    setMonth(currentPeriodMonth(day));
+  }
+
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">本期概況</p>
-          <h2 className="text-2xl font-semibold">{monthLabel(month)}</h2>
+          <p className="text-sm text-muted-foreground">期間概況</p>
+          <h2 className="text-2xl font-semibold">{monthLabel(month)}期</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {formatShortDate(bounds.dateFrom)}–
+            {formatShortDate(toInclusiveDate(bounds.dateTo))}
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <MonthPicker
             aria-label="總覽月份"
             value={month}
             onValueChange={setMonth}
+            className="w-full sm:w-40"
+          />
+          <DayOfMonthPicker
+            aria-label="每月起始日"
+            value={startDay}
+            onValueChange={changeStartDay}
+            className="w-full sm:w-40"
           />
         </div>
       </div>
@@ -140,13 +163,13 @@ export function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <CategoryChart
               title="支出分類"
-              description="依支出帳戶彙整本月金額"
+              description="依支出帳戶彙整本期金額"
               tone="expense"
               accounts={report.data.expense_accounts}
             />
             <CategoryChart
               title="收入分類"
-              description="依收入帳戶彙整本月金額"
+              description="依收入帳戶彙整本期金額"
               tone="income"
               accounts={report.data.income_accounts}
             />

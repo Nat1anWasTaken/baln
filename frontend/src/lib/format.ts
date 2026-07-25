@@ -1,4 +1,13 @@
-import { addDays, format, parseISO, startOfMonth } from "date-fns";
+import {
+  addDays,
+  addMonths,
+  format,
+  getDaysInMonth,
+  parseISO,
+  setDate,
+  startOfMonth,
+  subMonths,
+} from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { zhTW } from "date-fns/locale";
 
@@ -46,6 +55,28 @@ export function monthBounds(month: string) {
     dateFrom: format(startOfMonth(from), "yyyy-MM-dd"),
     dateTo: format(next, "yyyy-MM-dd"),
   };
+}
+
+function monthBoundary(month: string, startDay: number) {
+  const firstDay = parseISO(`${month}-01`);
+  return setDate(firstDay, Math.min(startDay, getDaysInMonth(firstDay)));
+}
+
+export function monthPeriodBounds(month: string, startDay: number) {
+  const firstDay = parseISO(`${month}-01`);
+  const nextMonth = format(addMonths(firstDay, 1), "yyyy-MM");
+  return {
+    dateFrom: format(monthBoundary(month, startDay), "yyyy-MM-dd"),
+    dateTo: format(monthBoundary(nextMonth, startDay), "yyyy-MM-dd"),
+  };
+}
+
+export function currentPeriodMonth(startDay: number, today = todayTaipei()) {
+  const currentMonth = today.slice(0, 7);
+  if (today >= format(monthBoundary(currentMonth, startDay), "yyyy-MM-dd")) {
+    return currentMonth;
+  }
+  return format(subMonths(parseISO(`${currentMonth}-01`), 1), "yyyy-MM");
 }
 
 export function formatLedgerDate(value: string) {
