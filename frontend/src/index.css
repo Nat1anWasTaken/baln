@@ -149,3 +149,18 @@
     min-width: 320px;
   }
 }
+
+/*
+ * iOS 26 WebKit adds a date input's padding outside its declared width.
+ * Move the horizontal spacing to WebKit's inner value element so the shared
+ * input keeps the same alignment without overflowing its container.
+ */
+@supports (-webkit-touch-callout: none) {
+  input[data-slot="input"][type="date"] {
+    padding: 0;
+  }
+
+  input[data-slot="input"][type="date"]::-webkit-date-and-time-value {
+    padding-inline: 0.625rem;
+  }
+}
