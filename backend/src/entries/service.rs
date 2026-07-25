@@ -525,7 +525,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn creates_and_idempotently_replays_an_entry(pool: PgPool) {
+    async fn exact_retry_with_same_explicit_key_replays_existing_entry(pool: PgPool) {
         let user_id = seed(&pool).await;
         let (first, replayed) = create(&pool, user_id, request()).await.unwrap();
         assert!(!replayed);
@@ -534,6 +534,36 @@ mod tests {
         let (second, replayed) = create(&pool, user_id, request()).await.unwrap();
         assert!(replayed);
         assert_eq!(first.id, second.id);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn explicit_key_with_different_content_is_a_conflict(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        create(&pool, user_id, request()).await.unwrap();
+        let mut changed = request();
+        changed.description = "Unrelated later transaction".to_owned();
+
+        let error = create(&pool, user_id, changed).await.unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "dedup_key_conflict",
+                ..
+            }
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn identical_content_with_different_operation_keys_creates_both(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let (first, first_replayed) = create(&pool, user_id, request()).await.unwrap();
+        let mut second_request = request();
+        second_request.dedup_key = Some("manual-message:distinct-operation".to_owned());
+        let (second, second_replayed) = create(&pool, user_id, second_request).await.unwrap();
+
+        assert!(!first_replayed);
+        assert!(!second_replayed);
+        assert_ne!(first.id, second.id);
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -583,6 +613,36 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn batch_conflict_rolls_back_new_items(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        create(&pool, user_id, request()).await.unwrap();
+
+        let mut new_item = request();
+        new_item.description = "Would otherwise be inserted".to_owned();
+        new_item.dedup_key = Some("manual-message:new-item".to_owned());
+        let mut conflicting_item = request();
+        conflicting_item.description = "Different content under existing key".to_owned();
+
+        let error = create_batch(&pool, user_id, vec![new_item, conflicting_item])
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "dedup_key_conflict",
+                ..
+            }
+        ));
+        let descriptions: Vec<String> =
+            sqlx::query_scalar("SELECT description FROM entries WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(descriptions, vec!["麥當勞 早餐"]);
     }
 
     #[sqlx::test(migrations = "./migrations")]

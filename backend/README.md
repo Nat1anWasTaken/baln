@@ -128,6 +128,7 @@ Entry tools accept positive semantic movements:
 
 ```json
 {
+  "operation_key": "9b6cc2cc-1173-4dab-8f1d-2e456d698b98",
   "description": "Lunch",
   "movements": [
     {
@@ -141,8 +142,30 @@ Entry tools accept positive semantic movements:
 
 The server converts each movement to balanced postings. Agents do not submit
 signed amounts, debit/credit labels, totals, user IDs, posting IDs, or
-deduplication keys. `create_entries` accepts up to 100 entries and commits the
-whole batch atomically.
+database deduplication keys. `create_entries` accepts up to 100 entries and
+commits the whole batch atomically.
+
+`create_entry` and `create_entries` accept an optional caller-generated
+`operation_key`. Clients should generate a new opaque key (preferably a UUID)
+for every distinct operation, retain it, and reuse it only when retrying the
+exact same operation. One batch-level key derives a different database
+deduplication key for every batch index. The explicit identity is scoped by
+OAuth grant and tool name, but not by MCP session, so it remains stable across
+reconnects. Reusing it with different content returns `dedup_key_conflict`;
+identical content with a different operation key creates another entry.
+
+When `operation_key` is omitted, the server generates an invocation-specific
+fallback scoped with the authenticated grant, MCP session when present, tool
+name, JSON-RPC request ID, batch index, and a fresh nonce. This avoids false
+collisions when request IDs are reused across sessions, within a later
+operation, or in sessionless MCP, but it does not provide durable retry
+identity. Durable retries therefore require `operation_key`.
+
+This follows the current MCP draft, where request IDs need only be unique among
+in-flight requests and durable state must use an explicit request-carried
+identifier. It also remains compatible with MCP 2025-11-25 and the pinned
+`rmcp 3.0.0-beta.1`, where Streamable HTTP session IDs are transport lifecycle
+state rather than durable business-operation IDs.
 
 Every tool returns a natural-language summary plus structured content. Errors
 state whether the agent should call another tool, retry, reconnect, or ask the
@@ -165,7 +188,8 @@ OAuth consent flow, and verify:
 2. `get_entry_creation_context` returns the current date and active account
    keys.
 3. `create_entry` creates one balanced entry.
-4. Retrying the identical JSON-RPC request does not create a duplicate.
+4. Retrying with the same `operation_key` and identical content returns the
+   existing entry with `replayed: true`.
 5. A batch containing an invalid account creates zero entries and explains the
    required correction.
 6. Revoking the connection under **已連接的應用程式** makes the access and
