@@ -10,6 +10,8 @@ use crate::{
     },
 };
 
+const MAX_ACCOUNT_NOTE_CHARACTERS: usize = 2_000;
+
 pub async fn create(
     pool: &PgPool,
     user_id: Uuid,
@@ -29,7 +31,8 @@ pub async fn create(
             "account key must match its type and contain two or three snake_case segments",
         ));
     }
-    repository::create(pool, user_id, key, name, request.r#type).await
+    let note = clean_note(request.note.as_deref())?;
+    repository::create(pool, user_id, key, name, note, request.r#type).await
 }
 
 pub async fn update(
@@ -38,7 +41,7 @@ pub async fn update(
     account_id: Uuid,
     request: UpdateAccountRequest,
 ) -> ApiResult<Account> {
-    if request.name.is_none() && request.archived.is_none() {
+    if request.name.is_none() && request.note.is_none() && request.archived.is_none() {
         return Err(ApiError::bad_request(
             "empty_update",
             "at least one mutable field is required",
@@ -51,9 +54,25 @@ pub async fn update(
             "account name cannot be empty",
         ));
     }
-    repository::update(pool, user_id, account_id, name, request.archived)
+    let note = request
+        .note
+        .as_ref()
+        .map(|note| clean_note(note.as_deref()))
+        .transpose()?;
+    repository::update(pool, user_id, account_id, name, request.archived, note)
         .await?
         .ok_or_else(|| ApiError::not_found("account"))
+}
+
+fn clean_note(note: Option<&str>) -> ApiResult<Option<&str>> {
+    let note = note.map(str::trim).filter(|note| !note.is_empty());
+    if note.is_some_and(|note| note.chars().count() > MAX_ACCOUNT_NOTE_CHARACTERS) {
+        return Err(ApiError::bad_request(
+            "invalid_account_note",
+            "account note cannot exceed 2000 characters",
+        ));
+    }
+    Ok(note)
 }
 
 pub async fn balance(
@@ -125,9 +144,107 @@ mod tests {
         key: &str,
         account_type: AccountType,
     ) -> Account {
-        repository::create(pool, user_id, key, key, account_type)
+        repository::create(pool, user_id, key, key, None, account_type)
             .await
             .unwrap()
+    }
+
+    #[test]
+    fn update_note_distinguishes_omitted_from_null() {
+        let omitted: UpdateAccountRequest = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(omitted.note.is_none());
+
+        let cleared: UpdateAccountRequest =
+            serde_json::from_value(serde_json::json!({"note": null})).unwrap();
+        assert_eq!(cleared.note, Some(None));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn account_notes_are_normalized_searchable_and_clearable(pool: PgPool) {
+        let user_id = seed_user(&pool).await;
+        let account = create(
+            &pool,
+            user_id,
+            CreateAccountRequest {
+                key: "asset.post".to_owned(),
+                name: "郵局".to_owned(),
+                note: Some("  連結到郵局金融卡  ".to_owned()),
+                r#type: AccountType::Asset,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(account.note.as_deref(), Some("連結到郵局金融卡"));
+
+        let matches = repository::list(&pool, user_id, false, Some("金融卡"))
+            .await
+            .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].id, account.id);
+
+        let renamed = update(
+            &pool,
+            user_id,
+            account.id,
+            UpdateAccountRequest {
+                name: Some("中華郵政".to_owned()),
+                note: None,
+                archived: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(renamed.note.as_deref(), Some("連結到郵局金融卡"));
+
+        let cleared = update(
+            &pool,
+            user_id,
+            account.id,
+            UpdateAccountRequest {
+                name: None,
+                note: Some(None),
+                archived: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.note, None);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn account_notes_cannot_exceed_limit(pool: PgPool) {
+        let user_id = seed_user(&pool).await;
+        let error = create(
+            &pool,
+            user_id,
+            CreateAccountRequest {
+                key: "asset.post".to_owned(),
+                name: "郵局".to_owned(),
+                note: Some("字".repeat(MAX_ACCOUNT_NOTE_CHARACTERS + 1)),
+                r#type: AccountType::Asset,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                status: StatusCode::BAD_REQUEST,
+                code: "invalid_account_note",
+                ..
+            }
+        ));
+
+        let database_error = sqlx::query(
+            "INSERT INTO accounts (id, user_id, key, name, note, type) \
+             VALUES ($1, $2, 'asset.direct', 'Direct', $3, 'asset')",
+        )
+        .bind(Uuid::now_v7())
+        .bind(user_id)
+        .bind("字".repeat(MAX_ACCOUNT_NOTE_CHARACTERS + 1))
+        .execute(&pool)
+        .await;
+        assert!(database_error.is_err());
     }
 
     #[sqlx::test(migrations = "./migrations")]

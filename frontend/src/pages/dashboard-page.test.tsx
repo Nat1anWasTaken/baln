@@ -45,6 +45,7 @@ describe("dashboard account balances", () => {
     const liabilityId = "01980000-0000-7000-8000-000000000002";
     const accountBase = {
       archived: false,
+      note: null,
       created_at: "2026-07-24T00:00:00Z",
       updated_at: "2026-07-24T00:00:00Z",
     };

@@ -35,6 +35,7 @@ const localizedProblems: Record<string, string> = {
   forbidden: "你沒有執行這項操作的權限。",
   not_found: "找不到指定的資料。",
   invalid_account_name: "帳戶名稱不可為空白。",
+  invalid_account_note: "帳戶備註不可超過 2,000 個字元。",
   invalid_account_key: "帳戶代碼格式不正確。",
   account_in_use: "這個帳戶已有交易紀錄，請改為封存。",
   empty_update: "請至少修改一個欄位。",

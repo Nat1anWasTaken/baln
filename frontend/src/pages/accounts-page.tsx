@@ -138,6 +138,11 @@ export function AccountsPage() {
                   <CardDescription className="truncate">
                     {account.key}
                   </CardDescription>
+                  {account.note ? (
+                    <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
+                      {account.note}
+                    </p>
+                  ) : null}
                 </div>
                 <Badge variant={account.archived ? "outline" : "secondary"}>
                   {account.archived
@@ -208,6 +213,11 @@ export function AccountsPage() {
                 <TableCell>
                   <p className="font-medium">{account.name}</p>
                   <p className="text-xs text-muted-foreground">{account.key}</p>
+                  {account.note ? (
+                    <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
+                      {account.note}
+                    </p>
+                  ) : null}
                 </TableCell>
                 <TableCell>{accountTypeLabels[account.type]}</TableCell>
                 <TableCell>
@@ -279,7 +289,7 @@ export function AccountsPage() {
               id="account-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="名稱或帳戶代碼"
+              placeholder="名稱、帳戶代碼或備註"
               className="pl-8"
             />
           </div>

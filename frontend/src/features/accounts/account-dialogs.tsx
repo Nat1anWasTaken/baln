@@ -19,6 +19,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   accountKeyIsValid,
   accountTypeLabels,
@@ -36,6 +37,7 @@ export function CreateAccountDialog({
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
+  const [note, setNote] = useState("");
   const [type, setType] = useState<AccountType>("asset");
   const [suffix, setSuffix] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -45,6 +47,7 @@ export function CreateAccountDialog({
   function changeOpen(nextOpen: boolean) {
     if (!nextOpen) {
       setName("");
+      setNote("");
       setType("asset");
       setSuffix("");
       setSubmitted(false);
@@ -66,7 +69,7 @@ export function CreateAccountDialog({
     event.preventDefault();
     setSubmitted(true);
     if (!name.trim() || !keyValid) return;
-    create.mutate({ name: name.trim(), key, type });
+    create.mutate({ name: name.trim(), note: note.trim() || null, key, type });
   }
 
   return (
@@ -128,6 +131,19 @@ export function CreateAccountDialog({
                 <FieldError>帳戶代碼格式不正確。</FieldError>
               ) : null}
             </Field>
+            <Field>
+              <FieldLabel htmlFor="account-note">帳戶備註</FieldLabel>
+              <Textarea
+                id="account-note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="例如：這個帳戶連結到郵局金融卡"
+                maxLength={2000}
+              />
+              <FieldDescription>
+                提供給 AI 代理辨識付款工具或帳戶別名，最多 2,000 個字元。
+              </FieldDescription>
+            </Field>
           </div>
           <DialogFooter>
             <Button
@@ -158,13 +174,23 @@ export function EditAccountDialog({
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(account?.name ?? "");
+  const [note, setNote] = useState(account?.note ?? "");
 
   const update = useMutation({
-    mutationFn: (nextName: string) =>
-      accountsApi.update(account!.id, { name: nextName }),
+    mutationFn: ({
+      nextName,
+      nextNote,
+    }: {
+      nextName: string;
+      nextNote: string | null;
+    }) =>
+      accountsApi.update(account!.id, {
+        name: nextName,
+        note: nextNote,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      toast.success("帳戶名稱已更新");
+      toast.success("帳戶已更新");
       onOpenChange(false);
     },
     onError: (error) => toast.error(error.message),
@@ -173,7 +199,10 @@ export function EditAccountDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!account || !name.trim()) return;
-    update.mutate(name.trim());
+    update.mutate({
+      nextName: name.trim(),
+      nextNote: note.trim() || null,
+    });
   }
 
   return (
@@ -184,7 +213,7 @@ export function EditAccountDialog({
             <DialogTitle>編輯帳戶</DialogTitle>
             <DialogDescription>{account?.key}</DialogDescription>
           </DialogHeader>
-          <div className="py-5">
+          <div className="grid gap-4 py-5">
             <Field>
               <FieldLabel htmlFor="edit-account-name">顯示名稱</FieldLabel>
               <Input
@@ -192,6 +221,19 @@ export function EditAccountDialog({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="edit-account-note">帳戶備註</FieldLabel>
+              <Textarea
+                id="edit-account-note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="例如：這個帳戶連結到郵局金融卡"
+                maxLength={2000}
+              />
+              <FieldDescription>
+                提供給 AI 代理辨識付款工具或帳戶別名，最多 2,000 個字元。
+              </FieldDescription>
             </Field>
           </div>
           <DialogFooter>

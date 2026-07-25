@@ -5,6 +5,7 @@ const accounts = [
     id: "01980000-0000-7000-8000-000000000001",
     key: "asset.cash",
     name: "現金",
+    note: "連結到郵局金融卡",
     type: "asset",
     archived: false,
     created_at: "2026-07-24T00:00:00Z",
@@ -14,6 +15,7 @@ const accounts = [
     id: "01980000-0000-7000-8000-000000000002",
     key: "expense.restaurant",
     name: "餐飲",
+    note: null,
     type: "expense",
     archived: false,
     created_at: "2026-07-24T00:00:00Z",
@@ -23,6 +25,7 @@ const accounts = [
     id: "01980000-0000-7000-8000-000000000003",
     key: "income.salary",
     name: "薪資",
+    note: null,
     type: "income",
     archived: false,
     created_at: "2026-07-24T00:00:00Z",
@@ -346,6 +349,27 @@ test("keeps long transaction summaries inside mobile cards", async ({
   expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(
     cardBox!.x + cardBox!.width,
   );
+});
+
+test("shows account notes in responsive lists and the edit dialog", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/accounts");
+
+  const desktopRow = page.getByRole("row").filter({ hasText: "現金" });
+  await expect(desktopRow.getByText("連結到郵局金融卡")).toBeVisible();
+  await desktopRow.getByRole("button", { name: "編輯 現金" }).click();
+  const note = page.getByRole("textbox", { name: "帳戶備註" });
+  await expect(note).toHaveValue("連結到郵局金融卡");
+  await expect(note).toHaveAttribute("maxlength", "2000");
+  await page.getByRole("button", { name: "取消" }).click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileCard = page
+    .locator('[data-slot="card"]:visible')
+    .filter({ hasText: "現金" });
+  await expect(mobileCard.getByText("連結到郵局金融卡")).toBeVisible();
 });
 
 test("groups the transaction account filter by account type", async ({

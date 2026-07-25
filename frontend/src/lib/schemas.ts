@@ -92,6 +92,7 @@ export const accountSchema = z.object({
   id: z.string().uuid(),
   key: z.string(),
   name: z.string(),
+  note: z.string().nullable(),
   type: accountTypeSchema,
   archived: z.boolean(),
   created_at: z.string(),
@@ -195,11 +196,13 @@ export type PeriodSummary = z.infer<typeof periodSummarySchema>;
 export type CreateAccountRequest = {
   key: string;
   name: string;
+  note?: string | null;
   type: AccountType;
 };
 
 export type UpdateAccountRequest = {
   name?: string;
+  note?: string | null;
   archived?: boolean;
 };
 

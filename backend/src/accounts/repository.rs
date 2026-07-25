@@ -19,19 +19,21 @@ pub async fn create(
     user_id: Uuid,
     key: &str,
     name: &str,
+    note: Option<&str>,
     account_type: AccountType,
 ) -> ApiResult<Account> {
     Ok(sqlx::query_as::<_, Account>(
         r#"
-        INSERT INTO accounts (id, user_id, key, name, type)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, key, name, type, archived, created_at, updated_at
+        INSERT INTO accounts (id, user_id, key, name, note, type)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, user_id, key, name, note, type, archived, created_at, updated_at
         "#,
     )
     .bind(Uuid::now_v7())
     .bind(user_id)
     .bind(key)
     .bind(name)
+    .bind(note)
     .bind(account_type)
     .fetch_one(pool)
     .await?)
@@ -45,11 +47,16 @@ pub async fn list(
 ) -> ApiResult<Vec<Account>> {
     Ok(sqlx::query_as::<_, Account>(
         r#"
-        SELECT id, user_id, key, name, type, archived, created_at, updated_at
+        SELECT id, user_id, key, name, note, type, archived, created_at, updated_at
           FROM accounts
          WHERE user_id = $1
            AND ($2 OR archived = FALSE)
-           AND ($3::text IS NULL OR key ILIKE '%' || $3 || '%' OR name ILIKE '%' || $3 || '%')
+           AND (
+                $3::text IS NULL
+                OR key ILIKE '%' || $3 || '%'
+                OR name ILIKE '%' || $3 || '%'
+                OR COALESCE(note, '') ILIKE '%' || $3 || '%'
+           )
          ORDER BY type, key
         "#,
     )
@@ -63,7 +70,7 @@ pub async fn list(
 pub async fn get(pool: &PgPool, user_id: Uuid, account_id: Uuid) -> ApiResult<Option<Account>> {
     Ok(sqlx::query_as::<_, Account>(
         r#"
-        SELECT id, user_id, key, name, type, archived, created_at, updated_at
+        SELECT id, user_id, key, name, note, type, archived, created_at, updated_at
           FROM accounts
          WHERE id = $1 AND user_id = $2
         "#,
@@ -80,20 +87,24 @@ pub async fn update(
     account_id: Uuid,
     name: Option<&str>,
     archived: Option<bool>,
+    note: Option<Option<&str>>,
 ) -> ApiResult<Option<Account>> {
     Ok(sqlx::query_as::<_, Account>(
         r#"
         UPDATE accounts
            SET name = COALESCE($3, name),
-               archived = COALESCE($4, archived)
+               archived = COALESCE($4, archived),
+               note = CASE WHEN $5 THEN $6 ELSE note END
          WHERE id = $1 AND user_id = $2
-        RETURNING id, user_id, key, name, type, archived, created_at, updated_at
+        RETURNING id, user_id, key, name, note, type, archived, created_at, updated_at
         "#,
     )
     .bind(account_id)
     .bind(user_id)
     .bind(name)
     .bind(archived)
+    .bind(note.is_some())
+    .bind(note.flatten())
     .fetch_optional(pool)
     .await?)
 }

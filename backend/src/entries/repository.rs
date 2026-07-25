@@ -169,7 +169,7 @@ pub async fn resolve_accounts(
 ) -> ApiResult<Vec<Account>> {
     Ok(sqlx::query_as::<_, Account>(
         r#"
-        SELECT id, user_id, key, name, type, archived, created_at, updated_at
+        SELECT id, user_id, key, name, note, type, archived, created_at, updated_at
           FROM accounts
          WHERE user_id = $1 AND key = ANY($2)
          FOR SHARE
