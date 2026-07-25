@@ -68,6 +68,22 @@ describe("EntryCard", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("preserves the configured list filters in the detail link", () => {
+    render(
+      <MemoryRouter>
+        <EntryCard
+          entry={entry}
+          listSearch="?q=%E5%8D%88%E9%A4%90&account=expense.food"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "查看 午餐" })).toHaveAttribute(
+      "href",
+      "/entries/00000000-0000-4000-8000-000000000001?q=%E5%8D%88%E9%A4%90&account=expense.food",
+    );
+  });
+
   it("truncates long descriptions alongside the fixed amount action", () => {
     render(
       <MemoryRouter>

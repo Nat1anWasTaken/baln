@@ -260,6 +260,12 @@ async function mockApi(page: Page) {
     ) {
       return route.fulfill({ json: createdEntry });
     }
+    if (
+      path === "/api/v1/entries/01980000-0000-7000-8000-000000000010" &&
+      method === "GET"
+    ) {
+      return route.fulfill({ json: entry });
+    }
     if (path === "/api/v1/entries" && method === "GET") {
       return route.fulfill({ json: { items: [entry], next_cursor: null } });
     }
@@ -407,6 +413,69 @@ test("groups the responsive transaction account pills by account type", async ({
   await page.getByRole("tab", { name: "支出" }).click();
   await expect(page.getByRole("radio", { name: "餐飲" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "現金" })).not.toBeVisible();
+});
+
+test("separates account and transaction filters", async ({ page }) => {
+  const assertFilterOrder = async () => {
+    const accountLabel = page.getByText("帳戶", { exact: true }).first();
+    const separator = page.locator('[data-slot="separator"]').first();
+    const searchInput = page.getByRole("textbox", { name: "搜尋交易" });
+
+    await expect(accountLabel).toBeVisible();
+    await expect(separator).toBeVisible();
+    await expect(searchInput).toBeVisible();
+
+    const [accountBox, separatorBox, searchBox] = await Promise.all([
+      accountLabel.boundingBox(),
+      separator.boundingBox(),
+      searchInput.boundingBox(),
+    ]);
+    expect(accountBox).not.toBeNull();
+    expect(separatorBox).not.toBeNull();
+    expect(searchBox).not.toBeNull();
+    expect(accountBox!.y).toBeLessThan(separatorBox!.y);
+    expect(separatorBox!.y).toBeLessThan(searchBox!.y);
+  };
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/entries");
+  await assertFilterOrder();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await assertFilterOrder();
+});
+
+test("preserves transaction filters when returning from details", async ({
+  page,
+}) => {
+  await page.goto(
+    "/entries?q=%E4%BE%BF%E5%88%A9%E5%95%86%E5%BA%97&from=2026-07-01&to=2026-07-31&account=expense.restaurant",
+  );
+
+  await page
+    .getByRole("link", {
+      name: "全家便利商店 — 藍—成人加長不黏身雨衣",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("link", { name: "返回交易" })).toHaveAttribute(
+    "href",
+    "/entries?q=%E4%BE%BF%E5%88%A9%E5%95%86%E5%BA%97&from=2026-07-01&to=2026-07-31&account=expense.restaurant",
+  );
+  await page.getByRole("link", { name: "返回交易" }).click();
+
+  await expect(page).toHaveURL(
+    /\/entries\?q=%E4%BE%BF%E5%88%A9%E5%95%86%E5%BA%97&from=2026-07-01&to=2026-07-31&account=expense\.restaurant$/,
+  );
+  await expect(page.getByRole("textbox", { name: "搜尋交易" })).toHaveValue(
+    "便利商店",
+  );
+  await expect(page.getByLabel("開始日期")).toHaveValue("2026-07-01");
+  await expect(page.getByLabel("結束日期")).toHaveValue("2026-07-31");
+  await expect(page.getByRole("radio", { name: "餐飲" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
 });
 
 test("opens the advanced balanced-postings editor", async ({ page }) => {

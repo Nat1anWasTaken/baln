@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -39,6 +39,7 @@ import { formatLedgerDate, formatMoney, formatTimestamp } from "@/lib/format";
 
 export function EntryDetailPage() {
   const { entryId = "" } = useParams();
+  const { search } = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -55,7 +56,7 @@ export function EntryDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ["report"] });
       await queryClient.invalidateQueries({ queryKey: ["account-balance"] });
       toast.success("交易已刪除");
-      navigate("/entries", { replace: true });
+      navigate({ pathname: "/entries", search }, { replace: true });
     },
     onError: (error) => toast.error(error.message),
   });
@@ -74,14 +75,14 @@ export function EntryDetailPage() {
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost">
-          <Link to="/entries">
+          <Link to={{ pathname: "/entries", search }}>
             <ArrowLeft aria-hidden="true" />
             返回交易
           </Link>
         </Button>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link to={`/entries/${entryId}/edit`}>
+            <Link to={{ pathname: `/entries/${entryId}/edit`, search }}>
               <Pencil aria-hidden="true" />
               編輯
             </Link>

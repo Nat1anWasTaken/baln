@@ -1,7 +1,7 @@
 import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
 import { ArrowLeft, CircleAlert, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -287,6 +287,7 @@ export function EntryEditor({
   accounts: Account[];
   entry?: EntryResponse;
 }) {
+  const { search } = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [duplicateReview, setDuplicateReview] = useState<{
@@ -336,7 +337,7 @@ export function EntryEditor({
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries();
       toast.success(entry ? "交易已更新" : "交易已建立");
-      navigate(`/entries/${saved.id}`, { replace: true });
+      navigate({ pathname: `/entries/${saved.id}`, search }, { replace: true });
     },
     onError: (error, submission) => {
       if (
@@ -486,7 +487,12 @@ export function EntryEditor({
       onSubmit={form.handleSubmit(validateAndSubmit)}
     >
       <Button asChild variant="ghost" className="w-fit">
-        <Link to={entry ? `/entries/${entry.id}` : "/entries"}>
+        <Link
+          to={{
+            pathname: entry ? `/entries/${entry.id}` : "/entries",
+            search,
+          }}
+        >
           <ArrowLeft aria-hidden="true" />
           {entry ? "返回交易明細" : "返回交易"}
         </Link>
@@ -757,7 +763,14 @@ export function EntryEditor({
 
       <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4">
         <Button asChild type="button" variant="outline">
-          <Link to={entry ? `/entries/${entry.id}` : "/entries"}>取消</Link>
+          <Link
+            to={{
+              pathname: entry ? `/entries/${entry.id}` : "/entries",
+              search,
+            }}
+          >
+            取消
+          </Link>
         </Button>
         <Button type="submit" loading={mutation.isPending}>
           {entry ? "儲存變更" : "建立交易"}

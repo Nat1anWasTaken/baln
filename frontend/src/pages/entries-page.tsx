@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -28,6 +29,7 @@ export function EntriesPage() {
   const dateFrom = searchParams.get("from") ?? "";
   const dateTo = searchParams.get("to") ?? "";
   const accountKey = searchParams.get("account") ?? "all";
+  const listSearch = searchParams.size ? `?${searchParams.toString()}` : "";
 
   useEffect(() => {
     const current = searchParams.get("q") ?? "";
@@ -85,42 +87,7 @@ export function EntriesPage() {
         <CardHeader>
           <CardTitle>篩選條件</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <Field className="md:col-span-2">
-            <FieldLabel htmlFor="entry-search">搜尋交易</FieldLabel>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                id="entry-search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="說明、備註、帳戶或分錄備註"
-                className="pl-8"
-              />
-            </div>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="entry-from">開始日期</FieldLabel>
-            <Input
-              id="entry-from"
-              type="date"
-              value={dateFrom}
-              onChange={(event) => setFilter("from", event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="entry-to">結束日期</FieldLabel>
-            <Input
-              id="entry-to"
-              type="date"
-              min={dateFrom || undefined}
-              value={dateTo}
-              onChange={(event) => setFilter("to", event.target.value)}
-            />
-          </Field>
+        <CardContent className="grid gap-3">
           <Field className="md:col-span-4">
             <FieldLabel>帳戶</FieldLabel>
             <AccountFilterSelector
@@ -134,6 +101,44 @@ export function EntriesPage() {
               onRetry={() => void accounts.refetch()}
             />
           </Field>
+          <Separator />
+          <div className="grid gap-3 md:grid-cols-4">
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="entry-search">搜尋交易</FieldLabel>
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  id="entry-search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="說明、備註、帳戶或分錄備註"
+                  className="pl-8"
+                />
+              </div>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="entry-from">開始日期</FieldLabel>
+              <Input
+                id="entry-from"
+                type="date"
+                value={dateFrom}
+                onChange={(event) => setFilter("from", event.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="entry-to">結束日期</FieldLabel>
+              <Input
+                id="entry-to"
+                type="date"
+                min={dateFrom || undefined}
+                value={dateTo}
+                onChange={(event) => setFilter("to", event.target.value)}
+              />
+            </Field>
+          </div>
           <div className="flex items-end gap-2 md:col-span-4 md:justify-end">
             {hasFilters ? (
               <Button type="button" variant="ghost" onClick={clearFilters}>
@@ -186,7 +191,7 @@ export function EntriesPage() {
         <>
           <div className="grid gap-3 md:hidden">
             {items.map((entry) => (
-              <EntryCard key={entry.id} entry={entry} />
+              <EntryCard key={entry.id} entry={entry} listSearch={listSearch} />
             ))}
           </div>
           <Card className="hidden overflow-hidden md:block">
@@ -202,7 +207,11 @@ export function EntriesPage() {
               </TableHeader>
               <TableBody>
                 {items.map((entry) => (
-                  <EntryTableRow key={entry.id} entry={entry} />
+                  <EntryTableRow
+                    key={entry.id}
+                    entry={entry}
+                    listSearch={listSearch}
+                  />
                 ))}
               </TableBody>
             </Table>

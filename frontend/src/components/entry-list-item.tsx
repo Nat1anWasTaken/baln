@@ -65,10 +65,16 @@ export function EntrySummary({
   );
 }
 
-export function EntryCard({ entry }: { entry: EntryResponse }) {
+export function EntryCard({
+  entry,
+  listSearch = "",
+}: {
+  entry: EntryResponse;
+  listSearch?: string;
+}) {
   return (
     <Link
-      to={`/entries/${entry.id}`}
+      to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
       aria-label={`查看 ${entry.description}`}
       className="touch-surface block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
@@ -86,7 +92,13 @@ export function EntryCard({ entry }: { entry: EntryResponse }) {
   );
 }
 
-export function EntryTableRow({ entry }: { entry: EntryResponse }) {
+export function EntryTableRow({
+  entry,
+  listSearch = "",
+}: {
+  entry: EntryResponse;
+  listSearch?: string;
+}) {
   return (
     <TableRow>
       <TableCell className="whitespace-nowrap">
@@ -94,7 +106,7 @@ export function EntryTableRow({ entry }: { entry: EntryResponse }) {
       </TableCell>
       <TableCell>
         <Link
-          to={`/entries/${entry.id}`}
+          to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
           data-slot="entry-link"
           className="touch-press inline-flex items-center rounded-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
@@ -120,7 +132,7 @@ export function EntryTableRow({ entry }: { entry: EntryResponse }) {
           size="icon-sm"
           aria-label={`查看 ${entry.description}`}
         >
-          <Link to={`/entries/${entry.id}`}>
+          <Link to={{ pathname: `/entries/${entry.id}`, search: listSearch }}>
             <ChevronRight aria-hidden="true" />
           </Link>
         </Button>
