@@ -372,9 +372,10 @@ test("shows account notes in responsive lists and the edit dialog", async ({
   await expect(mobileCard.getByText("連結到郵局金融卡")).toBeVisible();
 });
 
-test("groups the transaction account filter by account type", async ({
+test("groups the responsive transaction account pills by account type", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/entries");
 
   await expect(
