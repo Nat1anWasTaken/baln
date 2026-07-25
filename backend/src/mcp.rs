@@ -51,8 +51,8 @@ invent an account key. Creation tools accept positive semantic movements from a 
 a destination account and return natural-language next actions whenever more information is \
 required. When a user supplies a non-TWD amount, automatically convert it under the foreign-currency \
 policy returned by get_entry_creation_context before writing the entry. For each distinct create \
-operation, generate a new opaque operation_key and retain it for retries; reuse a key only for the \
-exact same operation.";
+operation, generate a new UUID v4 or v7 operation_key and retain it for retries; reuse a key only \
+for the exact same operation.";
 
 fn foreign_currency_policy() -> Value {
     json!({
@@ -333,19 +333,16 @@ impl BalnMcp {
                 } else {
                     match parse_input::<CreateEntryInput>(arguments) {
                         Ok(input) => {
-                            match operation_identity(&context, input.operation_key.as_deref()) {
-                                Ok(operation) => {
-                                    self.create_entries(
-                                        principal,
-                                        vec![input.into()],
-                                        "create_entry",
-                                        operation,
-                                        false,
-                                    )
-                                    .await
-                                }
-                                Err(result) => result,
-                            }
+                            let operation =
+                                operation_identity(&context, input.operation_key.as_ref());
+                            self.create_entries(
+                                principal,
+                                vec![input.into()],
+                                "create_entry",
+                                operation,
+                                false,
+                            )
+                            .await
                         }
                         Err(result) => result,
                     }
@@ -357,19 +354,16 @@ impl BalnMcp {
                 } else {
                     match parse_input::<CreateEntriesInput>(arguments) {
                         Ok(input) => {
-                            match operation_identity(&context, input.operation_key.as_deref()) {
-                                Ok(operation) => {
-                                    self.create_entries(
-                                        principal,
-                                        input.entries,
-                                        "create_entries",
-                                        operation,
-                                        true,
-                                    )
-                                    .await
-                                }
-                                Err(result) => result,
-                            }
+                            let operation =
+                                operation_identity(&context, input.operation_key.as_ref());
+                            self.create_entries(
+                                principal,
+                                input.entries,
+                                "create_entries",
+                                operation,
+                                true,
+                            )
+                            .await
                         }
                         Err(result) => result,
                     }
@@ -996,12 +990,12 @@ struct EntryDraft {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct CreateEntryInput {
-    /// Stable caller-generated identifier for this intended operation. Use a new opaque value
-    /// (preferably a UUID) for every distinct operation, even when the entry content is identical.
-    /// Reuse the exact same value only when retrying the same operation, including after reconnects.
-    /// Reusing it with different content returns an idempotency conflict. Omit only when the
-    /// operation does not need retry protection.
-    operation_key: Option<String>,
+    /// Stable caller-generated UUID for this intended operation. Generate a new UUID v4 or v7 for
+    /// every distinct operation, even when the entry content is identical; for example,
+    /// 9b6cc2cc-1173-4dab-8f1d-2e456d698b98. Reuse the exact same UUID only when retrying the same
+    /// operation, including after reconnects. Reusing it with different content returns an
+    /// idempotency conflict. Omit only when the operation does not need retry protection.
+    operation_key: Option<Uuid>,
     /// Bookkeeping date in YYYY-MM-DD. Omit to use today in Baln's configured timezone.
     date: Option<NaiveDate>,
     /// Short user-facing description, such as “Lunch” or “July salary”.
@@ -1028,12 +1022,12 @@ impl From<CreateEntryInput> for EntryDraft {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct CreateEntriesInput {
-    /// Stable caller-generated identifier for this complete atomic batch. Use a new opaque value
-    /// (preferably a UUID) for every distinct batch, even when its content is identical. Reuse the
-    /// exact same value only when retrying the same batch, including after reconnects. Reusing it
-    /// with different content returns an idempotency conflict. Omit only when the batch does not
-    /// need retry protection.
-    operation_key: Option<String>,
+    /// Stable caller-generated UUID for this complete atomic batch. Generate a new UUID v4 or v7
+    /// for every distinct batch, even when its content is identical; for example,
+    /// 9b6cc2cc-1173-4dab-8f1d-2e456d698b98. Reuse the exact same UUID only when retrying the same
+    /// batch, including after reconnects. Reusing it with different content returns an idempotency
+    /// conflict. Omit only when the batch does not need retry protection.
+    operation_key: Option<Uuid>,
     /// Complete atomic batch containing 1 through 100 entries.
     entries: Vec<EntryDraft>,
 }
@@ -1134,13 +1128,13 @@ fn build_tools() -> Vec<Tool> {
         write_tool::<CreateEntryInput>(
             "create_entry",
             "Create Ledger Entry",
-            "Create one balanced entry using a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Supply a new opaque operation_key for each distinct operation and reuse it only to retry that same operation, including after reconnects; the same key with changed content is a conflict. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
+            "Create one balanced entry using a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Generate a new UUID v4 or v7 operation_key for each distinct operation and reuse it only to retry that same operation, including after reconnects; the same UUID with changed content is a conflict. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
             false,
         ),
         write_tool::<CreateEntriesInput>(
             "create_entries",
             "Create Ledger Entries",
-            "Create 1–100 entries atomically using the same semantic movement shape and foreign-currency automatic-conversion policy as create_entry. Supply one new opaque operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same key with changed content is a conflict. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch.",
+            "Create 1–100 entries atomically using the same semantic movement shape and foreign-currency automatic-conversion policy as create_entry. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch.",
             false,
         ),
         write_tool::<UpdateEntryInput>(
@@ -1247,7 +1241,7 @@ fn request_id(context: &RequestContext<RoleServer>) -> String {
 
 #[derive(Debug, PartialEq, Eq)]
 enum OperationIdentity {
-    Explicit(String),
+    Explicit(Uuid),
     Automatic {
         session_id: Option<String>,
         request_id: String,
@@ -1257,20 +1251,10 @@ enum OperationIdentity {
 
 fn operation_identity(
     context: &RequestContext<RoleServer>,
-    explicit_key: Option<&str>,
-) -> Result<OperationIdentity, CallToolResult> {
+    explicit_key: Option<&Uuid>,
+) -> OperationIdentity {
     if let Some(key) = explicit_key {
-        let key = key.trim();
-        if key.is_empty() || key.len() > 200 {
-            return Err(action_error(
-                "needs_agent_action",
-                "Baln could not use operation_key because it must contain 1–200 non-whitespace characters.",
-                "Generate a new opaque operation key (preferably a UUID), or reuse the original key only if this is a retry of that exact operation.",
-                Vec::new(),
-                json!({"code": "invalid_operation_key"}),
-            ));
-        }
-        return Ok(OperationIdentity::Explicit(key.to_owned()));
+        return OperationIdentity::Explicit(*key);
     }
 
     let session_id = context
@@ -1283,11 +1267,11 @@ fn operation_identity(
     // later operation that legitimately reuses them. The per-invocation nonce prevents false
     // collisions in that case and in sessionless transports. Callers that need durable replay
     // semantics must supply operation_key.
-    Ok(OperationIdentity::Automatic {
+    OperationIdentity::Automatic {
         session_id: session_id.map(str::to_owned),
         request_id: request_id(context),
         nonce: Uuid::now_v7(),
-    })
+    }
 }
 
 fn parse_input<T: DeserializeOwned>(value: Value) -> Result<T, CallToolResult> {
@@ -1795,7 +1779,9 @@ mod tests {
     #[test]
     fn explicit_operation_key_is_durable_and_batch_keys_are_distinct() {
         let grant_id = Uuid::parse_str("018f0000-0000-7000-8000-000000000001").unwrap();
-        let operation = OperationIdentity::Explicit("agent-operation-42".to_owned());
+        let operation = OperationIdentity::Explicit(
+            Uuid::parse_str("018f0000-0000-4000-8000-000000000042").unwrap(),
+        );
         let keys = (0..100)
             .map(|index| idempotency_key(grant_id, "create_entries", &operation, index))
             .collect::<Vec<_>>();
@@ -1810,7 +1796,9 @@ mod tests {
             idempotency_key(
                 grant_id,
                 "create_entries",
-                &OperationIdentity::Explicit("agent-operation-43".to_owned()),
+                &OperationIdentity::Explicit(
+                    Uuid::parse_str("018f0000-0000-4000-8000-000000000043").unwrap(),
+                ),
                 0
             )
         );
@@ -1899,12 +1887,32 @@ mod tests {
         assert!(input_schema.contains("automatically convert"));
         assert!(input_schema.contains("exchange rate"));
         assert!(input_schema.contains("operation_key"));
+        assert!(input_schema.contains("\"format\":\"uuid\""));
         assert!(
             create
                 .description
                 .as_deref()
                 .unwrap()
                 .contains("including after reconnects")
+        );
+    }
+
+    #[test]
+    fn create_entry_rejects_non_uuid_operation_keys() {
+        let error = parse_input::<CreateEntryInput>(json!({
+            "operation_key": "123",
+            "description": "Lunch",
+            "movements": [{
+                "from_account_key": "asset.cash",
+                "to_account_key": "expense.restaurant",
+                "amount_minor": 320
+            }]
+        }))
+        .unwrap_err();
+
+        assert_eq!(
+            error.structured_content.unwrap()["code"],
+            "invalid_tool_input"
         );
     }
 

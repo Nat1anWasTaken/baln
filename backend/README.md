@@ -146,9 +146,10 @@ database deduplication keys. `create_entries` accepts up to 100 entries and
 commits the whole batch atomically.
 
 `create_entry` and `create_entries` accept an optional caller-generated
-`operation_key`. Clients should generate a new opaque key (preferably a UUID)
-for every distinct operation, retain it, and reuse it only when retrying the
-exact same operation. One batch-level key derives a different database
+`operation_key`. Clients should generate a new UUID v4 or v7 for every distinct
+operation, retain it, and reuse it only when retrying the exact same operation.
+Values such as counters or `"123"` are rejected by the UUID schema. One
+batch-level UUID derives a different database
 deduplication key for every batch index. The explicit identity is scoped by
 OAuth grant and tool name, but not by MCP session, so it remains stable across
 reconnects. Reusing it with different content returns `dedup_key_conflict`;
