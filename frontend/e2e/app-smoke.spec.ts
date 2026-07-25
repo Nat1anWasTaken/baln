@@ -138,7 +138,7 @@ async function mockApi(page: Page) {
       apiTokens = [];
       return route.fulfill({ status: 204 });
     }
-    if (path === "/api/v1/reports/monthly") {
+    if (path === "/api/v1/reports/summary") {
       return route.fulfill({
         json: {
           date_from: "2026-07-01",
@@ -293,6 +293,21 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
     "aria-current",
     "page",
   );
+  await page.getByRole("button", { name: "每月起始日" }).click();
+  await page.getByRole("button", { name: "26 日" }).click();
+  await expect(page.getByRole("button", { name: "每月起始日" })).toContainText(
+    "每月 26 日開始",
+  );
+  await expect(page.getByRole("heading", { name: /月期$/ })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem(
+          "baln:month-start-day:01980000-0000-7000-8000-000000000099",
+        ),
+      ),
+    )
+    .toBe("26");
 
   await page.getByRole("link", { name: "新增交易" }).click();
   await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
