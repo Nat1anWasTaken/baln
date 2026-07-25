@@ -191,9 +191,12 @@ OAuth consent flow, and verify:
 3. `create_entry` creates one balanced entry.
 4. Retrying with the same `operation_key` and identical content returns the
    existing entry with `replayed: true`.
-5. A batch containing an invalid account creates zero entries and explains the
+5. Creating another operation with the same date, accounts, and amounts returns
+   `possible_duplicate`; retry only after explicit user confirmation with
+   `confirmed_distinct: true`.
+6. A batch containing an invalid account creates zero entries and explains the
    required correction.
-6. Revoking the connection under **已連接的應用程式** makes the access and
+7. Revoking the connection under **已連接的應用程式** makes the access and
    refresh tokens unusable.
 
 ### ChatGPT web

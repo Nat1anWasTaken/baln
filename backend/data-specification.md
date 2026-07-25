@@ -380,6 +380,12 @@ bank-import:esun:20260724:12345
 * 相同操作重試時應使用相同 `dedup_key`
 * 不應使用描述、日期與金額拼接作為唯一防重機制
 
+`dedup_key` 只處理同一來源操作的重試。建立 Entry 時，Service 另以 `date` 與
+依 Account 彙總後的 signed Posting 金額檢查可能重複的既有 Entry；description、
+note、memo 與 Posting 順序不參與比對。若命中，呼叫端必須先讓使用者確認這是另一
+筆交易，再以 `confirmed_distinct = true` 重試。這個確認機制適用於 Web、API 與
+Agent，不能取代穩定的來源 `dedup_key`。
+
 ---
 
 ## 7.5 Entry Constraints
