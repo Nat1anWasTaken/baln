@@ -72,7 +72,7 @@ export function EntryCard({ entry }: { entry: EntryResponse }) {
       aria-label={`查看 ${entry.description}`}
       className="touch-surface block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <Card className="transition-colors group-active:bg-muted/40">
+      <Card className="touch-rebound group-active:bg-muted/40">
         <EntrySummary
           entry={entry}
           action={
