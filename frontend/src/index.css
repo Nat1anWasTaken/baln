@@ -239,6 +239,27 @@
     height: 2.75rem;
     transform: translate(-50%, -50%);
   }
+
+  .touch-press:active:not(:disabled):not([aria-disabled="true"]) {
+    box-shadow: inset 0 0 0 2px
+      color-mix(in oklch, currentColor 35%, transparent);
+    filter: brightness(0.62);
+    transform: translateY(2px) scale(0.9);
+  }
+
+  .touch-surface:active:not([aria-disabled="true"]) {
+    box-shadow: inset 0 0 0 2px var(--ring);
+    filter: brightness(0.72);
+    transform: scale(0.96);
+  }
+}
+
+@media (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  .touch-press:active:not(:disabled):not([aria-disabled="true"]),
+  .touch-surface:active:not([aria-disabled="true"]) {
+    filter: brightness(0.62);
+    transform: none;
+  }
 }
 
 /*

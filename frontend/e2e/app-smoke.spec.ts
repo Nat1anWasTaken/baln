@@ -511,6 +511,19 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await page.setViewportSize({ width: 320, height: 844 });
     await expectContainedTab(page.getByRole("tab", { name: "引導模式" }));
     await expectContainedTab(page.getByRole("tab", { name: "支出" }));
+    await expectContainedTab(page.getByRole("tab", { name: "退款" }));
+
+    const transactionTypeTabs = page
+      .locator('[data-slot="tabs-list"]')
+      .filter({ has: page.getByRole("tab", { name: "支出" }) });
+    const amountLabel = page.getByText("金額（TWD）", { exact: true });
+    const [tabsBox, amountLabelBox] = await Promise.all([
+      transactionTypeTabs.boundingBox(),
+      amountLabel.boundingBox(),
+    ]);
+    expect(tabsBox).not.toBeNull();
+    expect(amountLabelBox).not.toBeNull();
+    expect(tabsBox!.y + tabsBox!.height).toBeLessThan(amountLabelBox!.y);
 
     await expectTouchTarget(page.getByRole("button", { name: "切換顯示模式" }));
 

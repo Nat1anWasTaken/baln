@@ -551,10 +551,14 @@ export function EntryEditor({
                     form.setValue("secondaryAccountKey", "");
                   }}
                 >
-                  <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+                  <TabsList className="grid w-full grid-cols-2 gap-1 group-data-horizontal/tabs:h-auto sm:grid-cols-4">
                     {(Object.keys(presetConfiguration) as GuidedPreset[]).map(
                       (value) => (
-                        <TabsTrigger key={value} value={value}>
+                        <TabsTrigger
+                          key={value}
+                          value={value}
+                          className="h-auto"
+                        >
                           {presetConfiguration[value].label}
                         </TabsTrigger>
                       ),
