@@ -5,9 +5,9 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
+import { AccountFilterSelector } from "@/features/entries/account-filter-selector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Combobox } from "@/components/ui/combobox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,7 +18,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { toExclusiveDate } from "@/lib/format";
 
@@ -122,28 +121,20 @@ export function EntriesPage() {
               onChange={(event) => setFilter("to", event.target.value)}
             />
           </Field>
-          <Field className="md:col-span-2">
-            <FieldLabel htmlFor="entry-account">帳戶</FieldLabel>
-            <Combobox
-              id="entry-account"
+          <Field className="md:col-span-4">
+            <FieldLabel>帳戶</FieldLabel>
+            <AccountFilterSelector
               value={accountKey}
               onValueChange={(value) => setFilter("account", value)}
-              options={[{ value: "all", label: "所有帳戶" }]}
-              groups={accountTypes.map((type) => ({
-                label: accountTypeLabels[type],
-                options: (accounts.data ?? [])
-                  .filter((account) => account.type === type)
-                  .map((account) => ({
-                    value: account.key,
-                    label: `${account.name}${account.archived ? "（已封存）" : ""}`,
-                    keywords: [account.key, accountTypeLabels[type]],
-                  })),
-              }))}
-              searchPlaceholder="搜尋帳戶…"
-              emptyText="找不到帳戶。"
+              accounts={accounts.data ?? []}
+              isLoading={accounts.isPending}
+              errorMessage={
+                accounts.isError ? accounts.error.message : undefined
+              }
+              onRetry={() => void accounts.refetch()}
             />
           </Field>
-          <div className="flex items-end gap-2 md:col-span-2 md:justify-end">
+          <div className="flex items-end gap-2 md:col-span-4 md:justify-end">
             {hasFilters ? (
               <Button type="button" variant="ghost" onClick={clearFilters}>
                 <X aria-hidden="true" />

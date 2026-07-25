@@ -352,16 +352,36 @@ test("groups the transaction account filter by account type", async ({
   page,
 }) => {
   await page.goto("/entries");
-  await page.getByRole("combobox", { name: "帳戶" }).click();
 
-  const popover = page.locator('[data-slot="popover-content"]');
-  await expect(popover.getByText("資產", { exact: true })).toBeVisible();
-  await expect(popover.getByText("收入", { exact: true })).toBeVisible();
-  await expect(popover.getByText("支出", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("radiogroup", { name: "資產帳戶" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("radiogroup", { name: "收入帳戶" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("radiogroup", { name: "支出帳戶" }),
+  ).toBeVisible();
 
-  await popover.getByPlaceholder("搜尋帳戶…").fill("支出");
-  await expect(popover.getByRole("option", { name: "餐飲" })).toBeVisible();
-  await expect(popover.getByRole("option", { name: "現金" })).not.toBeVisible();
+  await page.getByRole("textbox", { name: "搜尋帳戶選項" }).fill("支出");
+  await expect(page.getByRole("radio", { name: "餐飲" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "現金" })).not.toBeVisible();
+  await page.getByRole("radio", { name: "餐飲" }).click();
+  await expect(page).toHaveURL(/account=expense\.restaurant/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("tab", { name: "支出" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("radio", { name: "餐飲" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await page.getByRole("radio", { name: "所有帳戶" }).click();
+  await page.getByRole("tab", { name: "支出" }).click();
+  await expect(page.getByRole("radio", { name: "餐飲" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "現金" })).not.toBeVisible();
 });
 
 test("opens the advanced balanced-postings editor", async ({ page }) => {
@@ -512,7 +532,10 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await page.goto("/entries");
 
     const search = page.getByLabel("搜尋交易");
-    const accountPicker = page.getByRole("combobox", { name: "帳戶" });
+    const accountSearch = page.getByRole("textbox", {
+      name: "搜尋帳戶選項",
+    });
+    const allAccounts = page.getByRole("radio", { name: "所有帳戶" });
     const transaction = page.getByRole("link", {
       name: "查看 全家便利商店 — 藍—成人加長不黏身雨衣",
     });
@@ -521,19 +544,15 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     });
 
     await expectTouchTarget(search);
-    await expectTouchTarget(accountPicker);
+    await expectTouchTarget(accountSearch);
+    await expectTouchTarget(allAccounts);
+    await expectContainedTab(page.getByRole("tab", { name: "資產" }));
     await expectTouchTarget(
       mobileNavigation.getByRole("link", { name: "交易", exact: true }),
     );
     await expectTouchTarget(transaction);
     await expect(transaction).toHaveCSS("touch-action", "manipulation");
-
-    await accountPicker.click();
-    await expect(page.locator('[data-slot="popover-content"]')).toHaveCSS(
-      "transform",
-      "none",
-    );
-    await expectTouchTarget(page.getByRole("option", { name: "所有帳戶" }));
+    await expectTouchTarget(page.getByRole("radio", { name: "現金" }));
 
     await page.goto("/entries/new");
     await expectContainedTab(page.getByRole("tab", { name: "引導模式" }));
