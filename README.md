@@ -186,12 +186,16 @@ When writing entries, use positive movements from one account to another:
 ```json
 {
   "operation_key": "9b6cc2cc-1173-4dab-8f1d-2e456d698b98",
-  "description": "Lunch",
-  "movements": [
+  "entries": [
     {
-      "from_account_key": "asset.cash",
-      "to_account_key": "expense.restaurant",
-      "amount_minor": 320
+      "description": "Lunch",
+      "movements": [
+        {
+          "from_account_key": "asset.cash",
+          "to_account_key": "expense.restaurant",
+          "amount_minor": 320
+        }
+      ]
     }
   ]
 }
@@ -199,8 +203,8 @@ When writing entries, use positive movements from one account to another:
 
 Use a new UUID `operation_key` for each distinct create operation and reuse it
 only when retrying that operation. `create_entries`, `update_entries`, and
-`delete_entries` support atomic batches of up to 100 entries. MCP updates and
-deletes use the plural tools even for a one-entry batch.
+`delete_entries` support atomic batches of up to 100 entries and are used even
+for a one-entry batch.
 
 ## Production deployment
 

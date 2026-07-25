@@ -124,17 +124,21 @@ available scopes are:
 ledger:read ledger:write ledger:delete offline_access
 ```
 
-Entry tools accept positive semantic movements:
+`create_entries` accepts positive semantic movements inside an `entries` array:
 
 ```json
 {
   "operation_key": "9b6cc2cc-1173-4dab-8f1d-2e456d698b98",
-  "description": "Lunch",
-  "movements": [
+  "entries": [
     {
-      "from_account_key": "asset.cash",
-      "to_account_key": "expense.restaurant",
-      "amount_minor": 320
+      "description": "Lunch",
+      "movements": [
+        {
+          "from_account_key": "asset.cash",
+          "to_account_key": "expense.restaurant",
+          "amount_minor": 320
+        }
+      ]
     }
   ]
 }
@@ -152,9 +156,9 @@ missing, or belongs to another user, the complete batch is rolled back. Use
 these plural tools for one-entry MCP operations as well. The singular REST
 entry routes remain available.
 
-`create_entry` and `create_entries` accept an optional caller-generated
-`operation_key`. Clients should generate a new UUID v4 or v7 for every distinct
-operation, retain it, and reuse it only when retrying the exact same operation.
+`create_entries` accepts an optional caller-generated `operation_key`. Clients
+should generate a new UUID v4 or v7 for every distinct batch, retain it, and
+reuse it only when retrying the exact same batch.
 Values such as counters or `"123"` are rejected by the UUID schema. One
 batch-level UUID derives a different database
 deduplication key for every batch index. The explicit identity is scoped by
@@ -195,7 +199,8 @@ OAuth consent flow, and verify:
    schemes.
 2. `get_entry_creation_context` returns the current date and active account
    keys.
-3. `create_entry` creates one balanced entry.
+3. `create_entries` creates one balanced entry when passed a one-item `entries`
+   array.
 4. Retrying with the same `operation_key` and identical content returns the
    existing entry with `replayed: true`.
 5. Creating another operation with the same date, accounts, and amounts returns

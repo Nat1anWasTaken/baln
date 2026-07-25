@@ -47,9 +47,9 @@ entry note or movement memo. Ask the user only when no reliable rate is availabl
 rate is materially ambiguous; never guess or silently convert.";
 const SERVER_INSTRUCTIONS: &str = "Baln is a private TWD double-entry ledger. Before creating an \
 entry, call get_entry_creation_context unless exact active account keys are already known. Never \
-invent an account key. Creation tools accept positive semantic movements from a source account to \
-a destination account and return natural-language next actions whenever more information is \
-required. When a user supplies a non-TWD amount, automatically convert it under the foreign-currency \
+invent an account key. Create entries only through create_entries, including for one entry. It \
+accepts positive semantic movements from a source account to a destination account and returns \
+natural-language next actions whenever more information is required. When a user supplies a non-TWD amount, automatically convert it under the foreign-currency \
 policy returned by get_entry_creation_context before writing the entry. For each distinct create \
 operation, generate a new UUID v4 or v7 operation_key and retain it for retries; reuse a key only \
 for the exact same operation. Baln checks new entries for matching dates, accounts, and amounts. \
@@ -332,27 +332,6 @@ impl BalnMcp {
                 )
                 .await
             }
-            "create_entry" => {
-                if let Err(result) = self.require(&principal, "ledger:write") {
-                    result
-                } else {
-                    match parse_input::<CreateEntryInput>(arguments) {
-                        Ok(input) => {
-                            let operation =
-                                operation_identity(&context, input.operation_key.as_ref());
-                            self.create_entries(
-                                principal,
-                                vec![input.into()],
-                                "create_entry",
-                                operation,
-                                false,
-                            )
-                            .await
-                        }
-                        Err(result) => result,
-                    }
-                }
-            }
             "create_entries" => {
                 if let Err(result) = self.require(&principal, "ledger:write") {
                     result
@@ -364,9 +343,7 @@ impl BalnMcp {
                             self.create_entries(
                                 principal,
                                 input.entries,
-                                "create_entries",
                                 operation,
-                                true,
                             )
                             .await
                         }
@@ -656,9 +633,7 @@ impl BalnMcp {
         &self,
         principal: OAuthPrincipal,
         drafts: Vec<EntryDraft>,
-        tool_name: &'static str,
         operation: OperationIdentity,
-        batch: bool,
     ) -> CallToolResult {
         if drafts.is_empty() || drafts.len() > MAX_BATCH_ENTRIES {
             return action_error(
@@ -736,7 +711,7 @@ impl BalnMcp {
                 note: draft.note.clone(),
                 dedup_key: Some(idempotency_key(
                     principal.grant_id,
-                    tool_name,
+                    "create_entries",
                     &operation,
                     entry_index,
                 )),
@@ -769,14 +744,7 @@ impl BalnMcp {
             .collect::<Vec<_>>();
         let created_count = results.iter().filter(|(_, replayed)| !replayed).count();
         let replayed_count = results.len() - created_count;
-        let summary = if batch {
-            format!(
-                "Saved {} ledger entries atomically: {} newly created and {} safely replayed. No further action is required.",
-                results.len(),
-                created_count,
-                replayed_count
-            )
-        } else {
+        let summary = if results.len() == 1 {
             let ((entry, replayed), draft) =
                 results.first().zip(drafts.first()).expect("one entry");
             let total: i64 = draft
@@ -795,6 +763,13 @@ impl BalnMcp {
                     entry.description, total, entry.date
                 )
             }
+        } else {
+            format!(
+                "Saved {} ledger entries atomically: {} newly created and {} safely replayed. No further action is required.",
+                results.len(),
+                created_count,
+                replayed_count
+            )
         };
         success(
             summary,
@@ -1069,43 +1044,6 @@ struct EntryDraft {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct CreateEntryInput {
-    /// Stable caller-generated UUID for this intended operation. Generate a new UUID v4 or v7 for
-    /// every distinct operation, even when the entry content is identical; for example,
-    /// 9b6cc2cc-1173-4dab-8f1d-2e456d698b98. Reuse the exact same UUID only when retrying the same
-    /// operation, including after reconnects. Reusing it with different content returns an
-    /// idempotency conflict. Omit only when the operation does not need retry protection.
-    operation_key: Option<Uuid>,
-    /// Bookkeeping date in YYYY-MM-DD. Omit to use today in Baln's configured timezone.
-    date: Option<NaiveDate>,
-    /// Short user-facing description, such as “Lunch” or “July salary”.
-    description: String,
-    /// Optional note applying to the whole entry. For a foreign-currency transaction, preserve the
-    /// original amount and currency, exchange rate, rate date, source, and rounding here or in the
-    /// movement memo.
-    note: Option<String>,
-    /// One or more positive money movements. Use multiple movements for splits.
-    movements: Vec<MovementInput>,
-    /// Set this to true only after Baln reports a possible duplicate for this exact operation and
-    /// the user explicitly confirms that it is a separate transaction. Never set it proactively.
-    #[serde(default)]
-    confirmed_distinct: bool,
-}
-
-impl From<CreateEntryInput> for EntryDraft {
-    fn from(input: CreateEntryInput) -> Self {
-        Self {
-            date: input.date,
-            description: input.description,
-            note: input.note,
-            movements: input.movements,
-            confirmed_distinct: input.confirmed_distinct,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
 struct CreateEntriesInput {
     /// Stable caller-generated UUID for this complete atomic batch. Generate a new UUID v4 or v7
     /// for every distinct batch, even when its content is identical; for example,
@@ -1226,16 +1164,10 @@ fn build_tools() -> Vec<Tool> {
             "Get Monthly Summary",
             "Summarize income, expenses, and net income for one YYYY-MM calendar month.",
         ),
-        write_tool::<CreateEntryInput>(
-            "create_entry",
-            "Create Ledger Entry",
-            "Create one balanced entry using a description and positive semantic movements from source accounts to destination accounts. date defaults to today. Generate a new UUID v4 or v7 operation_key for each distinct operation and reuse it only to retry that same operation, including after reconnects; the same UUID with changed content is a conflict. Baln checks the date, accounts, and amounts against existing entries. If it reports a possible duplicate, ask the user whether this is a separate transaction; retry with the same operation_key and confirmed_distinct=true only after explicit confirmation. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
-            false,
-        ),
         write_tool::<CreateEntriesInput>(
             "create_entries",
             "Create Ledger Entries",
-            "Create 1–100 entries atomically using the same semantic movement shape, possible-duplicate confirmation behavior, and foreign-currency automatic-conversion policy as create_entry. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch.",
+            "Create 1–100 balanced entries atomically, including a one-item batch for a single entry. Use descriptions and positive semantic movements from source accounts to destination accounts; dates default to today. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Baln checks dates, accounts, and amounts against existing entries. If it reports a possible duplicate, ask the user whether each flagged item is a separate transaction; retry the complete batch with the same operation_key and confirmed_distinct=true only on entries the user explicitly confirms. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
             false,
         ),
         write_tool::<UpdateEntriesInput>(
@@ -1879,8 +1811,8 @@ mod tests {
         };
 
         assert_ne!(
-            idempotency_key(grant_id, "create_entry", &first, 0),
-            idempotency_key(grant_id, "create_entry", &second, 0)
+            idempotency_key(grant_id, "create_entries", &first, 0),
+            idempotency_key(grant_id, "create_entries", &second, 0)
         );
     }
 
@@ -1933,11 +1865,12 @@ mod tests {
     }
 
     #[test]
-    fn create_tools_are_closed_world_and_idempotent() {
+    fn create_entries_is_the_only_create_tool_and_is_closed_world_and_idempotent() {
         let tools = build_tools();
+        assert!(tools.iter().all(|tool| tool.name != "create_entry"));
         let create = tools
             .iter()
-            .find(|tool| tool.name == "create_entry")
+            .find(|tool| tool.name == "create_entries")
             .unwrap();
         let annotations = create.annotations.as_ref().unwrap();
         assert_eq!(annotations.open_world_hint, Some(false));
@@ -2133,7 +2066,7 @@ mod tests {
                 .contains("foreign-currency automatic-conversion policy")
         );
 
-        for name in ["create_entry", "create_entries", "update_entries"] {
+        for name in ["create_entries", "update_entries"] {
             let tool = tools.iter().find(|tool| tool.name == name).unwrap();
             assert!(
                 tool.description
@@ -2146,7 +2079,7 @@ mod tests {
 
         let create = tools
             .iter()
-            .find(|tool| tool.name == "create_entry")
+            .find(|tool| tool.name == "create_entries")
             .unwrap();
         let input_schema = serde_json::to_string(&create.input_schema).unwrap();
         assert!(input_schema.contains("automatically convert"));
@@ -2172,14 +2105,16 @@ mod tests {
     }
 
     #[test]
-    fn create_entry_rejects_non_uuid_operation_keys() {
-        let error = parse_input::<CreateEntryInput>(json!({
+    fn create_entries_rejects_non_uuid_operation_keys() {
+        let error = parse_input::<CreateEntriesInput>(json!({
             "operation_key": "123",
-            "description": "Lunch",
-            "movements": [{
-                "from_account_key": "asset.cash",
-                "to_account_key": "expense.restaurant",
-                "amount_minor": 320
+            "entries": [{
+                "description": "Lunch",
+                "movements": [{
+                    "from_account_key": "asset.cash",
+                    "to_account_key": "expense.restaurant",
+                    "amount_minor": 320
+                }]
             }]
         }))
         .unwrap_err();
