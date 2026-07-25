@@ -242,7 +242,7 @@ export function AppShell() {
               to={item.to}
               aria-label={item.primary ? "新增交易" : undefined}
               aria-current={isActive ? "page" : undefined}
-              className={`touch-press flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs outline-none active:bg-muted active:text-foreground active:ring-2 active:ring-ring/70 focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`touch-press touch-press-frameless flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 isActive
                   ? "bg-muted/70 font-semibold text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
