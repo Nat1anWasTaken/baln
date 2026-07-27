@@ -166,6 +166,12 @@ OAuth grant and tool name, but not by MCP session, so it remains stable across
 reconnects. Reusing it with different content returns `dedup_key_conflict`;
 identical content with a different operation key creates another entry.
 
+Before insertion, Baln flags entries with the same date and economic amount as
+possible duplicates. Economic amount is calculated by netting signed postings within
+each account first, then summing the remaining positive account balances. Account
+keys are used only for that within-entry netting; account, description, note, memo,
+posting order, and split structure are not cross-entry matching conditions.
+
 When `operation_key` is omitted, the server generates an invocation-specific
 fallback scoped with the authenticated grant, MCP session when present, tool
 name, JSON-RPC request ID, batch index, and a fresh nonce. This avoids false
@@ -203,7 +209,7 @@ OAuth consent flow, and verify:
    array.
 4. Retrying with the same `operation_key` and identical content returns the
    existing entry with `replayed: true`.
-5. Creating another operation with the same date, accounts, and amounts returns
+5. Creating another operation with the same date and economic amount returns
    `possible_duplicate`; retry only after explicit user confirmation with
    `confirmed_distinct: true`.
 6. A batch containing an invalid account creates zero entries and explains the
