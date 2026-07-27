@@ -144,8 +144,15 @@ function useSheetDrag(
   requestClose: () => void,
 ) {
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const [contentElement, setContentElement] =
+    React.useState<HTMLDivElement | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
   const inertiaFrameRef = React.useRef<number | null>(null);
+
+  const setContentRef = React.useCallback((element: HTMLDivElement | null) => {
+    contentRef.current = element;
+    setContentElement(element);
+  }, []);
 
   const stopInertia = React.useCallback(() => {
     if (inertiaFrameRef.current !== null) {
@@ -397,7 +404,7 @@ function useSheetDrag(
   );
 
   React.useEffect(() => {
-    const content = contentRef.current;
+    const content = contentElement;
     if (!enabled || !content) return;
 
     const onTouchStart = (event: TouchEvent) => {
@@ -426,7 +433,7 @@ function useSheetDrag(
       content.removeEventListener("touchend", finishDrag);
       content.removeEventListener("touchcancel", finishDrag);
     };
-  }, [beginDrag, enabled, finishDrag, moveTouch]);
+  }, [beginDrag, contentElement, enabled, finishDrag, moveTouch]);
 
   const onPointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -477,7 +484,7 @@ function useSheetDrag(
   );
 
   return {
-    contentRef,
+    contentRef: setContentRef,
     dragHandlers: {
       onPointerCancel: finishPointer,
       onPointerDown,

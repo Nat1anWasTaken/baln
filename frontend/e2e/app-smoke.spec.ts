@@ -385,6 +385,30 @@ async function dragMouse(page: Page, target: Locator, distance: number) {
   await page.mouse.up();
 }
 
+async function dragTouch(page: Page, target: Locator, distance: number) {
+  const bounds = await target.boundingBox();
+  expect(bounds).not.toBeNull();
+  const x = Math.round(bounds!.x + bounds!.width / 2);
+  const y = Math.round(bounds!.y + bounds!.height / 2);
+  const client = await page.context().newCDPSession(page);
+
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x, y }],
+  });
+  for (let step = 1; step <= 8; step += 1) {
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x, y: y + (distance * step) / 8 }],
+    });
+    await page.waitForTimeout(16);
+  }
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
@@ -569,6 +593,33 @@ test("confirms account key and type changes before updating ledger views", async
     300,
   );
   await expect(mobileDialog).not.toBeVisible();
+});
+
+test("dismisses the account edit sheet with a touch drag", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ ...devices["Pixel 7"] });
+  const page = await context.newPage();
+  await mockApi(page);
+
+  try {
+    await page.goto("/accounts");
+
+    const accountCard = page
+      .locator('[data-slot="card"]:visible')
+      .filter({ hasText: "現金" });
+    await accountCard.getByRole("button", { name: "編輯 現金" }).click();
+
+    const sheet = page.getByRole("dialog", { name: "編輯帳戶" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveAttribute("data-presentation", "sheet");
+
+    await dragTouch(page, sheet.locator('[data-slot="dialog-handle"]'), 300);
+
+    await expect(sheet).not.toBeVisible();
+  } finally {
+    await context.close();
+  }
 });
 
 test("groups the responsive transaction account pills by account type", async ({
