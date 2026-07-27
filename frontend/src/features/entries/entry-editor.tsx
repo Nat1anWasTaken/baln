@@ -527,7 +527,7 @@ export function EntryEditor({
         className={cn(
           presentation === "page"
             ? "contents"
-            : "grid auto-rows-max content-start touch-pan-y gap-5 overscroll-contain",
+            : "grid auto-rows-max content-start gap-5",
         )}
       >
         {presentation === "page" ? (

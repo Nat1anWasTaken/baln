@@ -612,7 +612,9 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-body"
       className={cn(
-        isMobile ? "min-h-0 flex-1 overflow-y-auto px-4 py-5" : "py-5",
+        isMobile
+          ? "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-5"
+          : "py-5",
         className,
       )}
       {...props}
