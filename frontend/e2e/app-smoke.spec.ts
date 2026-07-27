@@ -1011,15 +1011,26 @@ test("uses shared directional transitions without layering over the mobile edito
 }) => {
   await page.addInitScript(() => {
     const trackedWindow = window as Window & {
+      __balnViewTransitionAnimations: string[];
       __balnViewTransitionCount: number;
     };
+    trackedWindow.__balnViewTransitionAnimations = [];
     trackedWindow.__balnViewTransitionCount = 0;
     if (typeof document.startViewTransition !== "function") return;
 
     const startViewTransition = document.startViewTransition.bind(document);
     const trackedStartViewTransition = ((options) => {
       trackedWindow.__balnViewTransitionCount += 1;
-      return startViewTransition(options);
+      const transition = startViewTransition(options);
+      void transition.ready.then(() => {
+        trackedWindow.__balnViewTransitionAnimations.push(
+          getComputedStyle(
+            document.documentElement,
+            "::view-transition-new(app-route-content)",
+          ).animationName,
+        );
+      });
+      return transition;
     }) as typeof document.startViewTransition;
     Object.defineProperty(document, "startViewTransition", {
       configurable: true,
@@ -1040,9 +1051,11 @@ test("uses shared directional transitions without layering over the mobile edito
       const transition = document.startViewTransition(() => {});
       await transition.finished;
       const trackedWindow = window as Window & {
+        __balnViewTransitionAnimations: string[];
         __balnViewTransitionCount: number;
       };
       const count = trackedWindow.__balnViewTransitionCount;
+      trackedWindow.__balnViewTransitionAnimations = [];
       trackedWindow.__balnViewTransitionCount = 0;
       return count;
     }),
@@ -1057,6 +1070,15 @@ test("uses shared directional transitions without layering over the mobile edito
           }
         ).__balnViewTransitionCount,
     );
+  const transitionAnimations = () =>
+    page.evaluate(
+      () =>
+        (
+          window as Window & {
+            __balnViewTransitionAnimations: string[];
+          }
+        ).__balnViewTransitionAnimations,
+    );
 
   const accountsNavigation = page.getByRole("link", {
     name: "帳戶",
@@ -1069,6 +1091,10 @@ test("uses shared directional transitions without layering over the mobile edito
   await accountsNavigation.click();
   await expect(page).toHaveURL(/\/accounts$/);
   await expect.poll(transitionCount).toBe(1);
+  await expect
+    .poll(transitionAnimations)
+    .toContain("app-navigation-in-forward");
+  await expect(page.locator('nav[aria-label="主要導覽"]')).toBeAttached();
 
   await page.getByRole("link", { name: "交易", exact: true }).click();
   await expect(page).toHaveURL(/\/entries$/);

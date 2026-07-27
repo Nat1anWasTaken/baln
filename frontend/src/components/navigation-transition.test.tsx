@@ -1,7 +1,15 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { preloadAppRoute } = vi.hoisted(() => ({
+  preloadAppRoute: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("@/lib/route-modules", () => ({
+  preloadAppRoute,
+}));
 
 import {
   AppLink,
@@ -56,6 +64,8 @@ function mockMatchMedia({
 }
 
 afterEach(() => {
+  preloadAppRoute.mockReset();
+  preloadAppRoute.mockResolvedValue();
   delete document.documentElement.dataset.navigationDirection;
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -70,6 +80,12 @@ afterEach(() => {
 describe("shared navigation transitions", () => {
   it("wraps supported in-app navigation in one native view transition", async () => {
     mockMatchMedia({});
+    let finishPreload = () => {};
+    preloadAppRoute.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishPreload = resolve;
+      }),
+    );
     const startViewTransition = vi.fn((update: () => void | Promise<void>) => {
       const updateCallbackDone = Promise.resolve().then(update);
       return {
@@ -89,7 +105,12 @@ describe("shared navigation transitions", () => {
 
     await user.click(screen.getByRole("link", { name: "前往目的地" }));
 
-    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(preloadAppRoute).toHaveBeenCalledWith("/entries");
+    expect(startViewTransition).not.toHaveBeenCalled();
+    finishPreload();
+    await waitFor(() => {
+      expect(startViewTransition).toHaveBeenCalledTimes(1);
+    });
     expect(await screen.findByText("/entries")).toBeInTheDocument();
     expect(
       document.querySelector('[data-slot="app-route-content"]'),
