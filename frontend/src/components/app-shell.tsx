@@ -1,29 +1,30 @@
 import {
-  ArrowLeftRight,
-  BarChart3,
   ChevronUp,
   CircleUserRound,
-  LayoutDashboard,
   KeyRound,
-  type LucideIcon,
   PlugZap,
   LogOut,
   Plus,
-  WalletCards,
 } from "lucide-react";
-import {
-  Link,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/auth-context";
 import { BrandIcon } from "@/components/brand-icon";
+import {
+  ActiveNavigationIndicator,
+  AppLink,
+  AppNavLink,
+  AppRouteTransition,
+  useAppNavigate,
+} from "@/components/navigation-transition";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import {
+  pageNameForPath,
+  primaryNavigation,
+  type PrimaryNavigationItem,
+} from "@/lib/app-navigation";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
 import {
   DropdownMenu,
@@ -48,24 +49,13 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
-type NavigationItem = {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  end?: boolean;
+type MobileNavigationItem = PrimaryNavigationItem & {
   primary?: boolean;
 };
 
-const navigation: NavigationItem[] = [
-  { to: "/", label: "總覽", icon: LayoutDashboard, end: true },
-  { to: "/entries", label: "交易", icon: ArrowLeftRight },
-  { to: "/accounts", label: "帳戶", icon: WalletCards },
-  { to: "/reports", label: "報表", icon: BarChart3 },
-];
-
-const mobileNavigation: NavigationItem[] = [
-  navigation[0],
-  navigation[1],
+const mobileNavigation: MobileNavigationItem[] = [
+  primaryNavigation[0],
+  primaryNavigation[1],
   {
     to: "/entries/new",
     label: "新增",
@@ -73,28 +63,18 @@ const mobileNavigation: NavigationItem[] = [
     end: true,
     primary: true,
   },
-  navigation[2],
-  navigation[3],
+  primaryNavigation[2],
+  primaryNavigation[3],
 ];
-
-const pageNames: Record<string, string> = {
-  "/": "總覽",
-  "/entries": "交易",
-  "/entries/new": "新增交易",
-  "/accounts": "帳戶",
-  "/reports": "報表",
-  "/settings/api-tokens": "API 權杖",
-  "/settings/connected-apps": "已連接的應用程式",
-};
 
 function UserMenu({ compact = false }: { compact?: boolean }) {
   const auth = useAuth();
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
 
   async function handleLogout() {
     try {
       await auth.logout();
-      navigate("/login", { replace: true });
+      navigate("/login", { replace: true, transitionIntent: "none" });
     } catch {
       toast.error("登出失敗，請再試一次。");
     }
@@ -129,11 +109,23 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate("/settings/api-tokens")}>
+        <DropdownMenuItem
+          onSelect={() => {
+            window.requestAnimationFrame(() =>
+              navigate("/settings/api-tokens"),
+            );
+          }}
+        >
           <KeyRound aria-hidden="true" />
           API 權杖
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate("/settings/connected-apps")}>
+        <DropdownMenuItem
+          onSelect={() => {
+            window.requestAnimationFrame(() =>
+              navigate("/settings/connected-apps"),
+            );
+          }}
+        >
           <PlugZap aria-hidden="true" />
           已連接的應用程式
         </DropdownMenuItem>
@@ -152,9 +144,7 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
 
 export function AppShell() {
   const location = useLocation();
-  const pageName =
-    pageNames[location.pathname] ??
-    (location.pathname.endsWith("/edit") ? "編輯交易" : "交易明細");
+  const pageName = pageNameForPath(location.pathname);
   const isMobileNavigationActive = (to: string) => {
     if (to === "/") return location.pathname === "/";
     if (to === "/entries/new") return location.pathname === "/entries/new";
@@ -184,19 +174,26 @@ export function AppShell() {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {navigation.map((item) => (
+                {primaryNavigation.map((item) => (
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton asChild tooltip={item.label}>
-                      <NavLink
+                      <AppNavLink
                         to={item.to}
                         end={item.end}
                         className={({ isActive }) =>
-                          isActive ? "bg-sidebar-accent font-medium" : ""
+                          `relative isolate ${isActive ? "font-medium" : ""}`
                         }
                       >
-                        <item.icon aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </NavLink>
+                        {({ isActive }) => (
+                          <>
+                            {isActive ? (
+                              <ActiveNavigationIndicator className="bg-sidebar-accent" />
+                            ) : null}
+                            <item.icon aria-hidden="true" />
+                            <span>{item.label}</span>
+                          </>
+                        )}
+                      </AppNavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -214,7 +211,7 @@ export function AppShell() {
       >
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
           <SidebarTrigger className="hidden md:inline-flex" />
-          <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-semibold">
+          <h1 className="app-page-title min-w-0 flex-1 truncate font-heading text-lg font-semibold">
             {pageName}
           </h1>
           <div className="md:hidden">
@@ -222,14 +219,19 @@ export function AppShell() {
           </div>
           <ThemeToggle />
           <Button asChild size="sm" className="hidden sm:inline-flex">
-            <NavLink to="/entries/new" state={entryEditorRouteState(location)}>
+            <AppNavLink
+              to="/entries/new"
+              state={entryEditorRouteState(location)}
+            >
               <Plus aria-hidden="true" />
               新增交易
-            </NavLink>
+            </AppNavLink>
           </Button>
         </header>
         <div className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">
-          <Outlet />
+          <AppRouteTransition>
+            <Outlet />
+          </AppRouteTransition>
         </div>
       </SidebarInset>
 
@@ -241,7 +243,7 @@ export function AppShell() {
           const isActive = isMobileNavigationActive(item.to);
 
           return (
-            <Link
+            <AppLink
               key={item.to}
               to={item.to}
               state={
@@ -251,12 +253,15 @@ export function AppShell() {
               }
               aria-label={item.primary ? "新增交易" : undefined}
               aria-current={isActive ? "page" : undefined}
-              className={`touch-press touch-press-frameless flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`touch-press touch-press-frameless relative isolate flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 isActive
-                  ? "bg-muted/70 font-semibold text-foreground"
+                  ? "font-semibold text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               }`}
             >
+              {isActive && !item.primary ? (
+                <ActiveNavigationIndicator className="bg-muted/70" />
+              ) : null}
               {item.primary ? (
                 <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <item.icon className="size-5" aria-hidden="true" />
@@ -265,7 +270,7 @@ export function AppShell() {
                 <item.icon className="size-5" aria-hidden="true" />
               )}
               <span className="truncate">{item.label}</span>
-            </Link>
+            </AppLink>
           );
         })}
       </nav>

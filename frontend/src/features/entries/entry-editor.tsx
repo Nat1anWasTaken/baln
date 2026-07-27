@@ -1,11 +1,12 @@
 import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
 import { ArrowLeft, CircleAlert, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { EntrySummary } from "@/components/entry-list-item";
+import { AppLink, useAppNavigate } from "@/components/navigation-transition";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -299,7 +300,7 @@ export function EntryEditor({
   onSaved?: (entry: EntryResponse) => void;
 }) {
   const { search } = useLocation();
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
   const queryClient = useQueryClient();
   const [duplicateReview, setDuplicateReview] = useState<{
     submission: EntrySubmission;
@@ -353,7 +354,10 @@ export function EntryEditor({
       } else {
         navigate(
           { pathname: `/entries/${saved.id}`, search },
-          { replace: true },
+          {
+            replace: true,
+            transitionIntent: entry ? "back" : "forward",
+          },
         );
       }
     },
@@ -526,15 +530,16 @@ export function EntryEditor({
       >
         {presentation === "page" ? (
           <Button asChild variant="ghost" className="w-fit">
-            <Link
+            <AppLink
               to={{
                 pathname: entry ? `/entries/${entry.id}` : "/entries",
                 search,
               }}
+              transitionIntent="back"
             >
               <ArrowLeft aria-hidden="true" />
               {entry ? "返回交易明細" : "返回交易"}
-            </Link>
+            </AppLink>
           </Button>
         ) : null}
 
@@ -820,14 +825,15 @@ export function EntryEditor({
       >
         {presentation === "page" ? (
           <Button asChild type="button" variant="outline">
-            <Link
+            <AppLink
               to={{
                 pathname: entry ? `/entries/${entry.id}` : "/entries",
                 search,
               }}
+              transitionIntent="back"
             >
               取消
-            </Link>
+            </AppLink>
           </Button>
         ) : (
           <Button

@@ -1005,3 +1005,95 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await context.close();
   }
 });
+
+test("uses shared directional transitions without layering over the mobile editor", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const trackedWindow = window as Window & {
+      __balnViewTransitionCount: number;
+    };
+    trackedWindow.__balnViewTransitionCount = 0;
+    if (typeof document.startViewTransition !== "function") return;
+
+    const startViewTransition = document.startViewTransition.bind(document);
+    const trackedStartViewTransition = ((options) => {
+      trackedWindow.__balnViewTransitionCount += 1;
+      return startViewTransition(options);
+    }) as typeof document.startViewTransition;
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: trackedStartViewTransition,
+    });
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  test.skip(
+    !(await page.evaluate(
+      () => typeof document.startViewTransition === "function",
+    )),
+    "The browser does not support the View Transition API",
+  );
+  expect(
+    await page.evaluate(async () => {
+      const transition = document.startViewTransition(() => {});
+      await transition.finished;
+      const trackedWindow = window as Window & {
+        __balnViewTransitionCount: number;
+      };
+      const count = trackedWindow.__balnViewTransitionCount;
+      trackedWindow.__balnViewTransitionCount = 0;
+      return count;
+    }),
+  ).toBe(1);
+
+  const transitionCount = () =>
+    page.evaluate(
+      () =>
+        (
+          window as Window & {
+            __balnViewTransitionCount: number;
+          }
+        ).__balnViewTransitionCount,
+    );
+
+  const accountsNavigation = page.getByRole("link", {
+    name: "帳戶",
+    exact: true,
+  });
+  await expect(accountsNavigation).toHaveAttribute(
+    "data-navigation-transition",
+    "native",
+  );
+  await accountsNavigation.click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expect.poll(transitionCount).toBe(1);
+
+  await page.getByRole("link", { name: "交易", exact: true }).click();
+  await expect(page).toHaveURL(/\/entries$/);
+  await expect.poll(transitionCount).toBe(2);
+
+  await page
+    .getByRole("link", {
+      name: `查看 ${entry.description}`,
+    })
+    .first()
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/entries/${entry.id}$`));
+  await expect.poll(transitionCount).toBe(3);
+
+  await page.evaluate(() => history.back());
+  await expect(page).toHaveURL(/\/entries$/);
+  await expect(page.locator('[data-slot="app-route-content"]')).toHaveAttribute(
+    "data-entry-direction",
+    "back",
+  );
+  await expect.poll(transitionCount).toBe(3);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/entries");
+  await page.getByLabel("新增交易").click();
+  await expect(page.getByRole("dialog", { name: "新增交易" })).toBeVisible();
+  await expect.poll(transitionCount).toBe(0);
+});

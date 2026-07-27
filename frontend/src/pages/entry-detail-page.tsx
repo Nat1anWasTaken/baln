@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useState } from "react";
 
 import { ErrorState, PageLoading } from "@/components/page-state";
+import { AppLink, useAppNavigate } from "@/components/navigation-transition";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +43,7 @@ export function EntryDetailPage() {
   const { entryId = "" } = useParams();
   const location = useLocation();
   const { search } = location;
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const entry = useQuery({
@@ -58,7 +59,10 @@ export function EntryDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ["report"] });
       await queryClient.invalidateQueries({ queryKey: ["account-balance"] });
       toast.success("交易已刪除");
-      navigate({ pathname: "/entries", search }, { replace: true });
+      navigate(
+        { pathname: "/entries", search },
+        { replace: true, transitionIntent: "back" },
+      );
     },
     onError: (error) => toast.error(error.message),
   });
@@ -77,20 +81,23 @@ export function EntryDetailPage() {
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost">
-          <Link to={{ pathname: "/entries", search }}>
+          <AppLink
+            to={{ pathname: "/entries", search }}
+            transitionIntent="back"
+          >
             <ArrowLeft aria-hidden="true" />
             返回交易
-          </Link>
+          </AppLink>
         </Button>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link
+            <AppLink
               to={{ pathname: `/entries/${entryId}/edit`, search }}
               state={entryEditorRouteState(location)}
             >
               <Pencil aria-hidden="true" />
               編輯
-            </Link>
+            </AppLink>
           </Button>
           <Button
             type="button"

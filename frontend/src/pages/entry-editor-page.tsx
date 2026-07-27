@@ -3,15 +3,18 @@ import { X } from "lucide-react";
 import {
   type Location,
   type To,
-  Link,
   useBlocker,
   useLocation,
-  useNavigate,
   useParams,
 } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
+import {
+  AppLink,
+  useAppNavigate,
+  useSuppressNextNavigationTransition,
+} from "@/components/navigation-transition";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,7 +110,7 @@ function EntryEditorSurface({
         </Button>
       ) : (
         <Button asChild>
-          <Link to="/accounts">前往帳戶管理</Link>
+          <AppLink to="/accounts">前往帳戶管理</AppLink>
         </Button>
       );
 
@@ -153,7 +156,9 @@ export function EntryEditorSheet({
 }) {
   const { entryId } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
+  const suppressNextNavigationTransition =
+    useSuppressNextNavigationTransition();
   const isEditing = Boolean(entryId);
   const [open, setOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
@@ -173,15 +178,19 @@ export function EntryEditorSheet({
     allowNavigation.current = true;
 
     if (blocker.state === "blocked") {
+      suppressNextNavigationTransition();
       blocker.proceed();
       return;
     }
     if (pendingDestination.current) {
-      navigate(pendingDestination.current, { replace: true });
+      navigate(pendingDestination.current, {
+        replace: true,
+        transitionIntent: "none",
+      });
       return;
     }
     if (hasHistoryBackground) {
-      navigate(-1);
+      navigate(-1, { transitionIntent: "none" });
       return;
     }
     navigate(
@@ -190,9 +199,15 @@ export function EntryEditorSheet({
         search: backgroundLocation.search,
         hash: backgroundLocation.hash,
       },
-      { replace: true },
+      { replace: true, transitionIntent: "none" },
     );
-  }, [backgroundLocation, blocker, hasHistoryBackground, navigate]);
+  }, [
+    backgroundLocation,
+    blocker,
+    hasHistoryBackground,
+    navigate,
+    suppressNextNavigationTransition,
+  ]);
 
   const closeSheet = useCallback(() => {
     setOpen(false);

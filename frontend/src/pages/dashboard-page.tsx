@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { WalletCards } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
+import { AppLink } from "@/components/navigation-transition";
 import {
   CardLoading,
   EmptyState,
@@ -158,7 +158,7 @@ export function DashboardPage() {
           <CardDescription>依交易日期由新到舊排列</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link to="/entries">查看全部</Link>
+              <AppLink to="/entries">查看全部</AppLink>
             </Button>
           </CardAction>
         </CardHeader>

@@ -1,16 +1,17 @@
 import { CircleAlert, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context";
 import { CenteredCardHeader } from "@/components/centered-card-header";
 import { CenteredPage } from "@/components/centered-page";
+import { useAppNavigate } from "@/components/navigation-transition";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function AuthCallbackPage() {
   const auth = useAuth();
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
   const [searchParams] = useSearchParams();
   const code = searchParams.get("code");
   const started = useRef(false);
@@ -31,7 +32,7 @@ export function AuthCallbackPage() {
       .then(() => {
         const returnTo = sessionStorage.getItem("baln:return-to") ?? "/";
         sessionStorage.removeItem("baln:return-to");
-        navigate(returnTo, { replace: true });
+        navigate(returnTo, { replace: true, transitionIntent: "none" });
       })
       .catch((reason: unknown) => {
         setError(
@@ -63,7 +64,12 @@ export function AuthCallbackPage() {
             <Button
               type="button"
               className="w-full"
-              onClick={() => navigate("/login", { replace: true })}
+              onClick={() =>
+                navigate("/login", {
+                  replace: true,
+                  transitionIntent: "none",
+                })
+              }
             >
               返回登入
             </Button>

@@ -1,9 +1,10 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Filter, Plus, Search, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
+import { AppLink } from "@/components/navigation-transition";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import { AccountFilterSelector } from "@/features/entries/account-filter-selector";
 import { Button } from "@/components/ui/button";
@@ -149,10 +150,13 @@ export function EntriesPage() {
               </Button>
             ) : null}
             <Button asChild>
-              <Link to="/entries/new" state={entryEditorRouteState(location)}>
+              <AppLink
+                to="/entries/new"
+                state={entryEditorRouteState(location)}
+              >
                 <Plus aria-hidden="true" />
                 新增交易
-              </Link>
+              </AppLink>
             </Button>
           </div>
         </CardContent>
@@ -181,10 +185,13 @@ export function EntriesPage() {
               </Button>
             ) : (
               <Button asChild>
-                <Link to="/entries/new" state={entryEditorRouteState(location)}>
+                <AppLink
+                  to="/entries/new"
+                  state={entryEditorRouteState(location)}
+                >
                   <Plus aria-hidden="true" />
                   新增第一筆交易
-                </Link>
+                </AppLink>
               </Button>
             )
           }

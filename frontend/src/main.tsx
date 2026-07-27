@@ -6,6 +6,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
 import App from "@/App";
 import { AuthProvider } from "@/auth/auth-context";
+import { NavigationTransitionProvider } from "@/components/navigation-transition";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/query-client";
@@ -15,10 +16,12 @@ const router = createBrowserRouter([
   {
     path: "*",
     element: (
-      <AuthProvider>
-        <App />
-        <Toaster position="top-center" richColors />
-      </AuthProvider>
+      <NavigationTransitionProvider>
+        <AuthProvider>
+          <App />
+          <Toaster position="top-center" richColors />
+        </AuthProvider>
+      </NavigationTransitionProvider>
     ),
   },
 ]);

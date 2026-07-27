@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 
+import { AppLink } from "@/components/navigation-transition";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,7 +73,7 @@ export function EntryCard({
   listSearch?: string;
 }) {
   return (
-    <Link
+    <AppLink
       to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
       aria-label={`查看 ${entry.description}`}
       className="touch-surface block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -88,7 +88,7 @@ export function EntryCard({
           }
         />
       </Card>
-    </Link>
+    </AppLink>
   );
 }
 
@@ -105,13 +105,13 @@ export function EntryTableRow({
         {formatShortDate(entry.date)}
       </TableCell>
       <TableCell>
-        <Link
+        <AppLink
           to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
           data-slot="entry-link"
           className="touch-press inline-flex items-center rounded-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {entry.description}
-        </Link>
+        </AppLink>
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
@@ -132,9 +132,11 @@ export function EntryTableRow({
           size="icon-sm"
           aria-label={`查看 ${entry.description}`}
         >
-          <Link to={{ pathname: `/entries/${entry.id}`, search: listSearch }}>
+          <AppLink
+            to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
+          >
             <ChevronRight aria-hidden="true" />
-          </Link>
+          </AppLink>
         </Button>
       </TableCell>
     </TableRow>

@@ -8,8 +8,9 @@ import {
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
+import { useAppNavigate } from "@/components/navigation-transition";
 import {
   authApi,
   refreshAccessToken,
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const queryClient = useQueryClient();
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
   const initialPath = useState(() => location.pathname)[0];
 
   const clearSession = useCallback(() => {
@@ -52,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionExpiredHandler(() => {
       clearSession();
       if (window.location.pathname !== "/login") {
-        navigate("/login", { replace: true });
+        navigate("/login", { replace: true, transitionIntent: "none" });
       }
     });
     return () => setSessionExpiredHandler(null);

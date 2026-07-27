@@ -5,9 +5,9 @@ import {
   Landmark,
   Scale,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
+import { AppLink } from "@/components/navigation-transition";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -288,7 +288,7 @@ export function CategoryRanking({
             ? (account.total_minor / maximum) * 100
             : 0;
         return (
-          <Link
+          <AppLink
             key={account.account_id}
             to={entryFilterUrl(account.account_key, dateFrom, dateTo)}
             className="touch-press grid gap-2 rounded-lg p-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -330,7 +330,7 @@ export function CategoryRanking({
                 tone === "expense" ? "bg-finance-expense" : "bg-finance-income"
               }
             />
-          </Link>
+          </AppLink>
         );
       })}
     </div>
@@ -351,7 +351,7 @@ export function OverviewCategoryCard({
         <CardDescription>本期支出最高的五個分類</CardDescription>
         <CardAction>
           <Button asChild variant="outline" size="sm">
-            <Link to="/reports">深入分析</Link>
+            <AppLink to="/reports">深入分析</AppLink>
           </Button>
         </CardAction>
       </CardHeader>
@@ -387,7 +387,7 @@ export function FinancialPositionCard({
         <CardDescription>截至今日的資產、負債與淨值</CardDescription>
         <CardAction>
           <Button asChild variant="outline" size="sm">
-            <Link to="/accounts">查看帳戶</Link>
+            <AppLink to="/accounts">查看帳戶</AppLink>
           </Button>
         </CardAction>
       </CardHeader>

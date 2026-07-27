@@ -1,8 +1,8 @@
 import { FileQuestion } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import { CenteredCardHeader } from "@/components/centered-card-header";
 import { CenteredPage } from "@/components/centered-page";
+import { AppLink } from "@/components/navigation-transition";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -18,7 +18,9 @@ export function NotFoundPage() {
         />
         <CardContent>
           <Button className="w-full" asChild>
-            <Link to="/">返回總覽</Link>
+            <AppLink to="/" transitionIntent="back">
+              返回總覽
+            </AppLink>
           </Button>
         </CardContent>
       </Card>

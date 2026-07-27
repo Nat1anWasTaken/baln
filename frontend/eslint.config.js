@@ -24,6 +24,25 @@ export default tseslint.config(
       ...jsxA11y.flatConfigs.recommended.rules,
       ...hooks.configs.flat.recommended.rules,
       "@typescript-eslint/no-explicit-any": "off",
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "react-router-dom",
+              importNames: ["Link", "NavLink", "useNavigate"],
+              message:
+                "Use AppLink, AppNavLink, or useAppNavigate from @/components/navigation-transition.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/components/navigation-transition.tsx"],
+    rules: {
+      "no-restricted-imports": "off",
     },
   },
   {

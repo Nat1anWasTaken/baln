@@ -82,6 +82,10 @@
   --touch-press-duration: 180ms;
   --touch-rebound-duration: 480ms;
   --touch-motion-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --navigation-motion-duration: 180ms;
+  --navigation-history-duration: 160ms;
+  --navigation-motion-distance: 12px;
+  --navigation-title-distance: 6px;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -154,6 +158,28 @@
 }
 
 @layer components {
+  .app-route-content {
+    view-transition-name: app-route-content;
+  }
+
+  .app-page-title {
+    view-transition-name: app-page-title;
+  }
+
+  .app-active-navigation-indicator {
+    view-transition-name: app-active-navigation-indicator;
+  }
+
+  .app-route-content[data-entry-direction="forward"] {
+    animation: app-navigation-in-forward var(--navigation-history-duration)
+      var(--touch-motion-easing) both;
+  }
+
+  .app-route-content[data-entry-direction="back"] {
+    animation: app-navigation-in-back var(--navigation-history-duration)
+      var(--touch-motion-easing) both;
+  }
+
   .touch-press {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -198,6 +224,161 @@
       filter: none;
       transform: none;
     }
+  }
+}
+
+@keyframes app-navigation-out-forward {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(var(--navigation-motion-distance) * -0.67));
+  }
+}
+
+@keyframes app-navigation-in-forward {
+  from {
+    opacity: 0;
+    transform: translateX(var(--navigation-motion-distance));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes app-navigation-out-back {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(var(--navigation-motion-distance) * 0.67));
+  }
+}
+
+@keyframes app-navigation-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--navigation-motion-distance) * -1));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes app-navigation-title-out-forward {
+  to {
+    opacity: 0;
+    transform: translateX(calc(var(--navigation-title-distance) * -1));
+  }
+}
+
+@keyframes app-navigation-title-in-forward {
+  from {
+    opacity: 0;
+    transform: translateX(var(--navigation-title-distance));
+  }
+}
+
+@keyframes app-navigation-title-out-back {
+  to {
+    opacity: 0;
+    transform: translateX(var(--navigation-title-distance));
+  }
+}
+
+@keyframes app-navigation-title-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--navigation-title-distance) * -1));
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(app-route-content),
+::view-transition-group(app-page-title),
+::view-transition-group(app-active-navigation-indicator) {
+  animation-duration: var(--navigation-motion-duration);
+  animation-timing-function: var(--touch-motion-easing);
+}
+
+::view-transition-old(app-route-content),
+::view-transition-new(app-route-content),
+::view-transition-old(app-page-title),
+::view-transition-new(app-page-title) {
+  mix-blend-mode: normal;
+}
+
+html[data-navigation-direction="forward"]
+  ::view-transition-old(app-route-content) {
+  animation: app-navigation-out-forward var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="forward"]
+  ::view-transition-new(app-route-content) {
+  animation: app-navigation-in-forward var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="back"]
+  ::view-transition-old(app-route-content) {
+  animation: app-navigation-out-back var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="back"]
+  ::view-transition-new(app-route-content) {
+  animation: app-navigation-in-back var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="forward"]
+  ::view-transition-old(app-page-title) {
+  animation: app-navigation-title-out-forward var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="forward"]
+  ::view-transition-new(app-page-title) {
+  animation: app-navigation-title-in-forward var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="back"] ::view-transition-old(app-page-title) {
+  animation: app-navigation-title-out-back var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+html[data-navigation-direction="back"] ::view-transition-new(app-page-title) {
+  animation: app-navigation-title-in-back var(--navigation-motion-duration)
+    var(--touch-motion-easing) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-route-content[data-entry-direction] {
+    animation: none;
+  }
+
+  ::view-transition-group(app-route-content),
+  ::view-transition-group(app-page-title),
+  ::view-transition-group(app-active-navigation-indicator),
+  ::view-transition-old(app-route-content),
+  ::view-transition-new(app-route-content),
+  ::view-transition-old(app-page-title),
+  ::view-transition-new(app-page-title) {
+    animation-duration: 1ms !important;
+    transform: none !important;
   }
 }
 
