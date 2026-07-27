@@ -225,8 +225,8 @@
       color, background-color, border-color, box-shadow, filter, transform;
   }
 
-  [data-vaul-drawer],
-  [data-vaul-overlay] {
+  [data-slot="dialog-content"][data-presentation="sheet"],
+  [data-slot="dialog-overlay"][data-presentation="sheet"] {
     animation-duration: var(--motion-duration-drawer);
     animation-timing-function: var(--motion-easing-standard);
     transition-duration: var(--motion-duration-drawer);
@@ -414,9 +414,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-vaul-drawer],
-  [data-vaul-overlay],
-  [data-vaul-drawer-wrapper] {
+  [data-slot="dialog-content"][data-presentation="sheet"],
+  [data-slot="dialog-overlay"][data-presentation="sheet"],
+  [data-slot="dialog-content"][data-presentation="sheet"][data-dragging="true"] {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }

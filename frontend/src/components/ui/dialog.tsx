@@ -1,29 +1,27 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { Drawer as DrawerPrimitive } from "vaul";
 import { XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
-
-type MobileDialogProps = DistributiveOmit<
-  React.ComponentProps<typeof DrawerPrimitive.Root>,
-  "children" | "defaultOpen" | "modal" | "onOpenChange" | "open"
->;
+type MobileDialogProps = {
+  dismissible?: boolean;
+  onAnimationEnd?: (open: boolean) => void;
+};
 
 type DialogContextValue = {
-  isMobile: boolean;
   dismissible: boolean;
+  isMobile: boolean;
+  onAnimationEnd?: (open: boolean) => void;
+  requestClose: () => void;
 };
 
 const DialogContext = React.createContext<DialogContextValue>({
-  isMobile: false,
   dismissible: true,
+  isMobile: false,
+  requestClose: () => undefined,
 });
 
 type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root> & {
@@ -39,45 +37,27 @@ function Dialog({
   open,
 }: DialogProps) {
   const isMobile = useIsMobile();
-  const parent = React.useContext(DialogContext);
-
-  if (isMobile) {
-    const dismissible = mobileProps?.dismissible ?? true;
-    const Root = parent.isMobile
-      ? DrawerPrimitive.NestedRoot
-      : DrawerPrimitive.Root;
-
-    return (
-      <DialogContext.Provider value={{ isMobile: true, dismissible }}>
-        <Root
-          {...mobileProps}
-          data-slot="dialog"
-          defaultOpen={defaultOpen}
-          dismissible={dismissible}
-          fixed={mobileProps?.fixed ?? true}
-          handleOnly={mobileProps?.handleOnly ?? false}
-          modal={modal}
-          onOpenChange={onOpenChange}
-          open={open}
-          preventScrollRestoration={
-            mobileProps?.preventScrollRestoration ?? true
-          }
-          scrollLockTimeout={mobileProps?.scrollLockTimeout ?? 0}
-          shouldScaleBackground={mobileProps?.shouldScaleBackground ?? true}
-        >
-          {children}
-        </Root>
-      </DialogContext.Provider>
-    );
-  }
+  const dismissible = !isMobile || (mobileProps?.dismissible ?? true);
+  const requestClose = React.useCallback(() => {
+    if (dismissible) onOpenChange?.(false);
+  }, [dismissible, onOpenChange]);
 
   return (
-    <DialogContext.Provider value={{ isMobile: false, dismissible: true }}>
+    <DialogContext.Provider
+      value={{
+        dismissible,
+        isMobile,
+        onAnimationEnd: isMobile ? mobileProps?.onAnimationEnd : undefined,
+        requestClose,
+      }}
+    >
       <DialogPrimitive.Root
         data-slot="dialog"
         defaultOpen={defaultOpen}
         modal={modal}
-        onOpenChange={onOpenChange}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen || dismissible) onOpenChange?.(nextOpen);
+        }}
         open={open}
       >
         {children}
@@ -89,25 +69,19 @@ function Dialog({
 function DialogTrigger({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  const { isMobile } = React.useContext(DialogContext);
-  const Trigger = isMobile ? DrawerPrimitive.Trigger : DialogPrimitive.Trigger;
-  return <Trigger data-slot="dialog-trigger" {...props} />;
+  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
 
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  const { isMobile } = React.useContext(DialogContext);
-  const Portal = isMobile ? DrawerPrimitive.Portal : DialogPrimitive.Portal;
-  return <Portal data-slot="dialog-portal" {...props} />;
+  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
 function DialogClose({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  const { isMobile } = React.useContext(DialogContext);
-  const Close = isMobile ? DrawerPrimitive.Close : DialogPrimitive.Close;
-  return <Close data-slot="dialog-close" {...props} />;
+  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
 function DialogOverlay({
@@ -115,10 +89,9 @@ function DialogOverlay({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   const { isMobile } = React.useContext(DialogContext);
-  const Overlay = isMobile ? DrawerPrimitive.Overlay : DialogPrimitive.Overlay;
 
   return (
-    <Overlay
+    <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       data-presentation={isMobile ? "sheet" : "dialog"}
       className={cn(
@@ -131,6 +104,305 @@ function DialogOverlay({
       {...props}
     />
   );
+}
+
+type DragState = {
+  dragging: boolean;
+  lastTime: number;
+  lastY: number;
+  pointerId: number;
+  scrollElement: HTMLElement | null;
+  startX: number;
+  startY: number;
+  translation: number;
+  velocity: number;
+};
+
+function findScrollableElement(
+  target: EventTarget | null,
+  boundary: HTMLElement,
+) {
+  let element = target instanceof HTMLElement ? target : null;
+  while (element && element !== boundary) {
+    const { overflowY } = window.getComputedStyle(element);
+    if (
+      element.scrollHeight > element.clientHeight &&
+      (overflowY === "auto" || overflowY === "scroll")
+    ) {
+      return element;
+    }
+    element = element.parentElement;
+  }
+  return null;
+}
+
+function useSheetDrag(
+  enabled: boolean,
+  dismissible: boolean,
+  requestClose: () => void,
+) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const dragRef = React.useRef<DragState | null>(null);
+  const inertiaFrameRef = React.useRef<number | null>(null);
+
+  const stopInertia = React.useCallback(() => {
+    if (inertiaFrameRef.current !== null) {
+      cancelAnimationFrame(inertiaFrameRef.current);
+      inertiaFrameRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => stopInertia, [stopInertia]);
+
+  const setTranslation = React.useCallback((translation: number) => {
+    const content = contentRef.current;
+    if (!content) return;
+    content.style.setProperty(
+      "--sheet-drag-y",
+      `${Math.max(translation, 0)}px`,
+    );
+  }, []);
+
+  const settle = React.useCallback(
+    (dismiss: boolean) => {
+      const content = contentRef.current;
+      const drag = dragRef.current;
+      if (!content || !drag) return;
+
+      content.dataset.dragging = "false";
+      if (dismiss) {
+        setTranslation(content.getBoundingClientRect().height);
+        requestClose();
+      }
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setTranslation(0));
+      });
+      dragRef.current = null;
+    },
+    [requestClose, setTranslation],
+  );
+
+  const startScrollInertia = React.useCallback(
+    (element: HTMLElement, pointerVelocity: number) => {
+      let velocity = -pointerVelocity;
+      let previousTime = performance.now();
+
+      const step = (time: number) => {
+        const elapsed = Math.min(time - previousTime, 32);
+        previousTime = time;
+        element.scrollTop += velocity * elapsed;
+        velocity *= Math.pow(0.94, elapsed / 16);
+
+        const atBoundary =
+          element.scrollTop <= 0 ||
+          element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+        if (Math.abs(velocity) < 0.03 || atBoundary) {
+          inertiaFrameRef.current = null;
+          return;
+        }
+        inertiaFrameRef.current = requestAnimationFrame(step);
+      };
+
+      if (Math.abs(velocity) >= 0.15) {
+        inertiaFrameRef.current = requestAnimationFrame(step);
+      }
+    },
+    [],
+  );
+
+  const beginDrag = React.useCallback(
+    (
+      target: EventTarget | null,
+      clientX: number,
+      clientY: number,
+      timeStamp: number,
+      pointerId: number,
+    ) => {
+      if (!enabled) return;
+      const content = contentRef.current;
+      if (
+        !content ||
+        (target instanceof Element && target.closest("[data-sheet-no-drag]"))
+      ) {
+        return;
+      }
+
+      stopInertia();
+      dragRef.current = {
+        dragging: false,
+        lastTime: timeStamp,
+        lastY: clientY,
+        pointerId,
+        scrollElement: findScrollableElement(target, content),
+        startX: clientX,
+        startY: clientY,
+        translation: 0,
+        velocity: 0,
+      };
+    },
+    [enabled, stopInertia],
+  );
+
+  const moveDrag = React.useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      timeStamp: number,
+      preventDefault: () => void,
+    ) => {
+      const drag = dragRef.current;
+      const content = contentRef.current;
+      if (!drag || !content) return;
+
+      const totalX = clientX - drag.startX;
+      const totalY = clientY - drag.startY;
+      if (!drag.dragging) {
+        if (Math.abs(totalX) < 6 && Math.abs(totalY) < 6) return;
+        if (Math.abs(totalX) > Math.abs(totalY)) {
+          dragRef.current = null;
+          return;
+        }
+        drag.dragging = true;
+        content.dataset.dragging = "true";
+      }
+
+      preventDefault();
+      const elapsed = Math.max(timeStamp - drag.lastTime, 1);
+      const delta = clientY - drag.lastY;
+      drag.velocity = drag.velocity * 0.65 + (delta / elapsed) * 0.35;
+      drag.lastTime = timeStamp;
+      drag.lastY = clientY;
+
+      let remaining = delta;
+      const scrollElement = drag.scrollElement;
+      if (remaining > 0 && scrollElement?.scrollTop) {
+        const consumed = Math.min(scrollElement.scrollTop, remaining);
+        scrollElement.scrollTop -= consumed;
+        remaining -= consumed;
+      }
+
+      if (remaining < 0 && drag.translation > 0) {
+        const consumed = Math.min(drag.translation, -remaining);
+        drag.translation -= consumed;
+        remaining += consumed;
+      }
+
+      if (remaining < 0 && scrollElement) {
+        scrollElement.scrollTop += -remaining;
+        remaining = 0;
+      }
+
+      if (remaining > 0) {
+        drag.translation += remaining;
+      }
+      setTranslation(drag.translation);
+    },
+    [setTranslation],
+  );
+
+  const finishDrag = React.useCallback(() => {
+    const drag = dragRef.current;
+    const content = contentRef.current;
+    if (!drag || !content) return;
+    if (!drag.dragging) {
+      dragRef.current = null;
+      return;
+    }
+
+    const dismiss =
+      dismissible &&
+      (drag.translation > content.getBoundingClientRect().height * 0.25 ||
+        (drag.translation > 40 && drag.velocity > 0.55));
+    if (!dismiss && drag.translation === 0 && drag.scrollElement) {
+      startScrollInertia(drag.scrollElement, drag.velocity);
+    }
+    settle(dismiss);
+  }, [dismissible, settle, startScrollInertia]);
+
+  React.useEffect(() => {
+    const content = contentRef.current;
+    if (!enabled || !content) return;
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      beginDrag(
+        event.target,
+        touch.clientX,
+        touch.clientY,
+        event.timeStamp,
+        -1,
+      );
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      moveDrag(touch.clientX, touch.clientY, event.timeStamp, () =>
+        event.preventDefault(),
+      );
+    };
+
+    content.addEventListener("touchstart", onTouchStart, { passive: true });
+    content.addEventListener("touchmove", onTouchMove, { passive: false });
+    content.addEventListener("touchend", finishDrag);
+    content.addEventListener("touchcancel", finishDrag);
+    return () => {
+      content.removeEventListener("touchstart", onTouchStart);
+      content.removeEventListener("touchmove", onTouchMove);
+      content.removeEventListener("touchend", finishDrag);
+      content.removeEventListener("touchcancel", finishDrag);
+    };
+  }, [beginDrag, enabled, finishDrag, moveDrag]);
+
+  const onPointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (
+        event.pointerType !== "mouse" ||
+        !event.isPrimary ||
+        event.button !== 0
+      )
+        return;
+      beginDrag(
+        event.target,
+        event.clientX,
+        event.clientY,
+        event.timeStamp,
+        event.pointerId,
+      );
+    },
+    [beginDrag],
+  );
+  const onPointerMove = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== "mouse") return;
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      moveDrag(event.clientX, event.clientY, event.timeStamp, () =>
+        event.preventDefault(),
+      );
+    },
+    [moveDrag],
+  );
+  const finishPointer = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== "mouse") return;
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      finishDrag();
+    },
+    [finishDrag],
+  );
+
+  return {
+    contentRef,
+    dragHandlers: {
+      onPointerCancel: finishPointer,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: finishPointer,
+    },
+  };
 }
 
 type DialogContentProps = React.ComponentProps<
@@ -147,34 +419,74 @@ function DialogContent({
   mobileSize = "content",
   showCloseButton = true,
   showHandle,
+  onAnimationEnd,
+  onPointerCancel,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
   ...props
 }: DialogContentProps) {
-  const { dismissible, isMobile } = React.useContext(DialogContext);
-  const Content = isMobile ? DrawerPrimitive.Content : DialogPrimitive.Content;
+  const {
+    dismissible,
+    isMobile,
+    onAnimationEnd: onMobileAnimationEnd,
+    requestClose,
+  } = React.useContext(DialogContext);
   const displayHandle = showHandle ?? dismissible;
+  const { contentRef, dragHandlers } = useSheetDrag(
+    isMobile,
+    dismissible,
+    requestClose,
+  );
 
   return (
     <DialogPortal>
       <DialogOverlay />
-      <Content
+      <DialogPrimitive.Content
+        ref={isMobile ? contentRef : undefined}
         data-slot="dialog-content"
         data-presentation={isMobile ? "sheet" : "dialog"}
         data-size={isMobile ? mobileSize : undefined}
         className={cn(
           isMobile
-            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-xl border-t bg-popover text-sm text-popover-foreground outline-none [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
+            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] touch-pan-x flex-col overflow-hidden rounded-t-xl border-t bg-popover text-sm text-popover-foreground outline-none [transform:translate3d(0,var(--sheet-drag-y,0px),0)] transition-transform duration-(--motion-duration-drawer) ease-(--motion-easing-standard) data-[dragging=true]:duration-0 data-open:animate-in data-open:slide-in-from-bottom-full data-closed:animate-out data-closed:slide-out-to-bottom-full [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
             : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-(--motion-duration-modal) ease-(--motion-easing-standard) outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           isMobile &&
             mobileSize === "near-full" &&
             "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] rounded-t-2xl",
           className,
         )}
+        onAnimationEnd={(event) => {
+          onAnimationEnd?.(event);
+          if (isMobile && event.currentTarget === event.target) {
+            onMobileAnimationEnd?.(
+              event.currentTarget.dataset.state === "open",
+            );
+          }
+        }}
+        onPointerCancel={(event) => {
+          onPointerCancel?.(event);
+          dragHandlers.onPointerCancel(event);
+        }}
+        onPointerDown={(event) => {
+          onPointerDown?.(event);
+          if (!event.defaultPrevented) dragHandlers.onPointerDown(event);
+        }}
+        onPointerMove={(event) => {
+          onPointerMove?.(event);
+          if (!event.defaultPrevented) dragHandlers.onPointerMove(event);
+        }}
+        onPointerUp={(event) => {
+          onPointerUp?.(event);
+          dragHandlers.onPointerUp(event);
+        }}
         {...props}
       >
         {isMobile && displayHandle ? (
-          <DrawerPrimitive.Handle
+          <div
             data-slot="dialog-handle"
-            className="mt-4 shrink-0"
+            aria-hidden="true"
+            className="mx-auto mt-4 h-1 w-12 shrink-0 rounded-full bg-muted-foreground/30"
           />
         ) : null}
         {children}
@@ -190,7 +502,7 @@ function DialogContent({
             </Button>
           </DialogClose>
         ) : null}
-      </Content>
+      </DialogPrimitive.Content>
     </DialogPortal>
   );
 }
@@ -259,16 +571,10 @@ function DialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  const { isMobile } = React.useContext(DialogContext);
-  const Title = isMobile ? DrawerPrimitive.Title : DialogPrimitive.Title;
   return (
-    <Title
+    <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn(
-        "font-heading text-base font-medium",
-        !isMobile && "leading-none",
-        className,
-      )}
+      className={cn("font-heading text-base font-medium", className)}
       {...props}
     />
   );
@@ -278,12 +584,8 @@ function DialogDescription({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
-  const { isMobile } = React.useContext(DialogContext);
-  const Description = isMobile
-    ? DrawerPrimitive.Description
-    : DialogPrimitive.Description;
   return (
-    <Description
+    <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
         "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",

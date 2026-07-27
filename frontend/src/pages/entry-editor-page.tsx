@@ -264,19 +264,7 @@ export function EntryEditorSheet({
         if (!nextOpen) requestDismiss();
       }}
     >
-      <DialogContent
-        mobileSize="near-full"
-        showCloseButton={false}
-        onAnimationEnd={(event) => {
-          if (
-            event.currentTarget === event.target &&
-            event.animationName === "slideToBottom" &&
-            closeApproved.current
-          ) {
-            finishClose();
-          }
-        }}
-      >
+      <DialogContent mobileSize="near-full" showCloseButton={false}>
         <DialogHeader className="relative border-b pt-3">
           <DialogTitle>{isEditing ? "編輯交易" : "新增交易"}</DialogTitle>
           <DialogDescription>
