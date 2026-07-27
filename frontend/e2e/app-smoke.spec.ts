@@ -740,7 +740,7 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
 
   const sheetScroller = sheet.locator('[data-slot="entry-editor-scroll"]');
   await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
-  await expect(sheetScroller).toHaveAttribute("data-vaul-no-drag", "");
+  await expect(sheetScroller).not.toHaveAttribute("data-vaul-no-drag", "");
   expect(
     await sheetScroller.evaluate(
       (element) => element.scrollHeight > element.clientHeight,
@@ -754,13 +754,25 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
     .toBeGreaterThan(0);
 
   await page.getByLabel("交易說明").fill("保留這份草稿");
-  await page.getByRole("button", { name: "關閉新增交易" }).click();
+  await sheetScroller.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  const dirtyScrollerBounds = await sheetScroller.boundingBox();
+  expect(dirtyScrollerBounds).not.toBeNull();
+  const dirtyPointerX = dirtyScrollerBounds!.x + dirtyScrollerBounds!.width / 2;
+  const dirtyPointerY =
+    dirtyScrollerBounds!.y + dirtyScrollerBounds!.height / 2;
+  await page.mouse.move(dirtyPointerX, dirtyPointerY);
+  await page.mouse.down();
+  await page.mouse.move(dirtyPointerX, dirtyPointerY + 220, { steps: 8 });
+  await page.mouse.up();
 
   const discardDialog = page.getByRole("alertdialog", {
     name: "捨棄這筆交易草稿？",
   });
   await expect(discardDialog).toBeVisible();
   await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
+  await expect(sheet).toBeVisible();
   await expect(page.getByLabel("交易說明")).toHaveValue("保留這份草稿");
 
   await page.evaluate(() => history.back());
@@ -775,6 +787,67 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   await page.getByRole("button", { name: "關閉新增交易" }).click();
   await expect(page).toHaveURL(/\/entries$/);
   await expect(directSheet).not.toBeVisible();
+});
+
+test("hands a single drag from sheet scrolling to dismissal", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.goto("/entries/new");
+
+  const sheet = page.getByRole("dialog", { name: "新增交易" });
+  const sheetScroller = sheet.locator('[data-slot="entry-editor-scroll"]');
+  await expect(sheet).toBeVisible();
+  await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
+  await page.waitForTimeout(550);
+
+  await sheetScroller.evaluate((element) => {
+    element.scrollTop = 240;
+  });
+  await expect
+    .poll(() => sheetScroller.evaluate((element) => element.scrollTop))
+    .toBe(240);
+
+  const scrollerBounds = await sheetScroller.boundingBox();
+  expect(scrollerBounds).not.toBeNull();
+  const pointerX = scrollerBounds!.x + scrollerBounds!.width / 2;
+  const pointerY = scrollerBounds!.y + scrollerBounds!.height / 2;
+
+  await page.mouse.move(pointerX, pointerY);
+  await page.mouse.down();
+  await page.mouse.move(pointerX, pointerY + 40, { steps: 4 });
+  await expect
+    .poll(() =>
+      sheet.evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).m42,
+      ),
+    )
+    .toBe(0);
+
+  await sheetScroller.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await page.mouse.move(pointerX, pointerY + 42);
+  const handoffTranslation = await sheet.evaluate(
+    (element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).m42,
+  );
+  expect(handoffTranslation).toBeGreaterThanOrEqual(0);
+  expect(handoffTranslation).toBeLessThan(8);
+
+  await page.mouse.move(pointerX, pointerY + 260, { steps: 8 });
+  await expect
+    .poll(() =>
+      sheet.evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).m42,
+      ),
+    )
+    .toBeGreaterThan(150);
+  await page.mouse.up();
+
+  await expect(page).toHaveURL(/\/entries$/);
+  await expect(sheet).not.toBeVisible();
 });
 
 test("edits through the same route-backed mobile transaction sheet", async ({
