@@ -13,7 +13,8 @@ export default defineConfig({
       includeAssets: [
         "favicon.svg",
         "favicon-light.svg",
-        "apple-touch-icon.png",
+        "icons/icon-dark-256.png",
+        "icons/icon-dark-512.png",
       ],
       manifest: {
         id: "/",
@@ -29,22 +30,16 @@ export default defineConfig({
         categories: ["finance", "productivity"],
         icons: [
           {
-            src: "/pwa-192x192.png",
-            sizes: "192x192",
+            src: "/icons/icon-dark-256.png",
+            sizes: "256x256",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "/icons/icon-dark-512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
-          },
-          {
-            src: "/pwa-maskable-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
           },
         ],
       },
