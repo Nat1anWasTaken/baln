@@ -207,7 +207,7 @@ export function NavigationTransitionProvider({
             }
           : current,
       );
-    }, 320);
+    }, 480);
     return () => window.clearTimeout(timeout);
   }, [transition.mode, transition.sequence]);
 

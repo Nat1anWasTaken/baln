@@ -8,6 +8,8 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
+  --default-transition-duration: var(--motion-duration-control);
+  --default-transition-timing-function: var(--motion-easing-standard);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -79,10 +81,17 @@
   --finance-expense: oklch(0.5 0.18 25);
   --finance-net: oklch(0.43 0.14 255);
   --radius: 0.625rem;
+  --motion-duration-control: 200ms;
+  --motion-duration-floating: 260ms;
+  --motion-duration-modal: 340ms;
+  --motion-duration-sheet: 420ms;
+  --motion-duration-drawer: 500ms;
+  --motion-easing-standard: cubic-bezier(0.32, 0.72, 0, 1);
   --touch-press-duration: 180ms;
   --touch-rebound-duration: 480ms;
-  --touch-motion-easing: cubic-bezier(0.16, 1, 0.3, 1);
-  --navigation-motion-duration: 260ms;
+  --touch-motion-easing: var(--motion-easing-standard);
+  --navigation-motion-duration: 420ms;
+  --navigation-motion-easing: var(--motion-easing-standard);
   --navigation-motion-distance: 32px;
   --navigation-title-distance: 12px;
   --sidebar: oklch(0.985 0 0);
@@ -159,29 +168,29 @@
 @layer components {
   .app-route-content[data-entry-direction="forward"] {
     animation: app-navigation-in-forward var(--navigation-motion-duration)
-      var(--touch-motion-easing) both;
+      var(--navigation-motion-easing) both;
     will-change: opacity, transform;
   }
 
   .app-route-content[data-entry-direction="back"] {
     animation: app-navigation-in-back var(--navigation-motion-duration)
-      var(--touch-motion-easing) both;
+      var(--navigation-motion-easing) both;
     will-change: opacity, transform;
   }
 
   html[data-navigation-direction="forward"] .app-page-title {
     animation: app-navigation-title-in-forward var(--navigation-motion-duration)
-      var(--touch-motion-easing) both;
+      var(--navigation-motion-easing) both;
   }
 
   html[data-navigation-direction="back"] .app-page-title {
     animation: app-navigation-title-in-back var(--navigation-motion-duration)
-      var(--touch-motion-easing) both;
+      var(--navigation-motion-easing) both;
   }
 
   html[data-navigation-direction] .app-active-navigation-indicator {
     animation: app-navigation-indicator-in var(--navigation-motion-duration)
-      var(--touch-motion-easing) both;
+      var(--navigation-motion-easing) both;
   }
 
   .touch-press {
@@ -190,7 +199,7 @@
     transition-duration: 100ms;
     transition-property:
       color, background-color, border-color, box-shadow, filter, transform;
-    transition-timing-function: ease-out;
+    transition-timing-function: var(--motion-easing-standard);
   }
 
   .touch-press:active:not(:disabled):not([aria-disabled="true"]) {
@@ -204,7 +213,7 @@
     transition-duration: 100ms;
     transition-property:
       color, background-color, border-color, box-shadow, filter, transform;
-    transition-timing-function: ease-out;
+    transition-timing-function: var(--motion-easing-standard);
   }
 
   .touch-surface:active:not([aria-disabled="true"]) {
@@ -215,6 +224,27 @@
   .touch-rebound {
     transition-property:
       color, background-color, border-color, box-shadow, filter, transform;
+  }
+
+  [data-vaul-drawer],
+  [data-vaul-overlay] {
+    animation-duration: var(--motion-duration-drawer);
+    animation-timing-function: var(--motion-easing-standard);
+    transition-duration: var(--motion-duration-drawer);
+    transition-timing-function: var(--motion-easing-standard);
+  }
+
+  [data-sonner-toaster],
+  [data-sonner-toast],
+  [data-sonner-toast] [data-button],
+  .sonner-loader {
+    transition-timing-function: var(--motion-easing-standard) !important;
+  }
+
+  [data-sonner-toast][data-swipe-out="true"],
+  [data-sonner-toast][data-promise="true"] [data-icon] > svg,
+  .sonner-loading-wrapper {
+    animation-timing-function: var(--motion-easing-standard) !important;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -280,6 +310,20 @@
   html[data-navigation-direction] .app-page-title,
   html[data-navigation-direction] .app-active-navigation-indicator {
     animation: none;
+  }
+
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"],
+  [data-slot="popover-content"],
+  [data-slot="tooltip-content"],
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-overlay"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-overlay"],
+  [data-slot="sheet-content"] {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
   }
 }
 
