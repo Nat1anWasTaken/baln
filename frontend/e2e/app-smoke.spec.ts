@@ -798,7 +798,7 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
     const sheetScroller = sheet.locator('[data-slot="entry-editor-scroll"]');
     await expect(sheet).toBeVisible();
     await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
-    await expect(sheet).toHaveCSS("touch-action", "pan-x");
+    await expect(sheet).toHaveCSS("touch-action", "auto");
     await page.waitForTimeout(550);
 
     await sheetScroller.evaluate((element) => {
@@ -817,6 +817,23 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
       await page.waitForTimeout(16);
     };
 
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: pointerX, y: pointerY }],
+    });
+    for (const offset of [-20, -40, -80]) await moveTouch(offset);
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect
+      .poll(() => sheetScroller.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(180);
+    await expect(sheet).not.toHaveAttribute("data-dragging", "true");
+
+    await sheetScroller.evaluate((element) => {
+      element.scrollTop = 180;
+    });
     await client.send("Input.dispatchTouchEvent", {
       type: "touchStart",
       touchPoints: [{ x: pointerX, y: pointerY }],

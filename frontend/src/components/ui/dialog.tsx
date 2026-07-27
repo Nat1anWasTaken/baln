@@ -259,7 +259,7 @@ function useSheetDrag(
       const totalY = clientY - drag.startY;
       if (!drag.dragging) {
         if (Math.abs(totalX) < 6 && Math.abs(totalY) < 6) return;
-        if (Math.abs(totalX) > Math.abs(totalY)) {
+        if (Math.abs(totalX) > Math.abs(totalY) || totalY < 0) {
           dragRef.current = null;
           return;
         }
@@ -449,7 +449,7 @@ function DialogContent({
         data-size={isMobile ? mobileSize : undefined}
         className={cn(
           isMobile
-            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] touch-pan-x flex-col overflow-hidden rounded-t-xl border-t bg-popover text-sm text-popover-foreground outline-none [transform:translate3d(0,var(--sheet-drag-y,0px),0)] transition-transform duration-(--motion-duration-drawer) ease-(--motion-easing-standard) data-[dragging=true]:duration-0 data-open:animate-in data-open:slide-in-from-bottom-full data-closed:animate-out data-closed:slide-out-to-bottom-full [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
+            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-xl border-t bg-popover text-sm text-popover-foreground outline-none [transform:translate3d(0,var(--sheet-drag-y,0px),0)] transition-transform duration-(--motion-duration-drawer) ease-(--motion-easing-standard) will-change-transform data-[dragging=true]:duration-0 data-open:animate-in data-open:slide-in-from-bottom-full data-closed:animate-out data-closed:slide-out-to-bottom-full [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
             : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-(--motion-duration-modal) ease-(--motion-easing-standard) outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           isMobile &&
             mobileSize === "near-full" &&
