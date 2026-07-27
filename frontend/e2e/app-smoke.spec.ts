@@ -830,6 +830,7 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
       .poll(() => sheetScroller.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(180);
     await expect(sheet).not.toHaveAttribute("data-dragging", "true");
+    await page.waitForTimeout(300);
 
     await sheetScroller.evaluate((element) => {
       element.scrollTop = 180;

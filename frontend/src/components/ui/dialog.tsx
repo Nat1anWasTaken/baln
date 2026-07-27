@@ -108,8 +108,10 @@ function DialogOverlay({
 
 type DragState = {
   dragging: boolean;
+  lastScrollTop: number;
   lastTime: number;
   lastY: number;
+  nativeScroll: boolean;
   pointerId: number;
   scrollElement: HTMLElement | null;
   startX: number;
@@ -229,12 +231,15 @@ function useSheetDrag(
       }
 
       stopInertia();
+      const scrollElement = findScrollableElement(target, content);
       dragRef.current = {
         dragging: false,
+        lastScrollTop: scrollElement?.scrollTop ?? 0,
         lastTime: timeStamp,
         lastY: clientY,
+        nativeScroll: pointerId === -1 && Boolean(scrollElement?.scrollTop),
         pointerId,
-        scrollElement: findScrollableElement(target, content),
+        scrollElement,
         startX: clientX,
         startY: clientY,
         translation: 0,
@@ -320,6 +325,77 @@ function useSheetDrag(
     settle(dismiss);
   }, [dismissible, settle, startScrollInertia]);
 
+  const moveTouch = React.useCallback(
+    (event: TouchEvent, touch: Touch) => {
+      const drag = dragRef.current;
+      const content = contentRef.current;
+      if (!drag || !content) return;
+
+      const totalX = touch.clientX - drag.startX;
+      const totalY = touch.clientY - drag.startY;
+      const delta = touch.clientY - drag.lastY;
+      const elapsed = Math.max(event.timeStamp - drag.lastTime, 1);
+      const scrollElement = drag.scrollElement;
+      const scrollTop = scrollElement?.scrollTop ?? 0;
+
+      if (!drag.dragging) {
+        if (Math.abs(totalX) > Math.abs(totalY) && Math.abs(totalX) >= 6) {
+          dragRef.current = null;
+          return;
+        }
+
+        drag.velocity = drag.velocity * 0.65 + (delta / elapsed) * 0.35;
+        drag.lastTime = event.timeStamp;
+        drag.lastY = touch.clientY;
+
+        if (delta <= 0 || Math.abs(totalY) < 6) {
+          drag.lastScrollTop = scrollTop;
+          return;
+        }
+        if (scrollElement && scrollTop > 0) {
+          drag.nativeScroll = true;
+          drag.lastScrollTop = scrollTop;
+          return;
+        }
+
+        drag.dragging = true;
+        content.dataset.dragging = "true";
+        const leftover = Math.max(delta - drag.lastScrollTop, 0);
+        drag.translation = leftover;
+        if (event.cancelable) event.preventDefault();
+        setTranslation(drag.translation);
+        drag.lastScrollTop = 0;
+        return;
+      }
+
+      drag.velocity = drag.velocity * 0.65 + (delta / elapsed) * 0.35;
+      drag.lastTime = event.timeStamp;
+      drag.lastY = touch.clientY;
+
+      let remaining = delta;
+      if (remaining < 0 && drag.translation > 0) {
+        const consumed = Math.min(drag.translation, -remaining);
+        drag.translation -= consumed;
+        remaining += consumed;
+      }
+
+      if (remaining < 0 && scrollElement) {
+        if (!drag.nativeScroll) {
+          scrollElement.scrollTop += -remaining;
+          if (event.cancelable) event.preventDefault();
+        }
+        remaining = 0;
+      }
+
+      if (remaining > 0) {
+        drag.translation += remaining;
+        if (event.cancelable) event.preventDefault();
+      }
+      setTranslation(drag.translation);
+    },
+    [setTranslation],
+  );
+
   React.useEffect(() => {
     const content = contentRef.current;
     if (!enabled || !content) return;
@@ -337,10 +413,7 @@ function useSheetDrag(
     };
     const onTouchMove = (event: TouchEvent) => {
       if (event.touches.length !== 1) return;
-      const touch = event.touches[0];
-      moveDrag(touch.clientX, touch.clientY, event.timeStamp, () =>
-        event.preventDefault(),
-      );
+      moveTouch(event, event.touches[0]);
     };
 
     content.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -353,7 +426,7 @@ function useSheetDrag(
       content.removeEventListener("touchend", finishDrag);
       content.removeEventListener("touchcancel", finishDrag);
     };
-  }, [beginDrag, enabled, finishDrag, moveDrag]);
+  }, [beginDrag, enabled, finishDrag, moveTouch]);
 
   const onPointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
