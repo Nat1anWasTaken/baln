@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   ChevronUp,
   CircleUserRound,
@@ -18,6 +19,7 @@ import {
   AppRouteTransition,
   useAppNavigate,
 } from "@/components/navigation-transition";
+import { PageLoading } from "@/components/page-state";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -229,9 +231,11 @@ export function AppShell() {
           </Button>
         </header>
         <div className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">
-          <AppRouteTransition>
-            <Outlet />
-          </AppRouteTransition>
+          <Suspense fallback={<PageLoading rows={4} />}>
+            <AppRouteTransition>
+              <Outlet />
+            </AppRouteTransition>
+          </Suspense>
         </div>
       </SidebarInset>
 

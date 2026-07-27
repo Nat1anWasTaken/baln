@@ -32,6 +32,7 @@ import {
   type NavigationDirection,
   type NavigationIntent,
 } from "@/lib/navigation-transition";
+import { preloadAppRoute } from "@/lib/route-modules";
 
 type TransitionMode = "idle" | "native" | "entry";
 
@@ -275,7 +276,7 @@ function startNativeNavigation(
   onUnavailable: () => void,
 ): Promise<void> {
   try {
-    return document.startViewTransition(update).finished;
+    return document.startViewTransition(update).finished.catch(() => {});
   } catch {
     onUnavailable();
     return Promise.resolve(update());
@@ -308,6 +309,7 @@ function usePreparedNavigation(
     direction,
     native,
     fallback: () => transition.beginNavigation(direction, false),
+    preload: () => preloadAppRoute(destination.pathname),
     prepare: () => transition.beginNavigation(direction, native),
   };
 }
@@ -321,7 +323,10 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
     {
       defaultShouldRevalidate,
       mask,
+      onFocus,
       onClick,
+      onPointerDown,
+      onPointerEnter,
       preventScrollReset,
       relative,
       reloadDocument,
@@ -362,26 +367,46 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
               ? "native"
               : "fallback"
         }
+        onFocus={(event) => {
+          onFocus?.(event);
+          if (!event.defaultPrevented) void navigation.preload();
+        }}
+        onPointerDown={(event) => {
+          onPointerDown?.(event);
+          if (!event.defaultPrevented) void navigation.preload();
+        }}
+        onPointerEnter={(event) => {
+          onPointerEnter?.(event);
+          if (!event.defaultPrevented) void navigation.preload();
+        }}
         onClick={(event) => {
           onClick?.(event);
           if (!shouldHandleClick(event, target)) return;
-          navigation.prepare();
-          if (!navigation.native) return;
+          if (!navigation.native) {
+            navigation.prepare();
+            return;
+          }
           event.preventDefault();
-          void startNativeNavigation(
-            () =>
-              navigate(to, {
-                flushSync: true,
-                mask,
-                preventScrollReset,
-                relative,
-                replace,
-                state,
-                viewTransition: false,
-                defaultShouldRevalidate,
-              }),
-            navigation.fallback,
-          );
+          void navigation
+            .preload()
+            .catch(() => {})
+            .then(() => {
+              navigation.prepare();
+              return startNativeNavigation(
+                () =>
+                  navigate(to, {
+                    flushSync: true,
+                    mask,
+                    preventScrollReset,
+                    relative,
+                    replace,
+                    state,
+                    viewTransition: false,
+                    defaultShouldRevalidate,
+                  }),
+                navigation.fallback,
+              );
+            });
         }}
       />
     );
@@ -397,7 +422,10 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
     {
       defaultShouldRevalidate,
       mask,
+      onFocus,
       onClick,
+      onPointerDown,
+      onPointerEnter,
       preventScrollReset,
       relative,
       reloadDocument,
@@ -438,26 +466,46 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
               ? "native"
               : "fallback"
         }
+        onFocus={(event) => {
+          onFocus?.(event);
+          if (!event.defaultPrevented) void navigation.preload();
+        }}
+        onPointerDown={(event) => {
+          onPointerDown?.(event);
+          if (!event.defaultPrevented) void navigation.preload();
+        }}
+        onPointerEnter={(event) => {
+          onPointerEnter?.(event);
+          if (!event.defaultPrevented) void navigation.preload();
+        }}
         onClick={(event) => {
           onClick?.(event);
           if (!shouldHandleClick(event, target)) return;
-          navigation.prepare();
-          if (!navigation.native) return;
+          if (!navigation.native) {
+            navigation.prepare();
+            return;
+          }
           event.preventDefault();
-          void startNativeNavigation(
-            () =>
-              navigate(to, {
-                flushSync: true,
-                mask,
-                preventScrollReset,
-                relative,
-                replace,
-                state,
-                viewTransition: false,
-                defaultShouldRevalidate,
-              }),
-            navigation.fallback,
-          );
+          void navigation
+            .preload()
+            .catch(() => {})
+            .then(() => {
+              navigation.prepare();
+              return startNativeNavigation(
+                () =>
+                  navigate(to, {
+                    flushSync: true,
+                    mask,
+                    preventScrollReset,
+                    relative,
+                    replace,
+                    state,
+                    viewTransition: false,
+                    defaultShouldRevalidate,
+                  }),
+                navigation.fallback,
+              );
+            });
         }}
       />
     );
@@ -508,18 +556,23 @@ export function useAppNavigate(): AppNavigateFunction {
         effectiveIntent,
       );
       const native = transition.canUseNativeTransition(direction);
-      transition.beginNavigation(direction, native);
       const finalOptions = {
         ...navigateOptions,
         flushSync: native || navigateOptions.flushSync,
         viewTransition: false,
       };
       if (native) {
-        return startNativeNavigation(
-          () => navigate(to, finalOptions),
-          () => transition.beginNavigation(direction, false),
-        );
+        return preloadAppRoute(destination.pathname)
+          .catch(() => {})
+          .then(() => {
+            transition.beginNavigation(direction, true);
+            return startNativeNavigation(
+              () => navigate(to, finalOptions),
+              () => transition.beginNavigation(direction, false),
+            );
+          });
       }
+      transition.beginNavigation(direction, false);
       return navigate(to, finalOptions);
     },
     [location.pathname, navigate, transition],

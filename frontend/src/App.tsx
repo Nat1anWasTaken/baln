@@ -6,69 +6,70 @@ import { AppLoading } from "@/components/app-loading";
 import { AppShell } from "@/components/app-shell";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getEntryEditorBackground } from "@/lib/entry-navigation";
+import { routeModules } from "@/lib/route-modules";
 
 const LoginPage = lazy(() =>
-  import("@/pages/login-page").then((module) => ({
+  routeModules.login().then((module) => ({
     default: module.LoginPage,
   })),
 );
 const AuthCallbackPage = lazy(() =>
-  import("@/pages/auth-callback-page").then((module) => ({
+  routeModules.authCallback().then((module) => ({
     default: module.AuthCallbackPage,
   })),
 );
 const DashboardPage = lazy(() =>
-  import("@/pages/dashboard-page").then((module) => ({
+  routeModules.dashboard().then((module) => ({
     default: module.DashboardPage,
   })),
 );
 const AccountsPage = lazy(() =>
-  import("@/pages/accounts-page").then((module) => ({
+  routeModules.accounts().then((module) => ({
     default: module.AccountsPage,
   })),
 );
 const EntriesPage = lazy(() =>
-  import("@/pages/entries-page").then((module) => ({
+  routeModules.entries().then((module) => ({
     default: module.EntriesPage,
   })),
 );
 const EntryDetailPage = lazy(() =>
-  import("@/pages/entry-detail-page").then((module) => ({
+  routeModules.entryDetail().then((module) => ({
     default: module.EntryDetailPage,
   })),
 );
 const EntryEditorPage = lazy(() =>
-  import("@/pages/entry-editor-page").then((module) => ({
+  routeModules.entryEditor().then((module) => ({
     default: module.EntryEditorPage,
   })),
 );
 const EntryEditorSheet = lazy(() =>
-  import("@/pages/entry-editor-page").then((module) => ({
+  routeModules.entryEditor().then((module) => ({
     default: module.EntryEditorSheet,
   })),
 );
 const ReportsPage = lazy(() =>
-  import("@/pages/reports-page").then((module) => ({
+  routeModules.reports().then((module) => ({
     default: module.ReportsPage,
   })),
 );
 const ApiTokensPage = lazy(() =>
-  import("@/pages/api-tokens-page").then((module) => ({
+  routeModules.apiTokens().then((module) => ({
     default: module.ApiTokensPage,
   })),
 );
 const OAuthConsentPage = lazy(() =>
-  import("@/pages/oauth-consent-page").then((module) => ({
+  routeModules.oauthConsent().then((module) => ({
     default: module.OAuthConsentPage,
   })),
 );
 const ConnectedAppsPage = lazy(() =>
-  import("@/pages/connected-apps-page").then((module) => ({
+  routeModules.connectedApps().then((module) => ({
     default: module.ConnectedAppsPage,
   })),
 );
 const NotFoundPage = lazy(() =>
-  import("@/pages/not-found-page").then((module) => ({
+  routeModules.notFound().then((module) => ({
     default: module.NotFoundPage,
   })),
 );

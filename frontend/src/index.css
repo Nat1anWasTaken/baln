@@ -82,10 +82,10 @@
   --touch-press-duration: 180ms;
   --touch-rebound-duration: 480ms;
   --touch-motion-easing: cubic-bezier(0.16, 1, 0.3, 1);
-  --navigation-motion-duration: 180ms;
-  --navigation-history-duration: 160ms;
-  --navigation-motion-distance: 12px;
-  --navigation-title-distance: 6px;
+  --navigation-motion-duration: 220ms;
+  --navigation-history-duration: 180ms;
+  --navigation-motion-distance: 24px;
+  --navigation-title-distance: 10px;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -319,48 +319,46 @@
   mix-blend-mode: normal;
 }
 
-html[data-navigation-direction="forward"]
-  ::view-transition-old(app-route-content) {
+html[data-navigation-direction="forward"]::view-transition-old(
+    app-route-content
+  ) {
   animation: app-navigation-out-forward var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="forward"]
-  ::view-transition-new(app-route-content) {
+html[data-navigation-direction="forward"]::view-transition-new(
+    app-route-content
+  ) {
   animation: app-navigation-in-forward var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="back"]
-  ::view-transition-old(app-route-content) {
+html[data-navigation-direction="back"]::view-transition-old(app-route-content) {
   animation: app-navigation-out-back var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="back"]
-  ::view-transition-new(app-route-content) {
+html[data-navigation-direction="back"]::view-transition-new(app-route-content) {
   animation: app-navigation-in-back var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="forward"]
-  ::view-transition-old(app-page-title) {
+html[data-navigation-direction="forward"]::view-transition-old(app-page-title) {
   animation: app-navigation-title-out-forward var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="forward"]
-  ::view-transition-new(app-page-title) {
+html[data-navigation-direction="forward"]::view-transition-new(app-page-title) {
   animation: app-navigation-title-in-forward var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="back"] ::view-transition-old(app-page-title) {
+html[data-navigation-direction="back"]::view-transition-old(app-page-title) {
   animation: app-navigation-title-out-back var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
 
-html[data-navigation-direction="back"] ::view-transition-new(app-page-title) {
+html[data-navigation-direction="back"]::view-transition-new(app-page-title) {
   animation: app-navigation-title-in-back var(--navigation-motion-duration)
     var(--touch-motion-easing) both;
 }
