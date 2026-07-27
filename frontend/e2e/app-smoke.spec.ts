@@ -512,6 +512,31 @@ test("provides an installable manifest and profile-menu install action", async (
   await expect(page.getByRole("menuitem", { name: "安裝 Baln" })).toBeVisible();
 });
 
+test("keeps iOS install instructions open after the profile menu closes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+
+  await page.getByRole("button", { name: "開啟使用者選單" }).click();
+  await page.getByRole("menuitem", { name: "安裝 Baln" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "將 Baln 加入主畫面" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Safari 會把 Baln 安裝成可獨立開啟的應用程式。"),
+  ).toBeVisible();
+});
+
 test("reopens the cached dashboard in read-only offline mode", async ({
   context,
   page,

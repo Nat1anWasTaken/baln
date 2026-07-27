@@ -1,5 +1,5 @@
 import { Download } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -53,16 +53,18 @@ const instructions: Record<
   },
 };
 
-export function InstallAppMenuItem() {
+export type InstructionPlatform = Exclude<InstallPlatform, "chromium">;
+
+export function InstallAppMenuItem({
+  onInstructions,
+}: {
+  onInstructions: (platform: InstructionPlatform) => void;
+}) {
   const state = useSyncExternalStore(
     subscribeInstallState,
     getInstallState,
     getInstallState,
   );
-  const [instructionPlatform, setInstructionPlatform] = useState<Exclude<
-    InstallPlatform,
-    "chromium"
-  > | null>(null);
 
   if (state.installed) return null;
 
@@ -74,50 +76,54 @@ export function InstallAppMenuItem() {
       result.kind === "instructions" &&
       result.platform !== "chromium"
     ) {
-      setInstructionPlatform(result.platform);
+      onInstructions(result.platform);
     }
   }
 
+  return (
+    <DropdownMenuItem onSelect={() => void handleInstall()}>
+      <Download aria-hidden="true" />
+      安裝 Baln
+    </DropdownMenuItem>
+  );
+}
+
+export function InstallAppDialog({
+  instructionPlatform,
+  onOpenChange,
+}: {
+  instructionPlatform: InstructionPlatform | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const content = instructionPlatform
     ? instructions[instructionPlatform]
     : null;
 
   return (
-    <>
-      <DropdownMenuItem onSelect={() => void handleInstall()}>
-        <Download aria-hidden="true" />
-        安裝 Baln
-      </DropdownMenuItem>
-      <Dialog
-        open={instructionPlatform !== null}
-        onOpenChange={(open) => {
-          if (!open) setInstructionPlatform(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{content?.title}</DialogTitle>
-            <DialogDescription>{content?.description}</DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <ol className="grid gap-3 text-sm">
-              {content?.steps.map((step, index) => (
-                <li key={step} className="flex gap-3">
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                    {index + 1}
-                  </span>
-                  <span className="pt-0.5">{step}</span>
-                </li>
-              ))}
-            </ol>
-          </DialogBody>
-          <DialogFooter>
-            <Button type="button" onClick={() => setInstructionPlatform(null)}>
-              知道了
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={instructionPlatform !== null} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{content?.title}</DialogTitle>
+          <DialogDescription>{content?.description}</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <ol className="grid gap-3 text-sm">
+            {content?.steps.map((step, index) => (
+              <li key={step} className="flex gap-3">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                  {index + 1}
+                </span>
+                <span className="pt-0.5">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            知道了
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

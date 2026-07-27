@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import {
   ChevronUp,
   CircleUserRound,
@@ -12,7 +12,11 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/auth/auth-context";
 import { BrandIcon } from "@/components/brand-icon";
-import { InstallAppMenuItem } from "@/components/install-app-menu-item";
+import {
+  InstallAppDialog,
+  InstallAppMenuItem,
+  type InstructionPlatform,
+} from "@/components/install-app-menu-item";
 import {
   ActiveNavigationIndicator,
   AppLink,
@@ -74,6 +78,8 @@ const mobileNavigation: MobileNavigationItem[] = [
 function UserMenu({ compact = false }: { compact?: boolean }) {
   const auth = useAuth();
   const navigate = useAppNavigate();
+  const [installInstructionsPlatform, setInstallInstructionsPlatform] =
+    useState<InstructionPlatform | null>(null);
 
   async function handleLogout() {
     try {
@@ -133,7 +139,7 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
           <PlugZap aria-hidden="true" />
           已連接的應用程式
         </DropdownMenuItem>
-        <InstallAppMenuItem />
+        <InstallAppMenuItem onInstructions={setInstallInstructionsPlatform} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => void handleLogout()}
@@ -143,6 +149,12 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
           登出
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <InstallAppDialog
+        instructionPlatform={installInstructionsPlatform}
+        onOpenChange={(open) => {
+          if (!open) setInstallInstructionsPlatform(null);
+        }}
+      />
     </DropdownMenu>
   );
 }
