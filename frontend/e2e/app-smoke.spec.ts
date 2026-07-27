@@ -72,6 +72,7 @@ const entry = {
 async function mockApi(page: Page) {
   let visibleAccounts = [...accounts];
   let createdEntry: typeof entry | null = null;
+  let updatedEntry: typeof entry | null = null;
   let apiTokens: Array<{
     id: string;
     name: string;
@@ -284,9 +285,49 @@ async function mockApi(page: Page) {
     }
     if (
       path === "/api/v1/entries/01980000-0000-7000-8000-000000000010" &&
+      method === "PUT"
+    ) {
+      const body = route.request().postDataJSON() as {
+        date: string;
+        description: string;
+        note: string | null;
+        postings: Array<{
+          account_key: string;
+          amount_minor: number;
+          memo: string | null;
+        }>;
+      };
+      updatedEntry = {
+        ...entry,
+        date: body.date,
+        description: body.description,
+        note: body.note,
+        updated_at: "2026-07-25T01:00:00Z",
+        postings: body.postings.map((posting, index) => {
+          const account = accounts.find(
+            (candidate) => candidate.key === posting.account_key,
+          )!;
+          return {
+            id: `01980000-0000-7000-8000-${String(index + 31).padStart(12, "0")}`,
+            account: {
+              id: account.id,
+              key: account.key,
+              name: account.name,
+              type: account.type,
+            },
+            amount_minor: posting.amount_minor,
+            memo: posting.memo,
+            created_at: "2026-07-24T00:00:00Z",
+          };
+        }),
+      };
+      return route.fulfill({ json: updatedEntry });
+    }
+    if (
+      path === "/api/v1/entries/01980000-0000-7000-8000-000000000010" &&
       method === "GET"
     ) {
-      return route.fulfill({ json: entry });
+      return route.fulfill({ json: updatedEntry ?? entry });
     }
     if (path === "/api/v1/entries" && method === "GET") {
       return route.fulfill({ json: { items: [entry], next_cursor: null } });
@@ -550,6 +591,13 @@ test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.getByRole("tab", { name: "進階分錄" }).click();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
+
+  await page.goto("/entries/01980000-0000-7000-8000-000000000010/edit");
+  await expect(page.getByRole("heading", { name: "編輯交易" })).toBeVisible();
+  await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+  await expect(page.getByLabel("交易說明")).toHaveValue(
+    "全家便利商店 — 藍—成人加長不黏身雨衣",
+  );
 });
 
 test("reviews a possible duplicate from the mobile transaction sheet", async ({
@@ -668,6 +716,76 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   await expect(directSheet).toBeVisible();
   await page.getByRole("button", { name: "關閉新增交易" }).click();
   await expect(page).toHaveURL(/\/entries$/);
+  await expect(directSheet).not.toBeVisible();
+});
+
+test("edits through the same route-backed mobile transaction sheet", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.goto("/entries/01980000-0000-7000-8000-000000000010");
+
+  const detailBackLink = page
+    .locator('a[href="/entries"]')
+    .filter({ hasText: "返回交易" });
+  await page.getByRole("link", { name: "編輯" }).click();
+  await expect(page).toHaveURL(
+    /\/entries\/01980000-0000-7000-8000-000000000010\/edit$/,
+  );
+
+  const sheet = page.getByRole("dialog", { name: "編輯交易" });
+  await expect(sheet).toBeVisible();
+  await expect
+    .poll(async () => {
+      const bounds = await sheet.boundingBox();
+      return bounds ? bounds.y + bounds.height : null;
+    })
+    .toBeCloseTo(667, 0);
+  await expect(detailBackLink).toBeAttached();
+  await expect(sheet).toHaveAttribute("data-size", "near-full");
+  await expect(sheet.locator('[data-slot="entry-editor-scroll"]')).toHaveCSS(
+    "overflow-y",
+    "auto",
+  );
+  await expect(page.getByLabel("交易說明")).toHaveValue(
+    "全家便利商店 — 藍—成人加長不黏身雨衣",
+  );
+
+  await page.getByLabel("交易說明").fill("更新後的便利商店交易");
+  await page.evaluate(() => history.back());
+
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "捨棄未儲存的變更？",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
+  await expect(page.getByLabel("交易說明")).toHaveValue("更新後的便利商店交易");
+
+  await page.getByRole("button", { name: "儲存變更" }).click();
+  await expect(page).toHaveURL(
+    /\/entries\/01980000-0000-7000-8000-000000000010$/,
+  );
+  await expect(sheet).not.toBeVisible();
+  await expect(page.getByText("更新後的便利商店交易")).toBeVisible();
+
+  await page.getByRole("button", { name: "切換顯示模式" }).click();
+  await page.getByRole("menuitem", { name: "深色" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.goto(
+    "/entries/01980000-0000-7000-8000-000000000010/edit?q=便利商店",
+  );
+  const directSheet = page.getByRole("dialog", { name: "編輯交易" });
+  await expect(directSheet).toBeVisible();
+  await expect
+    .poll(async () => {
+      const bounds = await directSheet.boundingBox();
+      return bounds ? bounds.y + bounds.height : null;
+    })
+    .toBeCloseTo(667, 0);
+  await page.getByRole("button", { name: "關閉編輯交易" }).click();
+  await expect(page).toHaveURL(
+    /\/entries\/01980000-0000-7000-8000-000000000010\?q=%E4%BE%BF%E5%88%A9%E5%95%86%E5%BA%97$/,
+  );
   await expect(directSheet).not.toBeVisible();
 });
 
