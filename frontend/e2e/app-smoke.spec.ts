@@ -1006,6 +1006,83 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
   }
 });
 
+test("uses the shared calm motion curve across interaction families", async ({
+  page,
+}) => {
+  const motionStyle = (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        animationDuration: style.animationDuration,
+        animationTimingFunction: style.animationTimingFunction,
+        transitionDuration: style.transitionDuration,
+        transitionTimingFunction: style.transitionTimingFunction,
+      };
+    });
+  const calmCurve = "cubic-bezier(0.32, 0.72, 0, 1)";
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /測試使用者/ }).click();
+
+  const dropdown = page.locator('[data-slot="dropdown-menu-content"]');
+  await expect(dropdown).toBeVisible();
+  await expect
+    .poll(() => motionStyle('[data-slot="dropdown-menu-content"]'))
+    .toMatchObject({
+      animationDuration: "0.26s",
+      animationTimingFunction: calmCurve,
+    });
+
+  await page.keyboard.press("Escape");
+  await expect(dropdown).not.toBeVisible();
+  const sidebarGapMotion = await motionStyle('[data-slot="sidebar-gap"]');
+  expect(sidebarGapMotion).toMatchObject({
+    transitionDuration: "0.2s",
+    transitionTimingFunction: calmCurve,
+  });
+
+  await page.goto("/accounts");
+  await page
+    .getByRole("row")
+    .filter({ hasText: "現金" })
+    .getByRole("button", { name: "編輯 現金" })
+    .click();
+
+  const dialog = page.locator('[data-slot="dialog-content"]');
+  await expect(dialog).toBeVisible();
+  await expect
+    .poll(() => motionStyle('[data-slot="dialog-content"]'))
+    .toMatchObject({
+      animationDuration: "0.34s",
+      animationTimingFunction: calmCurve,
+    });
+  await page.getByRole("button", { name: "取消" }).click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/entries");
+  await page.getByLabel("新增交易").click();
+
+  const drawer = page.locator('[data-slot="drawer-content"]');
+  await expect(drawer).toBeVisible();
+  await expect
+    .poll(() => motionStyle('[data-slot="drawer-content"]'))
+    .toMatchObject({
+      animationDuration: "0.5s",
+      animationTimingFunction: calmCurve,
+    });
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /測試使用者/ }).click();
+  await expect
+    .poll(() => motionStyle('[data-slot="dropdown-menu-content"]'))
+    .toMatchObject({
+      animationDuration: "0.001s",
+    });
+});
+
 test("animates real route content without layering over the mobile editor", async ({
   page,
 }) => {
