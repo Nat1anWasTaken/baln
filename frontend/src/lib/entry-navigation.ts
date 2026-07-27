@@ -1,16 +1,16 @@
 import type { Location } from "react-router-dom";
 
-export type EntryCreateRouteState = {
+export type EntryEditorRouteState = {
   backgroundLocation: Location;
 };
 
-export function entryCreateRouteState(
+export function entryEditorRouteState(
   backgroundLocation: Location,
-): EntryCreateRouteState {
+): EntryEditorRouteState {
   return { backgroundLocation };
 }
 
-export function getEntryCreateBackground(state: unknown): Location | undefined {
+export function getEntryEditorBackground(state: unknown): Location | undefined {
   if (
     typeof state !== "object" ||
     state === null ||

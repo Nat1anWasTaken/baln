@@ -35,11 +35,13 @@ import {
 } from "@/components/ui/table";
 import { accountTypeLabels } from "@/lib/account";
 import { entriesApi } from "@/lib/api-client";
+import { entryEditorRouteState } from "@/lib/entry-navigation";
 import { formatLedgerDate, formatMoney, formatTimestamp } from "@/lib/format";
 
 export function EntryDetailPage() {
   const { entryId = "" } = useParams();
-  const { search } = useLocation();
+  const location = useLocation();
+  const { search } = location;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -82,7 +84,10 @@ export function EntryDetailPage() {
         </Button>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link to={{ pathname: `/entries/${entryId}/edit`, search }}>
+            <Link
+              to={{ pathname: `/entries/${entryId}/edit`, search }}
+              state={entryEditorRouteState(location)}
+            >
               <Pencil aria-hidden="true" />
               編輯
             </Link>

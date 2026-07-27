@@ -5,7 +5,7 @@ import { ProtectedRoute } from "@/auth/protected-route";
 import { AppLoading } from "@/components/app-loading";
 import { AppShell } from "@/components/app-shell";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getEntryCreateBackground } from "@/lib/entry-navigation";
+import { getEntryEditorBackground } from "@/lib/entry-navigation";
 
 const LoginPage = lazy(() =>
   import("@/pages/login-page").then((module) => ({
@@ -76,16 +76,19 @@ const NotFoundPage = lazy(() =>
 export default function App() {
   const location = useLocation();
   const isMobile = useIsMobile();
-  const isMobileCreate = isMobile && location.pathname === "/entries/new";
+  const editMatch = location.pathname.match(/^\/entries\/([^/]+)\/edit$/);
+  const isEntryEditor =
+    location.pathname === "/entries/new" || editMatch !== null;
+  const isMobileEditor = isMobile && isEntryEditor;
   const fallbackBackground: Location = {
-    pathname: "/entries",
+    pathname: editMatch ? `/entries/${editMatch[1]}` : "/entries",
     search: location.search,
     hash: "",
     state: null,
-    key: "direct-entry-create",
+    key: editMatch ? "direct-entry-edit" : "direct-entry-create",
   };
-  const backgroundLocation = isMobileCreate
-    ? (getEntryCreateBackground(location.state) ?? fallbackBackground)
+  const backgroundLocation = isMobileEditor
+    ? (getEntryEditorBackground(location.state) ?? fallbackBackground)
     : undefined;
 
   return (
@@ -115,11 +118,17 @@ export default function App() {
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      {isMobileCreate ? (
+      {isMobileEditor ? (
         <Routes>
           <Route element={<ProtectedRoute />}>
             <Route
               path="/entries/new"
+              element={
+                <EntryEditorSheet backgroundLocation={backgroundLocation!} />
+              }
+            />
+            <Route
+              path="/entries/:entryId/edit"
               element={
                 <EntryEditorSheet backgroundLocation={backgroundLocation!} />
               }

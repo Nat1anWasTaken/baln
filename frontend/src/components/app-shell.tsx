@@ -24,7 +24,7 @@ import { useAuth } from "@/auth/auth-context";
 import { BrandIcon } from "@/components/brand-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { entryCreateRouteState } from "@/lib/entry-navigation";
+import { entryEditorRouteState } from "@/lib/entry-navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -222,7 +222,7 @@ export function AppShell() {
           </div>
           <ThemeToggle />
           <Button asChild size="sm" className="hidden sm:inline-flex">
-            <NavLink to="/entries/new" state={entryCreateRouteState(location)}>
+            <NavLink to="/entries/new" state={entryEditorRouteState(location)}>
               <Plus aria-hidden="true" />
               新增交易
             </NavLink>
@@ -246,7 +246,7 @@ export function AppShell() {
               to={item.to}
               state={
                 item.to === "/entries/new"
-                  ? entryCreateRouteState(location)
+                  ? entryEditorRouteState(location)
                   : undefined
               }
               aria-label={item.primary ? "新增交易" : undefined}

@@ -21,7 +21,7 @@ import {
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { toExclusiveDate } from "@/lib/format";
-import { entryCreateRouteState } from "@/lib/entry-navigation";
+import { entryEditorRouteState } from "@/lib/entry-navigation";
 
 export function EntriesPage() {
   const location = useLocation();
@@ -149,7 +149,7 @@ export function EntriesPage() {
               </Button>
             ) : null}
             <Button asChild>
-              <Link to="/entries/new" state={entryCreateRouteState(location)}>
+              <Link to="/entries/new" state={entryEditorRouteState(location)}>
                 <Plus aria-hidden="true" />
                 新增交易
               </Link>
@@ -181,7 +181,7 @@ export function EntriesPage() {
               </Button>
             ) : (
               <Button asChild>
-                <Link to="/entries/new" state={entryCreateRouteState(location)}>
+                <Link to="/entries/new" state={entryEditorRouteState(location)}>
                   <Plus aria-hidden="true" />
                   新增第一筆交易
                 </Link>

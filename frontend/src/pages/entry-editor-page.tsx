@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/drawer";
 import { EntryEditor } from "@/features/entries/entry-editor";
 import { accountsApi, entriesApi } from "@/lib/api-client";
-import { getEntryCreateBackground } from "@/lib/entry-navigation";
+import { getEntryEditorBackground } from "@/lib/entry-navigation";
 import type { EntryResponse } from "@/lib/schemas";
 
 type EditorPresentation = "page" | "sheet";
@@ -151,8 +151,10 @@ export function EntryEditorSheet({
 }: {
   backgroundLocation: Location;
 }) {
+  const { entryId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const isEditing = Boolean(entryId);
   const [open, setOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [isPending, setIsPending] = useState(false);
@@ -161,7 +163,7 @@ export function EntryEditorSheet({
   const finalized = useRef(false);
   const pendingDestination = useRef<To | null>(null);
   const hasHistoryBackground = Boolean(
-    getEntryCreateBackground(location.state),
+    getEntryEditorBackground(location.state),
   );
   const blocker = useBlocker(() => !allowNavigation.current);
 
@@ -260,7 +262,7 @@ export function EntryEditorSheet({
           }}
         >
           <DrawerHeader className="relative shrink-0 border-b px-12 pt-3 text-center">
-            <DrawerTitle>新增交易</DrawerTitle>
+            <DrawerTitle>{isEditing ? "編輯交易" : "新增交易"}</DrawerTitle>
             <DrawerDescription>
               使用引導模式處理常見交易，或用進階模式建立拆分分錄。
             </DrawerDescription>
@@ -269,7 +271,7 @@ export function EntryEditorSheet({
               variant="ghost"
               size="icon-sm"
               className="absolute top-2 right-3"
-              aria-label="關閉新增交易"
+              aria-label={isEditing ? "關閉編輯交易" : "關閉新增交易"}
               disabled={isPending}
               onClick={requestDismiss}
             >
@@ -303,9 +305,13 @@ export function EntryEditorSheet({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>捨棄這筆交易草稿？</AlertDialogTitle>
+            <AlertDialogTitle>
+              {isEditing ? "捨棄未儲存的變更？" : "捨棄這筆交易草稿？"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              尚未儲存的日期、說明、金額與分錄都會遺失。
+              {isEditing
+                ? "尚未儲存的日期、說明、金額與分錄變更都會遺失。"
+                : "尚未儲存的日期、說明、金額與分錄都會遺失。"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
