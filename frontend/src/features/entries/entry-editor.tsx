@@ -521,7 +521,6 @@ export function EntryEditor({
     >
       <div
         data-slot={presentation === "sheet" ? "entry-editor-scroll" : undefined}
-        data-vaul-no-drag={presentation === "sheet" ? "" : undefined}
         className={cn(
           presentation === "page"
             ? "contents"

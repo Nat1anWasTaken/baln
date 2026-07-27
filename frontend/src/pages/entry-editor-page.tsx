@@ -165,6 +165,7 @@ export function EntryEditorSheet({
   const [isPending, setIsPending] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const allowNavigation = useRef(false);
+  const closeApproved = useRef(false);
   const finalized = useRef(false);
   const pendingDestination = useRef<To | null>(null);
   const hasHistoryBackground = Boolean(
@@ -210,6 +211,7 @@ export function EntryEditorSheet({
   ]);
 
   const closeSheet = useCallback(() => {
+    closeApproved.current = true;
     setOpen(false);
     if (prefersReducedMotion()) {
       window.setTimeout(finishClose, 0);
@@ -255,7 +257,7 @@ export function EntryEditorSheet({
       mobileProps={{
         dismissible: !isPending,
         onAnimationEnd: (nextOpen) => {
-          if (!nextOpen) finishClose();
+          if (!nextOpen && closeApproved.current) finishClose();
         },
       }}
       onOpenChange={(nextOpen) => {
@@ -268,7 +270,8 @@ export function EntryEditorSheet({
         onAnimationEnd={(event) => {
           if (
             event.currentTarget === event.target &&
-            event.animationName === "slideToBottom"
+            event.animationName === "slideToBottom" &&
+            closeApproved.current
           ) {
             finishClose();
           }

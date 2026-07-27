@@ -55,13 +55,14 @@ function Dialog({
           defaultOpen={defaultOpen}
           dismissible={dismissible}
           fixed={mobileProps?.fixed ?? true}
-          handleOnly={mobileProps?.handleOnly ?? true}
+          handleOnly={mobileProps?.handleOnly ?? false}
           modal={modal}
           onOpenChange={onOpenChange}
           open={open}
           preventScrollRestoration={
             mobileProps?.preventScrollRestoration ?? true
           }
+          scrollLockTimeout={mobileProps?.scrollLockTimeout ?? 0}
           shouldScaleBackground={mobileProps?.shouldScaleBackground ?? true}
         >
           {children}
