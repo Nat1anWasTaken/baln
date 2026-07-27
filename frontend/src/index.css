@@ -84,7 +84,6 @@
   --motion-duration-control: 200ms;
   --motion-duration-floating: 260ms;
   --motion-duration-modal: 340ms;
-  --motion-duration-sheet: 420ms;
   --motion-duration-drawer: 500ms;
   --motion-easing-standard: cubic-bezier(0.32, 0.72, 0, 1);
   --touch-press-duration: 180ms;
@@ -319,9 +318,7 @@
   [data-slot="dialog-overlay"],
   [data-slot="dialog-content"],
   [data-slot="alert-dialog-overlay"],
-  [data-slot="alert-dialog-content"],
-  [data-slot="sheet-overlay"],
-  [data-slot="sheet-content"] {
+  [data-slot="alert-dialog-content"] {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
