@@ -230,7 +230,7 @@ export function AppShell() {
             </AppNavLink>
           </Button>
         </header>
-        <div className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">
+        <div className="mx-auto w-full max-w-7xl flex-1 overflow-x-clip p-4 md:p-6">
           <Suspense fallback={<PageLoading rows={4} />}>
             <AppRouteTransition>
               <Outlet />

@@ -78,7 +78,7 @@ afterEach(() => {
 });
 
 describe("shared navigation transitions", () => {
-  it("wraps supported in-app navigation in one native view transition", async () => {
+  it("preloads then animates the real route content", async () => {
     mockMatchMedia({});
     let finishPreload = () => {};
     preloadAppRoute.mockReturnValue(
@@ -86,16 +86,7 @@ describe("shared navigation transitions", () => {
         finishPreload = resolve;
       }),
     );
-    const startViewTransition = vi.fn((update: () => void | Promise<void>) => {
-      const updateCallbackDone = Promise.resolve().then(update);
-      return {
-        finished: updateCallbackDone.then(() => undefined),
-        ready: updateCallbackDone.then(() => undefined),
-        skipTransition: vi.fn(),
-        types: new Set<string>(),
-        updateCallbackDone,
-      } as unknown as ViewTransition;
-    });
+    const startViewTransition = vi.fn();
     Object.defineProperty(document, "startViewTransition", {
       configurable: true,
       value: startViewTransition,
@@ -107,17 +98,18 @@ describe("shared navigation transitions", () => {
 
     expect(preloadAppRoute).toHaveBeenCalledWith("/entries");
     expect(startViewTransition).not.toHaveBeenCalled();
+    expect(screen.getByText("/")).toBeInTheDocument();
     finishPreload();
     await waitFor(() => {
-      expect(startViewTransition).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("/entries")).toBeInTheDocument();
     });
-    expect(await screen.findByText("/entries")).toBeInTheDocument();
+    expect(startViewTransition).not.toHaveBeenCalled();
     expect(
       document.querySelector('[data-slot="app-route-content"]'),
-    ).not.toHaveAttribute("data-entry-direction");
+    ).toHaveAttribute("data-entry-direction", "forward");
   });
 
-  it("adds a directional entry fallback when native transitions are unavailable", async () => {
+  it("adds a directional entry animation without browser-specific APIs", async () => {
     mockMatchMedia({});
     const user = userEvent.setup();
     render(<Fixture />);

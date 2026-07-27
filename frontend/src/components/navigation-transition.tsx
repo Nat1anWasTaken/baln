@@ -34,7 +34,7 @@ import {
 } from "@/lib/navigation-transition";
 import { preloadAppRoute } from "@/lib/route-modules";
 
-type TransitionMode = "idle" | "native" | "entry";
+type TransitionMode = "idle" | "entry";
 
 type TransitionState = {
   direction: NavigationDirection;
@@ -44,12 +44,11 @@ type TransitionState = {
 
 type PendingNavigation = {
   direction: NavigationDirection;
-  native: boolean;
 };
 
 type NavigationTransitionContextValue = {
-  beginNavigation: (direction: NavigationDirection, native: boolean) => void;
-  canUseNativeTransition: (direction: NavigationDirection) => boolean;
+  beginNavigation: (direction: NavigationDirection) => void;
+  canAnimate: (direction: NavigationDirection) => boolean;
   isMobile: boolean;
 };
 
@@ -61,7 +60,7 @@ const NavigationVisualTransitionContext = createContext<TransitionState | null>(
 
 const navigationTransitionFallback: NavigationTransitionContextValue = {
   beginNavigation: () => {},
-  canUseNativeTransition: () => false,
+  canAnimate: () => false,
   isMobile: false,
 };
 
@@ -76,13 +75,6 @@ function motionIsAllowed() {
     typeof window === "undefined" ||
     typeof window.matchMedia !== "function" ||
     !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
-function nativeViewTransitionsAreSupported() {
-  return (
-    typeof document !== "undefined" &&
-    typeof document.startViewTransition === "function"
   );
 }
 
@@ -123,22 +115,14 @@ export function NavigationTransitionProvider({
     return () => media.removeEventListener("change", update);
   }, []);
 
-  const canUseNativeTransition = useCallback(
-    (direction: NavigationDirection) =>
-      direction !== "none" &&
-      motionAllowed &&
-      nativeViewTransitionsAreSupported(),
+  const canAnimate = useCallback(
+    (direction: NavigationDirection) => direction !== "none" && motionAllowed,
     [motionAllowed],
   );
 
-  const beginNavigation = useCallback(
-    (direction: NavigationDirection, native: boolean) => {
-      pendingNavigation.current = { direction, native };
-      if (!native) return;
-      setDocumentDirection(direction);
-    },
-    [],
-  );
+  const beginNavigation = useCallback((direction: NavigationDirection) => {
+    pendingNavigation.current = { direction };
+  }, []);
 
   useLayoutEffect(() => {
     if (!mounted.current) {
@@ -193,16 +177,18 @@ export function NavigationTransitionProvider({
       }));
       return;
     }
-    if (pending?.native) {
-      setTransition((current) => ({
-        direction,
-        mode: "native",
-        sequence: current.sequence + 1,
-      }));
-    } else if (motionAllowed) {
+    if (motionAllowed) {
+      setDocumentDirection(direction);
       setTransition((current) => ({
         direction,
         mode: "entry",
+        sequence: current.sequence + 1,
+      }));
+    } else {
+      setDocumentDirection("none");
+      setTransition((current) => ({
+        direction: "none",
+        mode: "idle",
         sequence: current.sequence + 1,
       }));
     }
@@ -221,17 +207,17 @@ export function NavigationTransitionProvider({
             }
           : current,
       );
-    }, 260);
+    }, 320);
     return () => window.clearTimeout(timeout);
   }, [transition.mode, transition.sequence]);
 
   const value = useMemo(
     () => ({
       beginNavigation,
-      canUseNativeTransition,
+      canAnimate,
       isMobile,
     }),
-    [beginNavigation, canUseNativeTransition, isMobile],
+    [beginNavigation, canAnimate, isMobile],
   );
 
   return (
@@ -271,18 +257,6 @@ function shouldHandleClick(
   );
 }
 
-function startNativeNavigation(
-  update: () => void | Promise<void>,
-  onUnavailable: () => void,
-): Promise<void> {
-  try {
-    return document.startViewTransition(update).finished.catch(() => {});
-  } catch {
-    onUnavailable();
-    return Promise.resolve(update());
-  }
-}
-
 function usePreparedNavigation(
   to: To,
   intent: NavigationIntent,
@@ -302,15 +276,13 @@ function usePreparedNavigation(
     destination.pathname,
     effectiveIntent,
   );
-  const native =
-    !reloadDocument && transition.canUseNativeTransition(direction);
+  const animate = !reloadDocument && transition.canAnimate(direction);
 
   return {
+    animate,
     direction,
-    native,
-    fallback: () => transition.beginNavigation(direction, false),
     preload: () => preloadAppRoute(destination.pathname),
-    prepare: () => transition.beginNavigation(direction, native),
+    prepare: () => transition.beginNavigation(direction),
   };
 }
 
@@ -363,9 +335,9 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
         data-navigation-transition={
           navigation.direction === "none"
             ? "none"
-            : navigation.native
-              ? "native"
-              : "fallback"
+            : navigation.animate
+              ? "css"
+              : "none"
         }
         onFocus={(event) => {
           onFocus?.(event);
@@ -382,7 +354,7 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
         onClick={(event) => {
           onClick?.(event);
           if (!shouldHandleClick(event, target)) return;
-          if (!navigation.native) {
+          if (!navigation.animate) {
             navigation.prepare();
             return;
           }
@@ -392,20 +364,16 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
             .catch(() => {})
             .then(() => {
               navigation.prepare();
-              return startNativeNavigation(
-                () =>
-                  navigate(to, {
-                    flushSync: true,
-                    mask,
-                    preventScrollReset,
-                    relative,
-                    replace,
-                    state,
-                    viewTransition: false,
-                    defaultShouldRevalidate,
-                  }),
-                navigation.fallback,
-              );
+              navigate(to, {
+                flushSync: true,
+                mask,
+                preventScrollReset,
+                relative,
+                replace,
+                state,
+                viewTransition: false,
+                defaultShouldRevalidate,
+              });
             });
         }}
       />
@@ -462,9 +430,9 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
         data-navigation-transition={
           navigation.direction === "none"
             ? "none"
-            : navigation.native
-              ? "native"
-              : "fallback"
+            : navigation.animate
+              ? "css"
+              : "none"
         }
         onFocus={(event) => {
           onFocus?.(event);
@@ -481,7 +449,7 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
         onClick={(event) => {
           onClick?.(event);
           if (!shouldHandleClick(event, target)) return;
-          if (!navigation.native) {
+          if (!navigation.animate) {
             navigation.prepare();
             return;
           }
@@ -491,20 +459,16 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
             .catch(() => {})
             .then(() => {
               navigation.prepare();
-              return startNativeNavigation(
-                () =>
-                  navigate(to, {
-                    flushSync: true,
-                    mask,
-                    preventScrollReset,
-                    relative,
-                    replace,
-                    state,
-                    viewTransition: false,
-                    defaultShouldRevalidate,
-                  }),
-                navigation.fallback,
-              );
+              navigate(to, {
+                flushSync: true,
+                mask,
+                preventScrollReset,
+                relative,
+                replace,
+                state,
+                viewTransition: false,
+                defaultShouldRevalidate,
+              });
             });
         }}
       />
@@ -538,7 +502,7 @@ export function useAppNavigate(): AppNavigateFunction {
           options.transitionIntent ??
             (to < 0 ? "back" : to > 0 ? "forward" : "none"),
         );
-        transition.beginNavigation(direction, false);
+        transition.beginNavigation(direction);
         return navigate(to);
       }
 
@@ -555,24 +519,21 @@ export function useAppNavigate(): AppNavigateFunction {
         destination.pathname,
         effectiveIntent,
       );
-      const native = transition.canUseNativeTransition(direction);
+      const animate = transition.canAnimate(direction);
       const finalOptions = {
         ...navigateOptions,
-        flushSync: native || navigateOptions.flushSync,
+        flushSync: animate || navigateOptions.flushSync,
         viewTransition: false,
       };
-      if (native) {
+      if (animate) {
         return preloadAppRoute(destination.pathname)
           .catch(() => {})
           .then(() => {
-            transition.beginNavigation(direction, true);
-            return startNativeNavigation(
-              () => navigate(to, finalOptions),
-              () => transition.beginNavigation(direction, false),
-            );
+            transition.beginNavigation(direction);
+            navigate(to, finalOptions);
           });
       }
-      transition.beginNavigation(direction, false);
+      transition.beginNavigation(direction);
       return navigate(to, finalOptions);
     },
     [location.pathname, navigate, transition],
@@ -581,10 +542,7 @@ export function useAppNavigate(): AppNavigateFunction {
 
 export function useSuppressNextNavigationTransition() {
   const transition = useNavigationTransition();
-  return useCallback(
-    () => transition.beginNavigation("none", false),
-    [transition],
-  );
+  return useCallback(() => transition.beginNavigation("none"), [transition]);
 }
 
 export function AppRouteTransition({ children }: { children: ReactNode }) {
