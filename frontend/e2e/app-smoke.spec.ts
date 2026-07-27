@@ -940,11 +940,7 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
     });
     await expect(discardDialog).toBeVisible();
     await expect(page).toHaveURL(/\/entries\/new$/);
-    await dragMouse(
-      page,
-      discardDialog.locator('[data-slot="dialog-handle"]'),
-      220,
-    );
+    await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
     await expect(discardDialog).not.toBeVisible();
     await expect(dirtySheet).toBeVisible();
     await expect(page.getByLabel("交易說明")).toHaveValue("保留這份草稿");

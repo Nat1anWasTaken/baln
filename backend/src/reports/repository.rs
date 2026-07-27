@@ -279,7 +279,7 @@ mod tests {
             INSERT INTO accounts (id, user_id, key, name, type, archived)
             VALUES
                 ($1, $7, 'asset.bank', '銀行', 'asset', FALSE),
-                ($2, $7, 'asset.savings', '存款', 'asset', TRUE),
+                ($2, $7, 'asset.savings', '存款', 'asset', FALSE),
                 ($3, $7, 'liability.card', '信用卡', 'liability', FALSE),
                 ($4, $7, 'income.salary', '薪資', 'income', FALSE),
                 ($5, $7, 'expense.food', '餐飲', 'expense', FALSE),
@@ -325,6 +325,7 @@ mod tests {
             ),
         ] {
             let entry_id = Uuid::now_v7();
+            let mut transaction = pool.begin().await.unwrap();
             sqlx::query(
                 "INSERT INTO entries (id, user_id, date, description) VALUES ($1, $2, $3, $4)",
             )
@@ -332,7 +333,7 @@ mod tests {
             .bind(user_id)
             .bind(NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap())
             .bind(description)
-            .execute(&pool)
+            .execute(&mut *transaction)
             .await
             .unwrap();
             for (account_id, amount) in postings {
@@ -344,11 +345,17 @@ mod tests {
                 .bind(entry_id)
                 .bind(account_id)
                 .bind(amount)
-                .execute(&pool)
+                .execute(&mut *transaction)
                 .await
                 .unwrap();
             }
+            transaction.commit().await.unwrap();
         }
+        sqlx::query("UPDATE accounts SET archived = TRUE WHERE id = $1")
+            .bind(savings_id)
+            .execute(&pool)
+            .await
+            .unwrap();
 
         let points = trend(
             &pool,
