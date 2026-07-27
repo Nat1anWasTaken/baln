@@ -1111,7 +1111,7 @@ test("deletes an account after responsive destructive confirmation", async ({
   await dragMouse(
     page,
     deleteSheet.locator('[data-slot="dialog-handle"]'),
-    220,
+    120,
   );
   await expect(deleteSheet).not.toBeVisible();
   await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
