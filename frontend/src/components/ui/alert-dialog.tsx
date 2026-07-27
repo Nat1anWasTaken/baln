@@ -33,7 +33,6 @@ function AlertDialog({
       <AlertDialogContext.Provider value={{ isMobile: true, onOpenChange }}>
         <Dialog
           defaultOpen={defaultOpen}
-          mobileProps={{ dismissible: false }}
           onOpenChange={onOpenChange}
           open={open}
         >
@@ -84,7 +83,6 @@ function AlertDialogContent({
         role="alertdialog"
         data-size={size}
         showCloseButton={false}
-        showHandle={false}
         className={cn(
           "group/alert-dialog-content text-popover-foreground",
           className,

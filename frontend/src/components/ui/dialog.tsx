@@ -454,6 +454,12 @@ function useSheetDrag(
       moveDrag(event.clientX, event.clientY, event.timeStamp, () =>
         event.preventDefault(),
       );
+      if (
+        dragRef.current?.dragging &&
+        !event.currentTarget.hasPointerCapture(event.pointerId)
+      ) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
     },
     [moveDrag],
   );
@@ -462,6 +468,9 @@ function useSheetDrag(
       if (event.pointerType !== "mouse") return;
       const drag = dragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
       finishDrag();
     },
     [finishDrag],
@@ -481,6 +490,7 @@ function useSheetDrag(
 type DialogContentProps = React.ComponentProps<
   typeof DialogPrimitive.Content
 > & {
+  closeLabel?: string;
   mobileSize?: "content" | "near-full";
   showCloseButton?: boolean;
   showHandle?: boolean;
@@ -489,6 +499,7 @@ type DialogContentProps = React.ComponentProps<
 function DialogContent({
   className,
   children,
+  closeLabel = "Close",
   mobileSize = "content",
   showCloseButton = true,
   showHandle,
@@ -505,9 +516,9 @@ function DialogContent({
     onAnimationEnd: onMobileAnimationEnd,
     requestClose,
   } = React.useContext(DialogContext);
-  const displayHandle = showHandle ?? dismissible;
+  const displayHandle = dismissible && (showHandle ?? true);
   const { contentRef, dragHandlers } = useSheetDrag(
-    isMobile,
+    isMobile && dismissible,
     dismissible,
     requestClose,
   );
@@ -563,7 +574,7 @@ function DialogContent({
           />
         ) : null}
         {children}
-        {showCloseButton ? (
+        {dismissible && showCloseButton ? (
           <DialogClose asChild>
             <Button
               variant="ghost"
@@ -571,7 +582,7 @@ function DialogContent({
               size="icon-sm"
             >
               <XIcon />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{closeLabel}</span>
             </Button>
           </DialogClose>
         ) : null}

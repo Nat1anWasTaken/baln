@@ -1,4 +1,10 @@
-import { devices, expect, test, type Page } from "@playwright/test";
+import {
+  devices,
+  expect,
+  test,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 
 const accounts = [
   {
@@ -364,6 +370,21 @@ async function mockApi(page: Page) {
   });
 }
 
+async function dragMouse(page: Page, target: Locator, distance: number) {
+  const bounds = await target.boundingBox();
+  expect(bounds).not.toBeNull();
+  const x = Math.round(bounds!.x + bounds!.width / 2);
+  const y = Math.round(bounds!.y + bounds!.height / 2);
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let step = 1; step <= 8; step += 1) {
+    await page.mouse.move(x, y + (distance * step) / 8);
+    await page.waitForTimeout(16);
+  }
+  await page.mouse.up();
+}
+
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
@@ -533,12 +554,21 @@ test("confirms account key and type changes before updating ledger views", async
   await expect(mobileDialog).toBeVisible();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(mobileDialog).toHaveAttribute("data-presentation", "sheet");
+  await expect(
+    mobileDialog.locator('[data-slot="dialog-handle"]'),
+  ).toBeVisible();
   await expect
     .poll(async () => {
       const bounds = await mobileDialog.boundingBox();
       return bounds ? bounds.y + bounds.height : null;
     })
     .toBeLessThanOrEqual(844);
+  await dragMouse(
+    page,
+    mobileDialog.locator('[data-slot="dialog-handle"]'),
+    300,
+  );
+  await expect(mobileDialog).not.toBeVisible();
 });
 
 test("groups the responsive transaction account pills by account type", async ({
@@ -720,6 +750,9 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   await expect(sheet).toBeVisible();
   await expect(entriesSearch).toBeAttached();
   await expect(sheet).toHaveAttribute("data-size", "near-full");
+  await expect(sheet.locator('[data-slot="dialog-header"]')).toBeVisible();
+  await expect(sheet.locator('[data-slot="dialog-body"]')).toBeVisible();
+  await expect(sheet.locator('[data-slot="dialog-footer"]')).toBeVisible();
   const navigationWhileOpen = await mobileNavigation.boundingBox();
   expect(navigationBeforeOpen).not.toBeNull();
   expect(navigationWhileOpen).not.toBeNull();
@@ -745,7 +778,7 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   expect(sheetGeometry.width).toBeCloseTo(390, 0);
   expect(sheetGeometry.borderTopLeftRadius).toBeGreaterThan(0);
 
-  const sheetScroller = sheet.locator('[data-slot="entry-editor-scroll"]');
+  const sheetScroller = sheet.locator("[data-entry-editor-scroll]");
   await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
   expect(
     await sheetScroller.evaluate(
@@ -795,7 +828,7 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
     await page.goto("/entries/new");
 
     const sheet = page.getByRole("dialog", { name: "新增交易" });
-    const sheetScroller = sheet.locator('[data-slot="entry-editor-scroll"]');
+    const sheetScroller = sheet.locator("[data-entry-editor-scroll]");
     await expect(sheet).toBeVisible();
     await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
     await expect(sheet).toHaveCSS("touch-action", "auto");
@@ -879,9 +912,7 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
 
     await page.goto("/entries/new");
     const dirtySheet = page.getByRole("dialog", { name: "新增交易" });
-    const dirtyScroller = dirtySheet.locator(
-      '[data-slot="entry-editor-scroll"]',
-    );
+    const dirtyScroller = dirtySheet.locator("[data-entry-editor-scroll]");
     await page.getByLabel("交易說明").fill("保留這份草稿");
     const dirtyBounds = await dirtyScroller.boundingBox();
     expect(dirtyBounds).not.toBeNull();
@@ -909,12 +940,69 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
     });
     await expect(discardDialog).toBeVisible();
     await expect(page).toHaveURL(/\/entries\/new$/);
-    await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
+    await dragMouse(
+      page,
+      discardDialog.locator('[data-slot="dialog-handle"]'),
+      220,
+    );
+    await expect(discardDialog).not.toBeVisible();
     await expect(dirtySheet).toBeVisible();
     await expect(page.getByLabel("交易說明")).toHaveValue("保留這份草稿");
   } finally {
     await context.close();
   }
+});
+
+test("keeps a pending mobile transaction sheet fixed", async ({ page }) => {
+  let releaseRequest = () => undefined;
+  const requestGate = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  await page.route("http://localhost:8080/api/v1/entries", async (route) => {
+    if (route.request().method() !== "POST") {
+      return route.fallback();
+    }
+    await requestGate;
+    return route.fulfill({
+      status: 500,
+      contentType: "application/problem+json",
+      json: {
+        title: "Internal Server Error",
+        status: 500,
+        detail: "delayed test response",
+      },
+    });
+  });
+
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.goto("/entries/new");
+  const sheet = page.getByRole("dialog", { name: "新增交易" });
+  await page.getByLabel("交易說明").fill("等待儲存");
+  await page.getByLabel("金額（TWD）").fill("120");
+  await page.getByRole("combobox", { name: "支出分類" }).click();
+  await page.getByRole("option", { name: "餐飲" }).click();
+  await page.getByRole("combobox", { name: "付款帳戶" }).click();
+  await page.getByRole("option", { name: "現金" }).click();
+  await page.getByRole("button", { name: "建立交易" }).click();
+  await expect(page.getByRole("button", { name: "建立交易" })).toBeDisabled();
+
+  await expect(sheet.locator('[data-slot="dialog-handle"]')).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "關閉新增交易" })).toHaveCount(
+    0,
+  );
+  await dragMouse(page, sheet.locator('[data-slot="dialog-header"]'), 220);
+  await expect(sheet).not.toHaveAttribute("data-dragging", "true");
+  expect(
+    await sheet.evaluate(
+      (element) =>
+        new DOMMatrixReadOnly(getComputedStyle(element).transform).m42,
+    ),
+  ).toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeVisible();
+
+  releaseRequest();
+  await expect(page.getByRole("button", { name: "建立交易" })).toBeEnabled();
 });
 
 test("edits through the same route-backed mobile transaction sheet", async ({
@@ -941,7 +1029,7 @@ test("edits through the same route-backed mobile transaction sheet", async ({
     .toBeCloseTo(667, 0);
   await expect(detailBackLink).toBeAttached();
   await expect(sheet).toHaveAttribute("data-size", "near-full");
-  await expect(sheet.locator('[data-slot="entry-editor-scroll"]')).toHaveCSS(
+  await expect(sheet.locator("[data-entry-editor-scroll]")).toHaveCSS(
     "overflow-y",
     "auto",
   );
@@ -1009,8 +1097,30 @@ test("deletes an account after responsive destructive confirmation", async ({
   });
   await expect(deleteSheet).toBeVisible();
   await expect(deleteSheet).toHaveAttribute("data-presentation", "sheet");
+  await expect(
+    deleteSheet.locator('[data-slot="dialog-handle"]'),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(deleteSheet).toBeVisible();
+  await expect(deleteSheet).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
+
+  await page.getByRole("button", { name: "刪除 現金" }).click();
+  await page
+    .locator('[data-slot="dialog-overlay"][data-presentation="sheet"]')
+    .click({ position: { x: 20, y: 20 } });
+  await expect(deleteSheet).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
+
+  await page.getByRole("button", { name: "刪除 現金" }).click();
+  await dragMouse(
+    page,
+    deleteSheet.locator('[data-slot="dialog-handle"]'),
+    220,
+  );
+  await expect(deleteSheet).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
+
+  await page.getByRole("button", { name: "刪除 現金" }).click();
   await deleteSheet.getByRole("button", { name: "確認刪除" }).click();
   await expect(
     page.getByRole("button", { name: "刪除 現金" }),

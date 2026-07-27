@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import {
   type Location,
   type To,
@@ -28,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -69,35 +69,43 @@ function EntryEditorSurface({
     enabled: isEditing,
   });
   const stateClassName =
-    presentation === "sheet"
-      ? "min-h-0 flex-1 overflow-y-auto px-4 pb-4"
-      : undefined;
+    presentation === "sheet" ? "grid content-start" : undefined;
+  const StateContainer = presentation === "sheet" ? DialogBody : "div";
 
   if (accounts.isPending || (isEditing && entry.isPending)) {
     return (
-      <div className={stateClassName}>
+      <StateContainer
+        data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
+        className={stateClassName}
+      >
         <PageLoading rows={5} />
-      </div>
+      </StateContainer>
     );
   }
   if (accounts.isError) {
     return (
-      <div className={stateClassName}>
+      <StateContainer
+        data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
+        className={stateClassName}
+      >
         <ErrorState
           message={accounts.error.message}
           onRetry={() => void accounts.refetch()}
         />
-      </div>
+      </StateContainer>
     );
   }
   if (entry.isError) {
     return (
-      <div className={stateClassName}>
+      <StateContainer
+        data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
+        className={stateClassName}
+      >
         <ErrorState
           message={entry.error.message}
           onRetry={() => void entry.refetch()}
         />
-      </div>
+      </StateContainer>
     );
   }
 
@@ -115,13 +123,16 @@ function EntryEditorSurface({
       );
 
     return (
-      <div className={stateClassName}>
+      <StateContainer
+        data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
+        className={stateClassName}
+      >
         <EmptyState
           title="請先建立帳戶"
           description="至少需要可用的帳戶才能建立交易。"
           action={action}
         />
-      </div>
+      </StateContainer>
     );
   }
 
@@ -264,23 +275,15 @@ export function EntryEditorSheet({
         if (!nextOpen) requestDismiss();
       }}
     >
-      <DialogContent mobileSize="near-full" showCloseButton={false}>
-        <DialogHeader className="relative border-b pt-3">
+      <DialogContent
+        closeLabel={isEditing ? "關閉編輯交易" : "關閉新增交易"}
+        mobileSize="near-full"
+      >
+        <DialogHeader>
           <DialogTitle>{isEditing ? "編輯交易" : "新增交易"}</DialogTitle>
           <DialogDescription>
             使用引導模式處理常見交易，或用進階模式建立拆分分錄。
           </DialogDescription>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="absolute top-2 right-3"
-            aria-label={isEditing ? "關閉編輯交易" : "關閉新增交易"}
-            disabled={isPending}
-            onClick={requestDismiss}
-          >
-            <X aria-hidden="true" />
-          </Button>
         </DialogHeader>
         <EntryEditorSurface
           presentation="sheet"

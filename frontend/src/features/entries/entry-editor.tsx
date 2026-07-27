@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
+import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import {
   Field,
   FieldDescription,
@@ -510,6 +511,8 @@ export function EntryEditor({
         (candidate, index, candidates) =>
           candidates.findIndex((entry) => entry.id === candidate.id) === index,
       ) ?? [];
+  const EditorBody = presentation === "sheet" ? DialogBody : "div";
+  const EditorFooter = presentation === "sheet" ? DialogFooter : "div";
 
   return (
     <form
@@ -519,12 +522,12 @@ export function EntryEditor({
       )}
       onSubmit={form.handleSubmit(validateAndSubmit)}
     >
-      <div
-        data-slot={presentation === "sheet" ? "entry-editor-scroll" : undefined}
+      <EditorBody
+        data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
         className={cn(
           presentation === "page"
             ? "contents"
-            : "grid min-h-0 flex-1 auto-rows-max content-start touch-pan-y gap-5 overflow-y-auto overscroll-contain px-4 pb-5",
+            : "grid auto-rows-max content-start touch-pan-y gap-5 overscroll-contain",
         )}
       >
         {presentation === "page" ? (
@@ -812,14 +815,13 @@ export function EntryEditor({
             <FieldError>{form.formState.errors.root.message}</FieldError>
           </div>
         ) : null}
-      </div>
+      </EditorBody>
 
-      <div
+      <EditorFooter
         className={cn(
-          "flex shrink-0 justify-end gap-2",
           presentation === "page"
-            ? "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4"
-            : "border-t bg-popover/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur",
+            ? "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex shrink-0 justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4"
+            : undefined,
         )}
       >
         {presentation === "page" ? (
@@ -847,7 +849,7 @@ export function EntryEditor({
         <Button type="submit" loading={mutation.isPending}>
           {entry ? "儲存變更" : "建立交易"}
         </Button>
-      </div>
+      </EditorFooter>
 
       <AlertDialog
         open={duplicateReview !== null}
