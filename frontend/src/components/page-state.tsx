@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function DashboardLoading() {
+function InsightsLoading({ stacked = false }: { stacked?: boolean }) {
   return (
     <div className="grid gap-6">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -19,40 +19,50 @@ function DashboardLoading() {
             </CardHeader>
             <CardContent>
               <Skeleton className="h-8 w-28" />
+              <Skeleton className="mt-2 h-3 w-20" />
             </CardContent>
           </Card>
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={stacked ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
         {Array.from({ length: 2 }).map((_, index) => (
-          <Card key={index} aria-hidden="true">
-            <CardHeader>
-              <Skeleton className="h-5 w-20" />
-              <Skeleton className="h-4 w-40 max-w-full" />
-            </CardHeader>
-            <CardContent className="grid gap-3 py-2">
-              {Array.from({ length: 3 }).map((_, rowIndex) => (
-                <div
-                  key={rowIndex}
-                  className="grid grid-cols-[4rem_1fr] items-center gap-3"
-                >
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton
-                    className={
-                      rowIndex === 0
-                        ? "h-5 w-full"
-                        : rowIndex === 1
-                          ? "h-5 w-4/5"
-                          : "h-5 w-3/5"
-                    }
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <CardLoading key={index} rows={stacked ? 4 : 3} announce={false} />
         ))}
       </div>
     </div>
+  );
+}
+
+export function CardLoading({
+  rows = 3,
+  announce = true,
+}: {
+  rows?: number;
+  announce?: boolean;
+}) {
+  return (
+    <Card
+      role={announce ? "status" : undefined}
+      aria-label={announce ? "載入中" : undefined}
+      aria-busy={announce || undefined}
+      aria-hidden={announce ? undefined : true}
+    >
+      <CardHeader>
+        <Skeleton className="h-5 w-24" aria-hidden="true" />
+        <Skeleton className="h-4 w-44 max-w-full" aria-hidden="true" />
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {Array.from({ length: rows }).map((_, index) => (
+          <div key={index} className="grid gap-2 rounded-lg border p-3">
+            <div className="flex justify-between gap-4">
+              <Skeleton className="h-4 w-24" aria-hidden="true" />
+              <Skeleton className="h-4 w-20" aria-hidden="true" />
+            </div>
+            <Skeleton className="h-1.5 w-full" aria-hidden="true" />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -61,7 +71,7 @@ export function PageLoading({
   variant = "list",
 }: {
   rows?: number;
-  variant?: "list" | "dashboard";
+  variant?: "list" | "dashboard" | "reports";
 }) {
   return (
     <div
@@ -71,8 +81,8 @@ export function PageLoading({
       aria-busy="true"
       data-loading-variant={variant}
     >
-      {variant === "dashboard" ? (
-        <DashboardLoading />
+      {variant === "dashboard" || variant === "reports" ? (
+        <InsightsLoading stacked={variant === "reports"} />
       ) : (
         Array.from({ length: rows }).map((_, index) => (
           <Skeleton key={index} className="h-20 w-full" aria-hidden="true" />
@@ -138,5 +148,25 @@ export function ErrorState({
         </CardContent>
       ) : null}
     </Card>
+  );
+}
+
+export function InlineErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+      role="alert"
+    >
+      <span>{message}</span>
+      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+        重新載入
+      </Button>
+    </div>
   );
 }

@@ -1,121 +1,315 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarRange } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
-import { CategoryChart, SummaryCards } from "@/components/report-summary";
+import {
+  CardLoading,
+  ErrorState,
+  InlineErrorState,
+  PageLoading,
+} from "@/components/page-state";
+import {
+  CategoryRanking,
+  ComparisonModeSelector,
+  SpendingTrendCard,
+  SummaryCards,
+} from "@/components/report-summary";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useComparisonMode } from "@/hooks/use-comparison-mode";
 import { useMonthStartDay } from "@/hooks/use-month-start-day";
 import { reportsApi } from "@/lib/api-client";
 import {
-  currentPeriodMonth,
-  monthPeriodBounds,
+  comparisonBoundsForPreset,
+  effectiveBounds,
+  formatShortDate,
+  reportPresetBounds,
   toExclusiveDate,
   toInclusiveDate,
+  trendGranularity,
+  type DateBounds,
+  type ReportPreset,
 } from "@/lib/format";
+
+const presetLabels: Record<ReportPreset, string> = {
+  current: "本期",
+  previous: "前期",
+  "last-3": "近 3 期",
+  "last-6": "近 6 期",
+  year: "今年",
+  custom: "自訂",
+};
+
+const presets = Object.entries(presetLabels) as Array<[ReportPreset, string]>;
 
 export function ReportsPage() {
   const { startDay } = useMonthStartDay();
-  const currentBounds = monthPeriodBounds(
-    currentPeriodMonth(startDay),
-    startDay,
+  const { comparisonMode, setComparisonMode } = useComparisonMode();
+  const initialBounds = reportPresetBounds("current", startDay);
+  const [preset, setPreset] = useState<ReportPreset>("current");
+  const [customFrom, setCustomFrom] = useState(initialBounds.dateFrom);
+  const [customTo, setCustomTo] = useState(
+    toInclusiveDate(initialBounds.dateTo),
   );
-  const [dateFrom, setDateFrom] = useState(currentBounds.dateFrom);
-  const [dateTo, setDateTo] = useState(toInclusiveDate(currentBounds.dateTo));
-  const [applied, setApplied] = useState({
-    from: currentBounds.dateFrom,
-    to: currentBounds.dateTo,
-  });
+  const [applied, setApplied] = useState<{
+    preset: ReportPreset;
+    bounds: DateBounds;
+  }>({ preset: "current", bounds: initialBounds });
+  const [category, setCategory] = useState<"expense" | "income">("expense");
+  const [expanded, setExpanded] = useState(false);
 
-  const isValid = Boolean(dateFrom && dateTo && dateFrom <= dateTo);
+  const customIsValid = Boolean(
+    customFrom && customTo && customFrom <= customTo,
+  );
+  const comparisonBounds = comparisonBoundsForPreset(
+    applied.preset,
+    applied.bounds,
+    startDay,
+    comparisonMode,
+  );
+  const trendBounds = effectiveBounds(applied.bounds);
+  const granularity = trendGranularity(trendBounds);
+
   const report = useQuery({
-    queryKey: ["report-summary", applied.from, applied.to],
-    queryFn: () => reportsApi.summary(applied.from, applied.to),
+    queryKey: [
+      "report-summary",
+      applied.bounds.dateFrom,
+      applied.bounds.dateTo,
+    ],
+    queryFn: () =>
+      reportsApi.summary(applied.bounds.dateFrom, applied.bounds.dateTo),
+  });
+  const comparison = useQuery({
+    queryKey: [
+      "report-summary",
+      comparisonBounds.dateFrom,
+      comparisonBounds.dateTo,
+    ],
+    queryFn: () =>
+      reportsApi.summary(comparisonBounds.dateFrom, comparisonBounds.dateTo),
+  });
+  const trend = useQuery({
+    queryKey: [
+      "report-trend",
+      trendBounds.dateFrom,
+      trendBounds.dateTo,
+      granularity,
+    ],
+    queryFn: () =>
+      reportsApi.trend(trendBounds.dateFrom, trendBounds.dateTo, granularity),
   });
 
-  function applyRange() {
-    if (!isValid) return;
-    setApplied({ from: dateFrom, to: toExclusiveDate(dateTo) });
+  function choosePreset(next: ReportPreset) {
+    setPreset(next);
+    setExpanded(false);
+    if (next === "custom") return;
+    const bounds = reportPresetBounds(next, startDay);
+    setApplied({ preset: next, bounds });
   }
 
-  function setCurrentPeriod() {
-    const bounds = monthPeriodBounds(currentPeriodMonth(startDay), startDay);
-    setDateFrom(bounds.dateFrom);
-    setDateTo(toInclusiveDate(bounds.dateTo));
-    setApplied({ from: bounds.dateFrom, to: bounds.dateTo });
+  function applyCustomRange() {
+    if (!customIsValid) return;
+    setExpanded(false);
+    setApplied({
+      preset: "custom",
+      bounds: {
+        dateFrom: customFrom,
+        dateTo: toExclusiveDate(customTo),
+      },
+    });
   }
+
+  const selectedAccounts =
+    category === "expense"
+      ? report.data?.expense_accounts
+      : report.data?.income_accounts;
+  const previousAccounts =
+    category === "expense"
+      ? comparison.data?.expense_accounts
+      : comparison.data?.income_accounts;
+  const selectedTotal =
+    category === "expense"
+      ? report.data?.expense_minor
+      : report.data?.income_minor;
+  const canExpand =
+    (selectedAccounts?.filter((item) => item.total_minor !== 0).length ?? 0) >
+    8;
 
   return (
     <div className="grid gap-6">
       <Card>
         <CardHeader>
           <CardTitle>報表期間</CardTitle>
+          <CardDescription>
+            {formatShortDate(applied.bounds.dateFrom)}–
+            {formatShortDate(toInclusiveDate(applied.bounds.dateTo))}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <Field>
-            <FieldLabel htmlFor="report-from">開始日期</FieldLabel>
-            <Input
-              id="report-from"
-              type="date"
-              value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="report-to">結束日期</FieldLabel>
-            <Input
-              id="report-to"
-              type="date"
-              value={dateTo}
-              min={dateFrom}
-              onChange={(event) => setDateTo(event.target.value)}
-            />
-          </Field>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={setCurrentPeriod}>
-              本期
-            </Button>
-            <Button type="button" disabled={!isValid} onClick={applyRange}>
-              套用
-            </Button>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field>
+              <FieldLabel>期間</FieldLabel>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between"
+                    aria-label={`報表期間：${presetLabels[preset]}`}
+                  >
+                    {presetLabels[preset]}
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>選擇期間</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={preset}
+                    onValueChange={(value) =>
+                      choosePreset(value as ReportPreset)
+                    }
+                  >
+                    {presets.map(([value, label]) => (
+                      <DropdownMenuRadioItem key={value} value={value}>
+                        {label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </Field>
+            <Field>
+              <FieldLabel>比較基準</FieldLabel>
+              <ComparisonModeSelector
+                value={comparisonMode}
+                onValueChange={setComparisonMode}
+                className="w-full"
+              />
+            </Field>
           </div>
+
+          {preset === "custom" ? (
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <Field>
+                <FieldLabel htmlFor="report-from">開始日期</FieldLabel>
+                <Input
+                  id="report-from"
+                  type="date"
+                  value={customFrom}
+                  onChange={(event) => setCustomFrom(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="report-to">結束日期</FieldLabel>
+                <Input
+                  id="report-to"
+                  type="date"
+                  value={customTo}
+                  min={customFrom}
+                  onChange={(event) => setCustomTo(event.target.value)}
+                />
+              </Field>
+              <Button
+                type="button"
+                disabled={!customIsValid}
+                onClick={applyCustomRange}
+              >
+                套用
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
       {report.isPending ? (
-        <PageLoading rows={4} />
+        <PageLoading variant="reports" />
       ) : report.isError ? (
         <ErrorState
           message={report.error.message}
           onRetry={() => void report.refetch()}
         />
-      ) : report.data.income_accounts.length === 0 &&
-        report.data.expense_accounts.length === 0 ? (
-        <EmptyState
-          icon={CalendarRange}
-          title="這段期間沒有收支資料"
-          description="調整報表期間，或先新增一筆收入或支出交易。"
-        />
       ) : (
         <>
-          <SummaryCards summary={report.data} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <CategoryChart
-              title="支出明細"
-              description="依支出帳戶彙整"
-              tone="expense"
-              accounts={report.data.expense_accounts}
+          <SummaryCards summary={report.data} comparison={comparison.data} />
+          {comparison.isError ? (
+            <InlineErrorState
+              message="比較資料無法載入，目前仍顯示所選期間結果。"
+              onRetry={() => void comparison.refetch()}
             />
-            <CategoryChart
-              title="收入明細"
-              description="依收入帳戶彙整"
-              tone="income"
-              accounts={report.data.income_accounts}
+          ) : null}
+
+          <Tabs
+            value={category}
+            onValueChange={(value) => {
+              setCategory(value as "expense" | "income");
+              setExpanded(false);
+            }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>分類分析</CardTitle>
+                <CardDescription>金額、占比與比較期間的變化</CardDescription>
+                <CardAction>
+                  <TabsList>
+                    <TabsTrigger value="expense">支出</TabsTrigger>
+                    <TabsTrigger value="income">收入</TabsTrigger>
+                  </TabsList>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                <TabsContent value={category}>
+                  <CategoryRanking
+                    accounts={selectedAccounts ?? []}
+                    previousAccounts={previousAccounts}
+                    total={selectedTotal ?? 0}
+                    tone={category}
+                    dateFrom={applied.bounds.dateFrom}
+                    dateTo={applied.bounds.dateTo}
+                    limit={expanded ? undefined : 8}
+                  />
+                  {canExpand ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="mt-2 w-full"
+                      onClick={() => setExpanded((current) => !current)}
+                    >
+                      {expanded ? "收合" : "顯示全部"}
+                    </Button>
+                  ) : null}
+                </TabsContent>
+              </CardContent>
+            </Card>
+          </Tabs>
+
+          {trend.isPending ? (
+            <CardLoading rows={4} />
+          ) : trend.isError ? (
+            <ErrorState
+              message={trend.error.message}
+              onRetry={() => void trend.refetch()}
             />
-          </div>
+          ) : (
+            <SpendingTrendCard trend={trend.data} />
+          )}
         </>
       )}
     </div>

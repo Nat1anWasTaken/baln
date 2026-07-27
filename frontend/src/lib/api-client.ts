@@ -8,10 +8,12 @@ import {
   connectedAppSchema,
   entryPageSchema,
   entryResponseSchema,
+  financialPositionSchema,
   periodSummarySchema,
   oauthConsentDecisionSchema,
   oauthConsentSchema,
   problemDetailsSchema,
+  reportTrendSchema,
   tokenResponseSchema,
   userSchema,
   type CreateAccountRequest,
@@ -49,6 +51,7 @@ const localizedProblems: Record<string, string> = {
   unknown_account: "部分帳戶不存在。",
   archived_account: "已封存的帳戶不能加入新交易。",
   invalid_date_range: "結束日期必須晚於開始日期。",
+  trend_range_too_large: "所選期間太長，請縮短範圍或調整報表粒度。",
   invalid_cursor: "分頁資訊已失效，請重新載入。",
   possible_duplicate: "可能已有日期、帳戶與金額相同的交易。",
   invalid_api_token_name: "權杖名稱必須為 1 至 100 個字元。",
@@ -308,5 +311,25 @@ export const reportsApi = {
       })}`,
       {},
       { schema: periodSummarySchema },
+    ),
+  trend: (
+    dateFrom: string,
+    dateTo: string,
+    granularity: "day" | "week" | "month",
+  ) =>
+    request(
+      `/reports/trend${queryString({
+        date_from: dateFrom,
+        date_to: dateTo,
+        granularity,
+      })}`,
+      {},
+      { schema: reportTrendSchema },
+    ),
+  position: (asOf: string) =>
+    request(
+      `/reports/position${queryString({ as_of: asOf })}`,
+      {},
+      { schema: financialPositionSchema },
     ),
 };

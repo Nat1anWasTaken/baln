@@ -193,6 +193,34 @@ export const periodSummarySchema = z.object({
 
 export type PeriodSummary = z.infer<typeof periodSummarySchema>;
 
+export const reportGranularitySchema = z.enum(["day", "week", "month"]);
+
+export const reportTrendPointSchema = z.object({
+  date_from: z.string(),
+  date_to: z.string(),
+  income_minor: z.number().int(),
+  expense_minor: z.number().int(),
+  net_minor: z.number().int(),
+});
+
+export const reportTrendSchema = z.object({
+  date_from: z.string(),
+  date_to: z.string(),
+  granularity: reportGranularitySchema,
+  points: z.array(reportTrendPointSchema),
+});
+
+export type ReportTrend = z.infer<typeof reportTrendSchema>;
+
+export const financialPositionSchema = z.object({
+  as_of: z.string(),
+  asset_minor: z.number().int(),
+  liability_minor: z.number().int(),
+  net_worth_minor: z.number().int(),
+});
+
+export type FinancialPosition = z.infer<typeof financialPositionSchema>;
+
 export type CreateAccountRequest = {
   key: string;
   name: string;
