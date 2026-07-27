@@ -171,6 +171,34 @@ async function mockApi(page: Page) {
         },
       });
     }
+    if (path === "/api/v1/reports/trend") {
+      return route.fulfill({
+        json: {
+          date_from: url.searchParams.get("date_from"),
+          date_to: url.searchParams.get("date_to"),
+          granularity: url.searchParams.get("granularity"),
+          points: [
+            {
+              date_from: "2026-07-24",
+              date_to: "2026-07-25",
+              income_minor: 50_000,
+              expense_minor: 120,
+              net_minor: 49_880,
+            },
+          ],
+        },
+      });
+    }
+    if (path === "/api/v1/reports/position") {
+      return route.fulfill({
+        json: {
+          as_of: url.searchParams.get("as_of"),
+          asset_minor: 60_000,
+          liability_minor: 10_000,
+          net_worth_minor: 50_000,
+        },
+      });
+    }
     if (path.endsWith("/balance")) {
       const accountId = path.split("/").at(-2);
       return route.fulfill({
@@ -384,6 +412,33 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await page.getByLabel("新增交易").click();
   await expect(page.getByRole("dialog", { name: "新增交易" })).toBeVisible();
   await expect(page).toHaveURL(/\/entries\/new$/);
+});
+
+test("presents spending insights responsively on overview and reports", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await expect(page.getByText("主要支出", { exact: true })).toBeVisible();
+  await expect(page.getByText("財務狀況", { exact: true })).toBeVisible();
+
+  await page.goto("/reports");
+  await expect(
+    page.getByRole("button", { name: "報表期間：本期" }),
+  ).toBeVisible();
+  await expect(page.getByText("分類分析", { exact: true })).toBeVisible();
+  await expect(page.getByText("支出趨勢", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /餐飲/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "切換顯示模式" }).click();
+  await page.getByRole("menuitem", { name: "深色" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(page.getByText("分類分析", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByText("主要支出", { exact: true })).toBeVisible();
 });
 
 test("keeps long transaction summaries inside mobile cards", async ({

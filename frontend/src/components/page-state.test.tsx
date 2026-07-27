@@ -1,7 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
+import {
+  EmptyState,
+  ErrorState,
+  InlineErrorState,
+  PageLoading,
+} from "@/components/page-state";
 
 describe("shared page states", () => {
   it("keeps the list loader compact and configurable", () => {
@@ -42,6 +47,15 @@ describe("shared page states", () => {
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveClass("bg-destructive/5", "ring-destructive/30");
+    screen.getByRole("button", { name: "重新載入" }).click();
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("keeps secondary failures compact and retryable", () => {
+    const onRetry = vi.fn();
+    render(<InlineErrorState message="比較資料失敗" onRetry={onRetry} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("比較資料失敗");
     screen.getByRole("button", { name: "重新載入" }).click();
     expect(onRetry).toHaveBeenCalledOnce();
   });

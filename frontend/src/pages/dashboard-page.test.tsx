@@ -18,7 +18,7 @@ const userId = "01980000-0000-7000-8000-000000000099";
 
 vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
-    user: { id: "01980000-0000-7000-8000-000000000099" },
+    user: { id: userId },
   }),
 }));
 
@@ -35,98 +35,61 @@ function renderPage() {
   );
 }
 
-describe("dashboard account balances", () => {
+function installDefaultHandlers(reportUrls: string[] = []) {
+  server.use(
+    http.get(`${API_BASE_URL}/reports/summary`, ({ request }) => {
+      reportUrls.push(request.url);
+      const params = new URL(request.url).searchParams;
+      return HttpResponse.json({
+        date_from: params.get("date_from"),
+        date_to: params.get("date_to"),
+        income_minor: 50_000,
+        expense_minor: 12_000,
+        net_minor: 38_000,
+        income_accounts: [],
+        expense_accounts: [],
+      });
+    }),
+    http.get(`${API_BASE_URL}/reports/position`, () =>
+      HttpResponse.json({
+        as_of: "2026-07-27",
+        asset_minor: 80_000,
+        liability_minor: 20_000,
+        net_worth_minor: 60_000,
+      }),
+    ),
+    http.get(`${API_BASE_URL}/entries`, () =>
+      HttpResponse.json({ items: [], next_cursor: null }),
+    ),
+  );
+}
+
+describe("dashboard insights", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
-  it("distinguishes equal asset and liability balances", async () => {
-    const assetId = "01980000-0000-7000-8000-000000000001";
-    const liabilityId = "01980000-0000-7000-8000-000000000002";
-    const accountBase = {
-      archived: false,
-      note: null,
-      created_at: "2026-07-24T00:00:00Z",
-      updated_at: "2026-07-24T00:00:00Z",
-    };
-
-    server.use(
-      http.get(`${API_BASE_URL}/reports/summary`, () =>
-        HttpResponse.json({
-          date_from: "2026-07-01",
-          date_to: "2026-08-01",
-          income_minor: 0,
-          expense_minor: 0,
-          net_minor: 0,
-          income_accounts: [],
-          expense_accounts: [],
-        }),
-      ),
-      http.get(`${API_BASE_URL}/accounts`, () =>
-        HttpResponse.json([
-          {
-            ...accountBase,
-            id: assetId,
-            key: "asset.cash",
-            name: "現金",
-            type: "asset",
-          },
-          {
-            ...accountBase,
-            id: liabilityId,
-            key: "liability.card",
-            name: "信用卡",
-            type: "liability",
-          },
-        ]),
-      ),
-      http.get(`${API_BASE_URL}/accounts/:id/balance`, ({ params }) =>
-        HttpResponse.json({
-          account_id: params.id,
-          account_key: params.id === assetId ? "asset.cash" : "liability.card",
-          as_of: "2026-07-25",
-          ledger_balance_minor: 8_200,
-          display_balance_minor: 8_200,
-        }),
-      ),
-      http.get(`${API_BASE_URL}/entries`, () =>
-        HttpResponse.json({ items: [], next_cursor: null }),
-      ),
-    );
-
+  it("shows aggregate assets, liabilities, and net worth", async () => {
+    installDefaultHandlers();
     renderPage();
 
-    expect(await screen.findByText("資產")).toBeVisible();
-    expect(screen.getByText("負債")).toBeVisible();
-    await waitFor(() => {
-      expect(screen.getByLabelText(/^資產餘額 /)).toHaveTextContent("8,200");
-      expect(screen.getByLabelText(/^負債餘額 /)).toHaveTextContent("8,200");
-    });
+    expect(await screen.findByText("財務狀況")).toBeVisible();
+    expect(
+      screen.getByText("資產").parentElement?.parentElement,
+    ).toHaveTextContent("TWD 80,000");
+    expect(
+      screen.getByText("負債").parentElement?.parentElement,
+    ).toHaveTextContent("TWD 20,000");
+    expect(
+      screen.getByText("淨值").parentElement?.parentElement,
+    ).toHaveTextContent("TWD 60,000");
   });
 
-  it("uses the saved start day and shows the exact period", async () => {
+  it("uses the saved start day and requests the exact accounting period", async () => {
     window.localStorage.setItem(`baln:month-start-day:${userId}`, "26");
     const bounds = monthPeriodBounds(currentPeriodMonth(26), 26);
-    let reportUrl = "";
-
-    server.use(
-      http.get(`${API_BASE_URL}/reports/summary`, ({ request }) => {
-        reportUrl = request.url;
-        return HttpResponse.json({
-          date_from: bounds.dateFrom,
-          date_to: bounds.dateTo,
-          income_minor: 0,
-          expense_minor: 0,
-          net_minor: 0,
-          income_accounts: [],
-          expense_accounts: [],
-        });
-      }),
-      http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([])),
-      http.get(`${API_BASE_URL}/entries`, () =>
-        HttpResponse.json({ items: [], next_cursor: null }),
-      ),
-    );
+    const reportUrls: string[] = [];
+    installDefaultHandlers(reportUrls);
 
     renderPage();
 
@@ -139,9 +102,15 @@ describe("dashboard account balances", () => {
       ),
     ).toBeVisible();
     await waitFor(() => {
-      const params = new URL(reportUrl).searchParams;
-      expect(params.get("date_from")).toBe(bounds.dateFrom);
-      expect(params.get("date_to")).toBe(bounds.dateTo);
+      expect(
+        reportUrls.some((url) => {
+          const params = new URL(url).searchParams;
+          return (
+            params.get("date_from") === bounds.dateFrom &&
+            params.get("date_to") === bounds.dateTo
+          );
+        }),
+      ).toBe(true);
     });
   });
 });
