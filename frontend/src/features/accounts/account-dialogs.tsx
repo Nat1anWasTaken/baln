@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -92,7 +93,7 @@ export function CreateAccountDialog({
               建立後仍可修改顯示名稱、帳戶代碼與類型。
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-5">
+          <DialogBody className="grid gap-4">
             <Field data-invalid={submitted && !name.trim()}>
               <FieldLabel htmlFor="account-name">顯示名稱</FieldLabel>
               <Input
@@ -154,7 +155,7 @@ export function CreateAccountDialog({
                 提供給 AI 代理辨識付款工具或帳戶別名，最多 2,000 個字元。
               </FieldDescription>
             </Field>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button
               type="button"
@@ -231,97 +232,95 @@ export function EditAccountDialog({
   }
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <form onSubmit={submit}>
-            <DialogHeader>
-              <DialogTitle>編輯帳戶</DialogTitle>
-              <DialogDescription>
-                可修改顯示名稱、帳戶類型、帳戶代碼與備註。
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-5">
-              <Field data-invalid={submitted && !name.trim()}>
-                <FieldLabel htmlFor="edit-account-name">顯示名稱</FieldLabel>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit}>
+          <DialogHeader>
+            <DialogTitle>編輯帳戶</DialogTitle>
+            <DialogDescription>
+              可修改顯示名稱、帳戶類型、帳戶代碼與備註。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="grid gap-4">
+            <Field data-invalid={submitted && !name.trim()}>
+              <FieldLabel htmlFor="edit-account-name">顯示名稱</FieldLabel>
+              <Input
+                id="edit-account-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                aria-invalid={submitted && !name.trim()}
+              />
+              {submitted && !name.trim() ? (
+                <FieldError>請輸入帳戶名稱。</FieldError>
+              ) : null}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="edit-account-type">帳戶類型</FieldLabel>
+              <Combobox
+                id="edit-account-type"
+                value={type}
+                onValueChange={(value) => setType(value as AccountType)}
+                options={accountTypes.map((value) => ({
+                  value,
+                  label: accountTypeLabels[value],
+                }))}
+                searchPlaceholder="搜尋帳戶類型…"
+                emptyText="找不到帳戶類型。"
+              />
+            </Field>
+            <Field data-invalid={submitted && !keyValid}>
+              <FieldLabel htmlFor="edit-account-key">帳戶代碼</FieldLabel>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-sm">
+                  {type}.
+                </span>
                 <Input
-                  id="edit-account-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  aria-invalid={submitted && !name.trim()}
+                  id="edit-account-key"
+                  value={suffix}
+                  onChange={(event) => setSuffix(event.target.value)}
+                  placeholder="bank.esun"
+                  aria-invalid={submitted && !keyValid}
                 />
-                {submitted && !name.trim() ? (
-                  <FieldError>請輸入帳戶名稱。</FieldError>
-                ) : null}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="edit-account-type">帳戶類型</FieldLabel>
-                <Combobox
-                  id="edit-account-type"
-                  value={type}
-                  onValueChange={(value) => setType(value as AccountType)}
-                  options={accountTypes.map((value) => ({
-                    value,
-                    label: accountTypeLabels[value],
-                  }))}
-                  searchPlaceholder="搜尋帳戶類型…"
-                  emptyText="找不到帳戶類型。"
-                />
-              </Field>
-              <Field data-invalid={submitted && !keyValid}>
-                <FieldLabel htmlFor="edit-account-key">帳戶代碼</FieldLabel>
-                <div className="flex items-center gap-2">
-                  <span className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-sm">
-                    {type}.
-                  </span>
-                  <Input
-                    id="edit-account-key"
-                    value={suffix}
-                    onChange={(event) => setSuffix(event.target.value)}
-                    placeholder="bank.esun"
-                    aria-invalid={submitted && !keyValid}
-                  />
-                </div>
-                <FieldDescription>
-                  使用一至兩段小寫英文、數字或底線，例如 cash、bank.esun。
-                </FieldDescription>
-                {submitted && !keyValid ? (
-                  <FieldError>帳戶代碼格式不正確。</FieldError>
-                ) : null}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="edit-account-note">帳戶備註</FieldLabel>
-                <Textarea
-                  id="edit-account-note"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="例如：這個帳戶連結到郵局金融卡"
-                  maxLength={2000}
-                />
-                <FieldDescription>
-                  提供給 AI 代理辨識付款工具或帳戶別名，最多 2,000 個字元。
-                </FieldDescription>
-              </Field>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                取消
-              </Button>
-              <Button
-                type="submit"
-                disabled={!name.trim() || !keyValid}
-                loading={update.isPending}
-              >
-                儲存
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+              </div>
+              <FieldDescription>
+                使用一至兩段小寫英文、數字或底線，例如 cash、bank.esun。
+              </FieldDescription>
+              {submitted && !keyValid ? (
+                <FieldError>帳戶代碼格式不正確。</FieldError>
+              ) : null}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="edit-account-note">帳戶備註</FieldLabel>
+              <Textarea
+                id="edit-account-note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="例如：這個帳戶連結到郵局金融卡"
+                maxLength={2000}
+              />
+              <FieldDescription>
+                提供給 AI 代理辨識付款工具或帳戶別名，最多 2,000 個字元。
+              </FieldDescription>
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              取消
+            </Button>
+            <Button
+              type="submit"
+              disabled={!name.trim() || !keyValid}
+              loading={update.isPending}
+            >
+              儲存
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
       <AlertDialog
         open={pendingUpdate !== null}
         onOpenChange={(nextOpen) => {
@@ -354,6 +353,6 @@ export function EditAccountDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </Dialog>
   );
 }

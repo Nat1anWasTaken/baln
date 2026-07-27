@@ -27,12 +27,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EntryEditor } from "@/features/entries/entry-editor";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { getEntryEditorBackground } from "@/lib/entry-navigation";
@@ -250,65 +250,61 @@ export function EntryEditorSheet({
   }, [blocker, closeSheet, isDirty, isPending]);
 
   return (
-    <>
-      <Drawer
-        open={open}
-        dismissible={!isPending}
-        fixed
-        handleOnly
-        preventScrollRestoration
-        shouldScaleBackground
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) requestDismiss();
-        }}
-        onAnimationEnd={(nextOpen) => {
+    <Dialog
+      open={open}
+      mobileProps={{
+        dismissible: !isPending,
+        onAnimationEnd: (nextOpen) => {
           if (!nextOpen) finishClose();
+        },
+      }}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) requestDismiss();
+      }}
+    >
+      <DialogContent
+        mobileSize="near-full"
+        showCloseButton={false}
+        onAnimationEnd={(event) => {
+          if (
+            event.currentTarget === event.target &&
+            event.animationName === "slideToBottom"
+          ) {
+            finishClose();
+          }
         }}
       >
-        <DrawerContent
-          size="near-full"
-          onAnimationEnd={(event) => {
-            if (
-              event.currentTarget === event.target &&
-              event.animationName === "slideToBottom"
-            ) {
-              finishClose();
-            }
-          }}
-        >
-          <DrawerHeader className="relative shrink-0 border-b px-12 pt-3 text-center">
-            <DrawerTitle>{isEditing ? "編輯交易" : "新增交易"}</DrawerTitle>
-            <DrawerDescription>
-              使用引導模式處理常見交易，或用進階模式建立拆分分錄。
-            </DrawerDescription>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="absolute top-2 right-3"
-              aria-label={isEditing ? "關閉編輯交易" : "關閉新增交易"}
-              disabled={isPending}
-              onClick={requestDismiss}
-            >
-              <X aria-hidden="true" />
-            </Button>
-          </DrawerHeader>
-          <EntryEditorSurface
-            presentation="sheet"
-            onCancel={requestDismiss}
-            onDirtyChange={setIsDirty}
-            onNavigate={requestNavigate}
-            onPendingChange={setIsPending}
-            onSaved={(saved) =>
-              requestNavigate({
-                pathname: `/entries/${saved.id}`,
-                search: location.search,
-              })
-            }
-          />
-        </DrawerContent>
-      </Drawer>
-
+        <DialogHeader className="relative border-b pt-3">
+          <DialogTitle>{isEditing ? "編輯交易" : "新增交易"}</DialogTitle>
+          <DialogDescription>
+            使用引導模式處理常見交易，或用進階模式建立拆分分錄。
+          </DialogDescription>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-2 right-3"
+            aria-label={isEditing ? "關閉編輯交易" : "關閉新增交易"}
+            disabled={isPending}
+            onClick={requestDismiss}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        </DialogHeader>
+        <EntryEditorSurface
+          presentation="sheet"
+          onCancel={requestDismiss}
+          onDirtyChange={setIsDirty}
+          onNavigate={requestNavigate}
+          onPendingChange={setIsPending}
+          onSaved={(saved) =>
+            requestNavigate({
+              pathname: `/entries/${saved.id}`,
+              search: location.search,
+            })
+          }
+        />
+      </DialogContent>
       <AlertDialog
         open={discardOpen}
         onOpenChange={(nextOpen) => {
@@ -345,6 +341,6 @@ export function EntryEditorSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </Dialog>
   );
 }

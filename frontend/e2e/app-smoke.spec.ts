@@ -532,10 +532,13 @@ test("confirms account key and type changes before updating ledger views", async
   const mobileDialog = page.getByRole("dialog", { name: "編輯帳戶" });
   await expect(mobileDialog).toBeVisible();
   await expect(page.locator("html")).toHaveClass(/dark/);
-  const bounds = await mobileDialog.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds!.y).toBeGreaterThanOrEqual(0);
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  await expect(mobileDialog).toHaveAttribute("data-presentation", "sheet");
+  await expect
+    .poll(async () => {
+      const bounds = await mobileDialog.boundingBox();
+      return bounds ? bounds.y + bounds.height : null;
+    })
+    .toBeLessThanOrEqual(844);
 });
 
 test("groups the responsive transaction account pills by account type", async ({
@@ -642,14 +645,14 @@ test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.goto("/entries/new");
 
   await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
-  await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+  await expect(page.locator("[data-vaul-drawer]")).toHaveCount(0);
   await page.getByRole("tab", { name: "進階分錄" }).click();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
 
   await page.goto("/entries/01980000-0000-7000-8000-000000000010/edit");
   await expect(page.getByRole("heading", { name: "編輯交易" })).toBeVisible();
-  await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+  await expect(page.locator("[data-vaul-drawer]")).toHaveCount(0);
   await expect(page.getByLabel("交易說明")).toHaveValue(
     "全家便利商店 — 藍—成人加長不黏身雨衣",
   );
@@ -861,8 +864,14 @@ test("deletes an account after responsive destructive confirmation", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
   await page.getByRole("button", { name: "刪除 現金" }).click();
-  await expect(page.getByText("刪除「現金」？")).toBeVisible();
-  await page.getByRole("button", { name: "確認刪除" }).click();
+  const deleteSheet = page.getByRole("alertdialog", {
+    name: "刪除「現金」？",
+  });
+  await expect(deleteSheet).toBeVisible();
+  await expect(deleteSheet).toHaveAttribute("data-presentation", "sheet");
+  await page.keyboard.press("Escape");
+  await expect(deleteSheet).toBeVisible();
+  await deleteSheet.getByRole("button", { name: "確認刪除" }).click();
   await expect(
     page.getByRole("button", { name: "刪除 現金" }),
   ).not.toBeVisible();
@@ -1063,10 +1072,14 @@ test("uses the shared calm motion curve across interaction families", async ({
   await page.goto("/entries");
   await page.getByLabel("新增交易").click();
 
-  const drawer = page.locator('[data-slot="drawer-content"]');
+  const drawer = page.locator(
+    '[data-slot="dialog-content"][data-presentation="sheet"]',
+  );
   await expect(drawer).toBeVisible();
   await expect
-    .poll(() => motionStyle('[data-slot="drawer-content"]'))
+    .poll(() =>
+      motionStyle('[data-slot="dialog-content"][data-presentation="sheet"]'),
+    )
     .toMatchObject({
       animationDuration: "0.5s",
       animationTimingFunction: calmCurve,

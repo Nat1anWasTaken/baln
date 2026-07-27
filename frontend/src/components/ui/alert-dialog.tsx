@@ -1,46 +1,70 @@
-"use client";
-
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
+
+const AlertDialogContext = React.createContext<{
+  isMobile: boolean;
+  onOpenChange?: (open: boolean) => void;
+}>({ isMobile: false });
 
 function AlertDialog({
-  ...props
+  children,
+  defaultOpen,
+  onOpenChange,
+  open,
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <AlertDialogContext.Provider value={{ isMobile: true, onOpenChange }}>
+        <Dialog
+          defaultOpen={defaultOpen}
+          mobileProps={{ dismissible: false }}
+          onOpenChange={onOpenChange}
+          open={open}
+        >
+          {children}
+        </Dialog>
+      </AlertDialogContext.Provider>
+    );
+  }
+
+  return (
+    <AlertDialogContext.Provider value={{ isMobile: false, onOpenChange }}>
+      <AlertDialogPrimitive.Root
+        defaultOpen={defaultOpen}
+        onOpenChange={onOpenChange}
+        open={open}
+      >
+        {children}
+      </AlertDialogPrimitive.Root>
+    </AlertDialogContext.Provider>
+  );
 }
 
 function AlertDialogTrigger({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
+  const { isMobile } = React.useContext(AlertDialogContext);
+  if (isMobile) {
+    return <DialogTrigger data-slot="alert-dialog-trigger" {...props} />;
+  }
   return (
     <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
-  );
-}
-
-function AlertDialogPortal({
-  ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Portal>) {
-  return (
-    <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal" {...props} />
-  );
-}
-
-function AlertDialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Overlay>) {
-  return (
-    <AlertDialogPrimitive.Overlay
-      data-slot="alert-dialog-overlay"
-      className={cn(
-        "fixed inset-0 z-50 bg-black/10 duration-(--motion-duration-modal) ease-(--motion-easing-standard) supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-        className,
-      )}
-      {...props}
-    />
   );
 }
 
@@ -51,9 +75,31 @@ function AlertDialogContent({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm";
 }) {
+  const { isMobile } = React.useContext(AlertDialogContext);
+
+  if (isMobile) {
+    return (
+      <DialogContent
+        data-slot="alert-dialog-content"
+        role="alertdialog"
+        data-size={size}
+        showCloseButton={false}
+        showHandle={false}
+        className={cn(
+          "group/alert-dialog-content text-popover-foreground",
+          className,
+        )}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <AlertDialogPortal>
-      <AlertDialogOverlay />
+    <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal">
+      <AlertDialogPrimitive.Overlay
+        data-slot="alert-dialog-overlay"
+        className="fixed inset-0 z-50 bg-black/10 duration-(--motion-duration-modal) ease-(--motion-easing-standard) supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+      />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         data-size={size}
@@ -63,7 +109,7 @@ function AlertDialogContent({
         )}
         {...props}
       />
-    </AlertDialogPortal>
+    </AlertDialogPrimitive.Portal>
   );
 }
 
@@ -71,6 +117,16 @@ function AlertDialogHeader({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const { isMobile } = React.useContext(AlertDialogContext);
+  if (isMobile) {
+    return (
+      <DialogHeader
+        data-slot="alert-dialog-header"
+        className={cn("items-center gap-1.5", className)}
+        {...props}
+      />
+    );
+  }
   return (
     <div
       data-slot="alert-dialog-header"
@@ -87,6 +143,19 @@ function AlertDialogFooter({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const { isMobile } = React.useContext(AlertDialogContext);
+  if (isMobile) {
+    return (
+      <DialogFooter
+        data-slot="alert-dialog-footer"
+        className={cn(
+          "group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2",
+          className,
+        )}
+        {...props}
+      />
+    );
+  }
   return (
     <div
       data-slot="alert-dialog-footer"
@@ -119,6 +188,16 @@ function AlertDialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Title>) {
+  const { isMobile } = React.useContext(AlertDialogContext);
+  if (isMobile) {
+    return (
+      <DialogTitle
+        data-slot="alert-dialog-title"
+        className={className}
+        {...props}
+      />
+    );
+  }
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
@@ -135,13 +214,24 @@ function AlertDialogDescription({
   className,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Description>) {
+  const { isMobile } = React.useContext(AlertDialogContext);
+  const sharedClassName = cn(
+    "text-sm text-balance text-muted-foreground md:text-pretty *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+    className,
+  );
+  if (isMobile) {
+    return (
+      <DialogDescription
+        data-slot="alert-dialog-description"
+        className={sharedClassName}
+        {...props}
+      />
+    );
+  }
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn(
-        "text-sm text-balance text-muted-foreground md:text-pretty *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
-        className,
-      )}
+      className={sharedClassName}
       {...props}
     />
   );
@@ -152,14 +242,21 @@ function AlertDialogAction({
   variant = "default",
   size = "default",
   loading = false,
+  onClick,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action> &
   Pick<React.ComponentProps<typeof Button>, "variant" | "size" | "loading">) {
+  const { isMobile, onOpenChange } = React.useContext(AlertDialogContext);
+  const Action = isMobile ? DialogClose : AlertDialogPrimitive.Action;
   return (
     <Button variant={variant} size={size} loading={loading} asChild>
-      <AlertDialogPrimitive.Action
+      <Action
         data-slot="alert-dialog-action"
         className={cn(className)}
+        onClick={(event) => {
+          onClick?.(event);
+          if (isMobile && !event.defaultPrevented) onOpenChange?.(false);
+        }}
         {...props}
       />
     </Button>
@@ -170,14 +267,21 @@ function AlertDialogCancel({
   className,
   variant = "outline",
   size = "default",
+  onClick,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel> &
   Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
+  const { isMobile, onOpenChange } = React.useContext(AlertDialogContext);
+  const Cancel = isMobile ? DialogClose : AlertDialogPrimitive.Cancel;
   return (
     <Button variant={variant} size={size} asChild>
-      <AlertDialogPrimitive.Cancel
+      <Cancel
         data-slot="alert-dialog-cancel"
         className={cn(className)}
+        onClick={(event) => {
+          onClick?.(event);
+          if (isMobile && !event.defaultPrevented) onOpenChange?.(false);
+        }}
         {...props}
       />
     </Button>
@@ -193,8 +297,6 @@ export {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogOverlay,
-  AlertDialogPortal,
   AlertDialogTitle,
   AlertDialogTrigger,
 };

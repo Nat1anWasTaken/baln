@@ -26,6 +26,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -138,7 +139,7 @@ function CreateTokenDialog({
               權杖可完整存取你的帳戶、交易與報表。
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-5">
+          <DialogBody className="grid gap-4">
             <Field
               data-invalid={
                 submitted && (!name.trim() || name.trim().length > 100)
@@ -178,7 +179,7 @@ function CreateTokenDialog({
                 emptyText="找不到有效期限。"
               />
             </Field>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button
               type="button"
@@ -223,7 +224,7 @@ function TokenSecretDialog({
             這是唯一一次顯示完整權杖。關閉後將無法再次查看。
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 py-4">
+        <DialogBody className="grid gap-3 py-4">
           <code className="max-h-32 overflow-auto rounded-lg bg-muted p-3 text-xs break-all select-all">
             {token?.token}
           </code>
@@ -235,7 +236,7 @@ function TokenSecretDialog({
             <Copy aria-hidden="true" />
             複製權杖
           </Button>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button type="button" onClick={onClose}>
             我已儲存
