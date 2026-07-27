@@ -38,7 +38,9 @@ use utoipa::{
         crate::entries::routes::update,
         crate::entries::routes::delete,
         crate::reports::routes::summary,
-        crate::reports::routes::monthly
+        crate::reports::routes::monthly,
+        crate::reports::routes::trend,
+        crate::reports::routes::position
     ),
     components(schemas(
         crate::auth::User,
@@ -62,7 +64,11 @@ use utoipa::{
         crate::entries::PossibleDuplicateMatch,
         crate::entries::EntryPage,
         crate::reports::ReportAccountTotal,
-        crate::reports::PeriodSummary
+        crate::reports::PeriodSummary,
+        crate::reports::ReportGranularity,
+        crate::reports::ReportTrendPoint,
+        crate::reports::ReportTrend,
+        crate::reports::FinancialPosition
     )),
     modifiers(&SecurityAddon)
 )]
