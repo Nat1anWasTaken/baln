@@ -54,7 +54,7 @@ accepts positive semantic movements from a source account to a destination accou
 natural-language next actions whenever more information is required. When a user supplies a non-TWD amount, automatically convert it under the foreign-currency \
 policy returned by get_entry_creation_context before writing the entry. For each distinct create \
 operation, generate a new UUID v4 or v7 operation_key and retain it for retries; reuse a key only \
-for the exact same operation. Baln checks new entries for matching dates, accounts, and amounts. \
+for the exact same operation. Baln checks new entries for matching dates and economic amounts. \
 When it reports a possible duplicate, ask whether the pending entry is separate and set \
 confirmed_distinct only after explicit user confirmation. Updates and deletions are available only \
 through the plural update_entries and delete_entries tools, including for one entry. Retrieve and \
@@ -1193,7 +1193,7 @@ fn build_tools() -> Vec<Tool> {
         write_tool::<CreateEntriesInput>(
             "create_entries",
             "Create Ledger Entries",
-            "Create 1–100 balanced entries atomically, including a one-item batch for a single entry. Use descriptions and positive semantic movements from source accounts to destination accounts; dates default to today. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Baln checks dates, accounts, and amounts against existing entries. If it reports a possible duplicate, ask the user whether each flagged item is a separate transaction; retry the complete batch with the same operation_key and confirmed_distinct=true only on entries the user explicitly confirms. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
+            "Create 1–100 balanced entries atomically, including a one-item batch for a single entry. Use descriptions and positive semantic movements from source accounts to destination accounts; dates default to today. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Baln checks dates and economic amounts against existing entries. If it reports a possible duplicate, ask the user whether each flagged item is a separate transaction; retry the complete batch with the same operation_key and confirmed_distinct=true only on entries the user explicitly confirms. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
             false,
         ),
         write_tool::<UpdateEntriesInput>(
@@ -1598,9 +1598,9 @@ fn api_error(error: ApiError) -> CallToolResult {
                 return action_error(
                     "needs_user_input",
                     detail,
-                    "Show the matching entries to the user and ask whether each pending entry is a separate transaction. If confirmed, retry the exact same operation_key with confirmed_distinct=true only on the confirmed entries. Otherwise, do not create them.",
+                    "Show the matching entries to the user, explain that they have the same date and economic amount, and ask whether each pending entry is a separate transaction. If confirmed, retry the exact same operation_key with confirmed_distinct=true only on the confirmed entries. Otherwise, do not create them.",
                     vec![
-                        "Baln found a transaction with the same date, accounts, and amounts. Is this a separate transaction that should also be recorded?".to_owned(),
+                        "Baln found one or more transactions with the same date and economic amount. Are any of these separate transactions that should also be recorded?".to_owned(),
                     ],
                     merge_result(
                         json!({"code": code}),
@@ -1955,6 +1955,10 @@ mod tests {
         assert_eq!(structured["code"], "possible_duplicate");
         assert_eq!(structured["atomic"], true);
         assert_eq!(structured["created_count"], 0);
+        assert_eq!(
+            structured["questions_for_user"][0],
+            "Baln found one or more transactions with the same date and economic amount. Are any of these separate transactions that should also be recorded?"
+        );
         assert_eq!(structured["matches"][0]["pending_entry_number"], 1);
         assert!(
             structured["next_action"]
@@ -2156,7 +2160,15 @@ mod tests {
                 .unwrap()
                 .contains("possible duplicate")
         );
+        assert!(
+            create
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("checks dates and economic amounts")
+        );
         assert!(SERVER_INSTRUCTIONS.contains("confirmed_distinct"));
+        assert!(SERVER_INSTRUCTIONS.contains("matching dates and economic amounts"));
     }
 
     #[test]

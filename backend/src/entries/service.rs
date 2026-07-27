@@ -107,7 +107,7 @@ pub async fn create_batch(
         if replayed[index].is_some() || request.confirmed_distinct {
             continue;
         }
-        let signature = posting_signature(&request.postings);
+        let amount = economic_amount(&request.postings);
         let existing_entries = entries_by_date
             .get(&request.date)
             .into_iter()
@@ -118,7 +118,7 @@ pub async fn create_batch(
                         .dedup_key
                         .as_deref()
                         .is_some_and(|entry_key| entry_key == key)
-                }) && response_posting_signature(entry) == signature
+                }) && response_economic_amount(entry) == amount
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -128,7 +128,7 @@ pub async fn create_batch(
             .filter(|(earlier_index, earlier)| {
                 replayed[*earlier_index].is_none()
                     && earlier.date == request.date
-                    && posting_signature(&earlier.postings) == signature
+                    && economic_amount(&earlier.postings) == amount
             })
             .map(|(earlier_index, _)| earlier_index + 1)
             .collect::<Vec<_>>();
@@ -194,20 +194,33 @@ pub async fn create_batch(
     Ok(results)
 }
 
-fn posting_signature(postings: &[PostingInput]) -> Vec<(String, i128)> {
-    let mut totals = BTreeMap::<String, i128>::new();
-    for posting in postings {
-        *totals.entry(posting.account_key.clone()).or_default() += i128::from(posting.amount_minor);
-    }
-    totals.into_iter().collect()
+fn economic_amount(postings: &[PostingInput]) -> i128 {
+    economic_amount_by_account(
+        postings
+            .iter()
+            .map(|posting| (posting.account_key.as_str(), posting.amount_minor)),
+    )
 }
 
-fn response_posting_signature(entry: &EntryResponse) -> Vec<(String, i128)> {
-    let mut totals = BTreeMap::<String, i128>::new();
-    for posting in &entry.postings {
-        *totals.entry(posting.account.key.clone()).or_default() += i128::from(posting.amount_minor);
+fn response_economic_amount(entry: &EntryResponse) -> i128 {
+    economic_amount_by_account(
+        entry
+            .postings
+            .iter()
+            .map(|posting| (posting.account.key.as_str(), posting.amount_minor)),
+    )
+}
+
+fn economic_amount_by_account<'a>(postings: impl IntoIterator<Item = (&'a str, i64)>) -> i128 {
+    let mut net_by_account = BTreeMap::<&str, i128>::new();
+    for (account_key, amount_minor) in postings {
+        *net_by_account.entry(account_key).or_default() += i128::from(amount_minor);
     }
-    totals.into_iter().collect()
+    net_by_account
+        .values()
+        .filter(|amount| **amount > 0)
+        .copied()
+        .sum()
 }
 
 pub async fn update(
@@ -633,6 +646,28 @@ mod tests {
         .execute(pool)
         .await
         .unwrap();
+        for (key, name, account_type) in [
+            ("expense.transport", "交通", "expense"),
+            ("expense.subscription", "訂閱", "expense"),
+            ("expense.other", "其他支出", "expense"),
+            ("liability.unreconciled_payment", "未對帳付款", "liability"),
+            ("liability.card_1508", "信用卡 1508", "liability"),
+            ("liability.card_4952", "信用卡 4952", "liability"),
+            ("asset.jkopay", "街口支付", "asset"),
+            ("asset.bank", "銀行", "asset"),
+        ] {
+            sqlx::query(
+                "INSERT INTO accounts (id, user_id, key, name, type) VALUES ($1, $2, $3, $4, $5::account_type)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(user_id)
+            .bind(key)
+            .bind(name)
+            .bind(account_type)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
         user_id
     }
 
@@ -724,6 +759,62 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn economic_amount_nets_intermediary_accounts_before_summing_positive_amounts() {
+        let postings = vec![
+            PostingInput {
+                account_key: "liability.card_4952".to_owned(),
+                amount_minor: -220,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.jkopay".to_owned(),
+                amount_minor: 220,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.jkopay".to_owned(),
+                amount_minor: -220,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "expense.subscription".to_owned(),
+                amount_minor: 220,
+                memo: None,
+            },
+        ];
+
+        assert_eq!(economic_amount(&postings), 220);
+    }
+
+    #[test]
+    fn economic_amount_uses_i128_for_per_account_and_final_sums() {
+        let postings = vec![
+            PostingInput {
+                account_key: "expense.restaurant".to_owned(),
+                amount_minor: i64::MAX,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "expense.restaurant".to_owned(),
+                amount_minor: i64::MAX,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.cash".to_owned(),
+                amount_minor: -i64::MAX,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.cash".to_owned(),
+                amount_minor: -i64::MAX,
+                memo: None,
+            },
+        ];
+
+        assert_eq!(economic_amount(&postings), i128::from(i64::MAX) * 2);
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     async fn exact_retry_with_same_explicit_key_replays_existing_entry(pool: PgPool) {
         let user_id = seed(&pool).await;
@@ -783,6 +874,7 @@ mod tests {
         let (first, first_replayed) = create(&pool, user_id, original_request).await.unwrap();
         let mut second_request = request();
         second_request.description = "Apple Pay 午餐".to_owned();
+        second_request.note = Some("different note".to_owned());
         second_request.dedup_key = None;
         second_request.postings.reverse();
 
@@ -814,12 +906,124 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
+    async fn same_date_and_amount_with_a_different_payment_account_is_duplicate(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let date = NaiveDate::from_ymd_opt(2026, 7, 23).unwrap();
+        let mut existing = request();
+        existing.date = date;
+        existing.description = "Unreconciled transit payment".to_owned();
+        existing.dedup_key = Some("regression:unreconciled".to_owned());
+        existing.postings = vec![
+            PostingInput {
+                account_key: "liability.unreconciled_payment".to_owned(),
+                amount_minor: -103,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "expense.transport".to_owned(),
+                amount_minor: 103,
+                memo: None,
+            },
+        ];
+        let (existing, _) = create(&pool, user_id, existing).await.unwrap();
+
+        let mut candidate = request();
+        candidate.date = date;
+        candidate.description = "Card transit payment".to_owned();
+        candidate.dedup_key = Some("regression:card-1508".to_owned());
+        candidate.postings = vec![
+            PostingInput {
+                account_key: "liability.card_1508".to_owned(),
+                amount_minor: -103,
+                memo: Some("different memo".to_owned()),
+            },
+            PostingInput {
+                account_key: "expense.transport".to_owned(),
+                amount_minor: 103,
+                memo: None,
+            },
+        ];
+
+        let error = create(&pool, user_id, candidate.clone()).await.unwrap_err();
+        match error {
+            ApiError::Problem {
+                code,
+                fields: Some(fields),
+                ..
+            } => {
+                assert_eq!(code, "possible_duplicate");
+                assert_eq!(
+                    fields["matches"][0]["existing_entries"][0]["id"],
+                    existing.id.to_string()
+                );
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM entries WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+
+        candidate.confirmed_distinct = true;
+        let (created, replayed) = create(&pool, user_id, candidate).await.unwrap();
+        assert!(!replayed);
+        assert_ne!(created.id, existing.id);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn same_date_and_amount_with_all_different_accounts_is_duplicate(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let mut existing = request();
+        existing.dedup_key = Some("different-accounts:existing".to_owned());
+        create(&pool, user_id, existing).await.unwrap();
+
+        let mut candidate = request();
+        candidate.description = "Completely different labels".to_owned();
+        candidate.note = Some("accounts do not participate in matching".to_owned());
+        candidate.dedup_key = Some("different-accounts:candidate".to_owned());
+        candidate.postings = vec![
+            PostingInput {
+                account_key: "asset.bank".to_owned(),
+                amount_minor: -320,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "expense.other".to_owned(),
+                amount_minor: 320,
+                memo: Some("different category".to_owned()),
+            },
+        ];
+
+        assert!(matches!(
+            create(&pool, user_id, candidate).await,
+            Err(ApiError::Problem {
+                code: "possible_duplicate",
+                ..
+            })
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn concurrent_matching_creates_cannot_both_pass_unconfirmed(pool: PgPool) {
         let user_id = seed(&pool).await;
         let first = request();
         let mut second = request();
         second.description = "Email receipt".to_owned();
         second.dedup_key = Some("manual-message:concurrent".to_owned());
+        second.postings = vec![
+            PostingInput {
+                account_key: "expense.transport".to_owned(),
+                amount_minor: 320,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "liability.card_1508".to_owned(),
+                amount_minor: -320,
+                memo: None,
+            },
+        ];
 
         let (first_result, second_result) = tokio::join!(
             create(&pool, user_id, first),
@@ -858,13 +1062,29 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
+    async fn same_date_with_a_different_economic_amount_is_not_a_duplicate(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let (first, _) = create(&pool, user_id, request()).await.unwrap();
+        let mut different_amount = request();
+        different_amount.dedup_key = Some("manual-message:different-amount".to_owned());
+        different_amount.postings[0].amount_minor = 321;
+        different_amount.postings[1].amount_minor = -321;
+
+        let (second, replayed) = create(&pool, user_id, different_amount).await.unwrap();
+        assert!(!replayed);
+        assert_ne!(first.id, second.id);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn batch_creation_is_atomic_when_one_entry_is_invalid(pool: PgPool) {
         let user_id = seed(&pool).await;
         let valid = request();
         let mut invalid = request();
         invalid.description = "計程車".to_owned();
         invalid.dedup_key = Some("manual-message:invalid".to_owned());
-        invalid.postings[0].account_key = "expense.transport".to_owned();
+        invalid.postings[0].account_key = "expense.unknown".to_owned();
+        invalid.postings[0].amount_minor = 321;
+        invalid.postings[1].amount_minor = -321;
 
         let error = create_batch(&pool, user_id, vec![valid, invalid])
             .await
@@ -913,6 +1133,28 @@ mod tests {
         let mut second = request();
         second.description = "Email receipt".to_owned();
         second.dedup_key = Some("manual-message:email".to_owned());
+        second.postings = vec![
+            PostingInput {
+                account_key: "liability.card_4952".to_owned(),
+                amount_minor: -320,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.jkopay".to_owned(),
+                amount_minor: 320,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.jkopay".to_owned(),
+                amount_minor: -320,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "expense.subscription".to_owned(),
+                amount_minor: 320,
+                memo: None,
+            },
+        ];
 
         let error = create_batch(&pool, user_id, vec![request(), second])
             .await
