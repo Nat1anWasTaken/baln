@@ -6,6 +6,7 @@ import { AppLoading } from "@/components/app-loading";
 import { BrandIcon } from "@/components/brand-icon";
 import { CenteredCardHeader } from "@/components/centered-card-header";
 import { CenteredPage } from "@/components/centered-page";
+import { OfflineUnavailableState } from "@/components/offline-state";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +22,23 @@ export function LoginPage() {
 
   if (auth.status === "authenticated") {
     return <Navigate to="/" replace />;
+  }
+
+  if (auth.status === "offline-authenticated") {
+    return <Navigate to="/" replace />;
+  }
+
+  if (auth.status === "connection-required") {
+    return (
+      <CenteredPage>
+        <div className="w-full max-w-sm">
+          <OfflineUnavailableState
+            title="需要連線才能登入"
+            description="請連線後重新嘗試；登入成功後，Baln 會準備可離線檢視的資料。"
+          />
+        </div>
+      </CenteredPage>
+    );
   }
 
   const intendedPath =

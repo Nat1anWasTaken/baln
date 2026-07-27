@@ -1,4 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { ThemeProvider } from "next-themes";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -7,10 +7,28 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "@/App";
 import { AuthProvider } from "@/auth/auth-context";
 import { NavigationTransitionProvider } from "@/components/navigation-transition";
+import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { configureConnectivityEvents } from "@/lib/connectivity";
+import "@/lib/install-prompt";
+import {
+  OFFLINE_CACHE_BUSTER,
+  OFFLINE_MAX_AGE,
+  offlinePersister,
+  shouldPersistQuery,
+} from "@/lib/offline-storage";
 import { queryClient } from "@/lib/query-client";
+import { preloadAppRoute } from "@/lib/route-modules";
+import { completeStartupTask, failStartup } from "@/lib/startup-progress";
 import "@/index.css";
+
+completeStartupTask("runtime", "正在載入介面");
+configureConnectivityEvents();
+
+void preloadAppRoute(window.location.pathname)
+  .then(() => completeStartupTask("route", "正在準備目前頁面"))
+  .catch(() => failStartup("目前頁面載入失敗，請重新嘗試。"));
 
 const router = createBrowserRouter([
   {
@@ -19,6 +37,7 @@ const router = createBrowserRouter([
       <NavigationTransitionProvider>
         <AuthProvider>
           <App />
+          <PwaUpdatePrompt />
           <Toaster position="top-center" richColors />
         </AuthProvider>
       </NavigationTransitionProvider>
@@ -28,12 +47,25 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: offlinePersister,
+        maxAge: OFFLINE_MAX_AGE,
+        buster: OFFLINE_CACHE_BUSTER,
+        dehydrateOptions: {
+          shouldDehydrateQuery: shouldPersistQuery,
+          shouldDehydrateMutation: () => false,
+        },
+      }}
+      onSuccess={() => completeStartupTask("cache", "正在讀取上次資料")}
+      onError={() => completeStartupTask("cache", "正在準備新的離線空間")}
+    >
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <TooltipProvider>
           <RouterProvider router={router} />
         </TooltipProvider>
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   </StrictMode>,
 );

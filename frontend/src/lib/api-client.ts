@@ -23,6 +23,10 @@ import {
   type UpdateAccountRequest,
   type EntryWriteRequest,
 } from "@/lib/schemas";
+import {
+  networkQueriesAreOnline,
+  reportNetworkFailure,
+} from "@/lib/connectivity";
 
 export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1"
@@ -74,6 +78,20 @@ export class ApiError extends Error {
   }
 }
 
+export class NetworkError extends Error {
+  constructor(message = "目前無法連線，請檢查網路後再試。") {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+export class OfflineWriteError extends Error {
+  constructor() {
+    super("離線模式僅供檢視，請連線後再進行變更。");
+    this.name = "OfflineWriteError";
+  }
+}
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
 }
@@ -85,6 +103,7 @@ export function setSessionExpiredHandler(handler: (() => void) | null) {
 type RequestOptions<T> = {
   schema?: z.ZodType<T>;
   retryAuth?: boolean;
+  allowWhileOffline?: boolean;
 };
 
 async function parseProblem(response: Response): Promise<ApiError> {
@@ -108,6 +127,16 @@ async function request<T>(
   init: RequestInit = {},
   options: RequestOptions<T> = {},
 ): Promise<T> {
+  const method = (init.method ?? "GET").toUpperCase();
+  if (
+    method !== "GET" &&
+    method !== "HEAD" &&
+    !options.allowWhileOffline &&
+    !networkQueriesAreOnline()
+  ) {
+    throw new OfflineWriteError();
+  }
+
   const headers = new Headers(init.headers);
   if (init.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
@@ -116,19 +145,31 @@ async function request<T>(
     headers.set("authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      credentials: "include",
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+    reportNetworkFailure();
+    throw new NetworkError();
+  }
 
   if (response.status === 401 && options.retryAuth !== false) {
     try {
       await refreshAccessToken();
       return request(path, init, { ...options, retryAuth: false });
-    } catch {
-      setAccessToken(null);
-      onSessionExpired?.();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setAccessToken(null);
+        onSessionExpired?.();
+      }
+      throw error;
     }
   }
 
@@ -144,12 +185,16 @@ async function request<T>(
   return options.schema ? options.schema.parse(data) : (data as T);
 }
 
-export async function refreshAccessToken() {
+export async function refreshAccessToken(signal?: AbortSignal) {
   if (!refreshPromise) {
     refreshPromise = request(
       "/auth/refresh",
-      { method: "POST" },
-      { schema: tokenResponseSchema, retryAuth: false },
+      { method: "POST", signal },
+      {
+        schema: tokenResponseSchema,
+        retryAuth: false,
+        allowWhileOffline: true,
+      },
     )
       .then((token) => {
         setAccessToken(token.access_token);
@@ -188,9 +233,14 @@ export const authApi = {
     setAccessToken(token.access_token);
     return token;
   },
-  me: () => request("/auth/me", {}, { schema: userSchema }),
+  me: (signal?: AbortSignal) =>
+    request("/auth/me", { signal }, { schema: userSchema }),
   logout: () =>
-    request<void>("/auth/logout", { method: "POST" }, { retryAuth: false }),
+    request<void>(
+      "/auth/logout",
+      { method: "POST" },
+      { retryAuth: false, allowWhileOffline: true },
+    ),
 };
 
 export const apiTokensApi = {

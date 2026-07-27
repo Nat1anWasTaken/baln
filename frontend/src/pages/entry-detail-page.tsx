@@ -4,6 +4,8 @@ import { useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useState } from "react";
 
+import { useOfflineReadOnly } from "@/auth/auth-context";
+import { OfflineUnavailableState } from "@/components/offline-state";
 import { ErrorState, PageLoading } from "@/components/page-state";
 import { AppLink, useAppNavigate } from "@/components/navigation-transition";
 import {
@@ -40,6 +42,7 @@ import { entryEditorRouteState } from "@/lib/entry-navigation";
 import { formatLedgerDate, formatMoney, formatTimestamp } from "@/lib/format";
 
 export function EntryDetailPage() {
+  const isReadOnly = useOfflineReadOnly();
   const { entryId = "" } = useParams();
   const location = useLocation();
   const { search } = location;
@@ -67,6 +70,9 @@ export function EntryDetailPage() {
     onError: (error) => toast.error(error.message),
   });
 
+  if (entry.isPending && isReadOnly) {
+    return <OfflineUnavailableState />;
+  }
   if (entry.isPending) return <PageLoading rows={4} />;
   if (entry.isError) {
     return (
@@ -90,18 +96,26 @@ export function EntryDetailPage() {
           </AppLink>
         </Button>
         <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <AppLink
-              to={{ pathname: `/entries/${entryId}/edit`, search }}
-              state={entryEditorRouteState(location)}
-            >
+          {isReadOnly ? (
+            <Button type="button" variant="outline" disabled>
               <Pencil aria-hidden="true" />
               編輯
-            </AppLink>
-          </Button>
+            </Button>
+          ) : (
+            <Button asChild variant="outline">
+              <AppLink
+                to={{ pathname: `/entries/${entryId}/edit`, search }}
+                state={entryEditorRouteState(location)}
+              >
+                <Pencil aria-hidden="true" />
+                編輯
+              </AppLink>
+            </Button>
+          )}
           <Button
             type="button"
             variant="destructive"
+            disabled={isReadOnly}
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 aria-hidden="true" />
@@ -222,6 +236,7 @@ export function EntryDetailPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
+              disabled={isReadOnly}
               loading={remove.isPending}
               onClick={(event) => {
                 event.preventDefault();

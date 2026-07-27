@@ -3,8 +3,10 @@ import { Filter, Plus, Search, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
+import { useOfflineReadOnly } from "@/auth/auth-context";
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { AppLink } from "@/components/navigation-transition";
+import { OfflineUnavailableState } from "@/components/offline-state";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import { AccountFilterSelector } from "@/features/entries/account-filter-selector";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ import { toExclusiveDate } from "@/lib/format";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
 
 export function EntriesPage() {
+  const isReadOnly = useOfflineReadOnly();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
@@ -149,20 +152,29 @@ export function EntriesPage() {
                 清除篩選
               </Button>
             ) : null}
-            <Button asChild>
-              <AppLink
-                to="/entries/new"
-                state={entryEditorRouteState(location)}
-              >
+            {isReadOnly ? (
+              <Button type="button" disabled title="離線模式僅供檢視">
                 <Plus aria-hidden="true" />
                 新增交易
-              </AppLink>
-            </Button>
+              </Button>
+            ) : (
+              <Button asChild>
+                <AppLink
+                  to="/entries/new"
+                  state={entryEditorRouteState(location)}
+                >
+                  <Plus aria-hidden="true" />
+                  新增交易
+                </AppLink>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {entries.isPending ? (
+      {entries.isPending && isReadOnly ? (
+        <OfflineUnavailableState />
+      ) : entries.isPending ? (
         <PageLoading rows={6} />
       ) : entries.isError ? (
         <ErrorState
@@ -183,7 +195,7 @@ export function EntriesPage() {
               <Button type="button" variant="outline" onClick={clearFilters}>
                 清除篩選
               </Button>
-            ) : (
+            ) : isReadOnly ? null : (
               <Button asChild>
                 <AppLink
                   to="/entries/new"

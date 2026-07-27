@@ -1,12 +1,18 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
+import { useIsRestoring } from "@tanstack/react-query";
 import { type Location, Route, Routes, useLocation } from "react-router-dom";
 
-import { ProtectedRoute } from "@/auth/protected-route";
+import { OnlineOnly, ProtectedRoute } from "@/auth/protected-route";
+import { useAuth } from "@/auth/auth-context";
 import { AppLoading } from "@/components/app-loading";
 import { AppShell } from "@/components/app-shell";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getEntryEditorBackground } from "@/lib/entry-navigation";
 import { routeModules } from "@/lib/route-modules";
+import {
+  completeStartupTask,
+  finishStartupAfterPaint,
+} from "@/lib/startup-progress";
 
 const LoginPage = lazy(() =>
   routeModules.login().then((module) => ({
@@ -74,6 +80,19 @@ const NotFoundPage = lazy(() =>
   })),
 );
 
+function StartupReady() {
+  const auth = useAuth();
+  const isRestoring = useIsRestoring();
+
+  useEffect(() => {
+    if (isRestoring || auth.status === "loading") return;
+    completeStartupTask("commit", "準備完成");
+    finishStartupAfterPaint();
+  }, [auth.status, isRestoring]);
+
+  return null;
+}
+
 export default function App() {
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -98,22 +117,51 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/oauth/consent" element={<OAuthConsentPage />} />
+          <Route
+            path="/oauth/consent"
+            element={
+              <OnlineOnly>
+                <OAuthConsentPage />
+              </OnlineOnly>
+            }
+          />
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="/entries" element={<EntriesPage />} />
-            <Route path="/entries/new" element={<EntryEditorPage />} />
+            <Route
+              path="/entries/new"
+              element={
+                <OnlineOnly>
+                  <EntryEditorPage />
+                </OnlineOnly>
+              }
+            />
             <Route path="/entries/:entryId" element={<EntryDetailPage />} />
             <Route
               path="/entries/:entryId/edit"
-              element={<EntryEditorPage />}
+              element={
+                <OnlineOnly>
+                  <EntryEditorPage />
+                </OnlineOnly>
+              }
             />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/settings/api-tokens" element={<ApiTokensPage />} />
+            <Route
+              path="/settings/api-tokens"
+              element={
+                <OnlineOnly>
+                  <ApiTokensPage />
+                </OnlineOnly>
+              }
+            />
             <Route
               path="/settings/connected-apps"
-              element={<ConnectedAppsPage />}
+              element={
+                <OnlineOnly>
+                  <ConnectedAppsPage />
+                </OnlineOnly>
+              }
             />
           </Route>
         </Route>
@@ -125,18 +173,23 @@ export default function App() {
             <Route
               path="/entries/new"
               element={
-                <EntryEditorSheet backgroundLocation={backgroundLocation!} />
+                <OnlineOnly>
+                  <EntryEditorSheet backgroundLocation={backgroundLocation!} />
+                </OnlineOnly>
               }
             />
             <Route
               path="/entries/:entryId/edit"
               element={
-                <EntryEditorSheet backgroundLocation={backgroundLocation!} />
+                <OnlineOnly>
+                  <EntryEditorSheet backgroundLocation={backgroundLocation!} />
+                </OnlineOnly>
               }
             />
           </Route>
         </Routes>
       ) : null}
+      <StartupReady />
     </Suspense>
   );
 }

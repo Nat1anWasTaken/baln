@@ -20,6 +20,7 @@ vi.mock("@/auth/auth-context", () => ({
   useAuth: () => ({
     user: { id: userId },
   }),
+  useOfflineReadOnly: () => false,
 }));
 
 function renderPage() {

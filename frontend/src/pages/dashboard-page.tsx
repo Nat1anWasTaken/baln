@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { WalletCards } from "lucide-react";
 import { useState } from "react";
 
+import { useOfflineReadOnly } from "@/auth/auth-context";
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
 import { AppLink } from "@/components/navigation-transition";
+import { OfflineUnavailableState } from "@/components/offline-state";
 import {
   CardLoading,
   EmptyState,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/format";
 
 export function DashboardPage() {
+  const isReadOnly = useOfflineReadOnly();
   const { startDay, setStartDay } = useMonthStartDay();
   const { comparisonMode, setComparisonMode } = useComparisonMode();
   const [month, setMonth] = useState(() => currentPeriodMonth(startDay));
@@ -117,7 +120,9 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {report.isPending ? (
+      {report.isPending && isReadOnly ? (
+        <OfflineUnavailableState />
+      ) : report.isPending ? (
         <PageLoading variant="dashboard" />
       ) : report.isError ? (
         <ErrorState
@@ -138,7 +143,12 @@ export function DashboardPage() {
               summary={report.data}
               comparison={comparison.data}
             />
-            {position.isPending ? (
+            {position.isPending && isReadOnly ? (
+              <OfflineUnavailableState
+                title="尚未儲存財務狀況"
+                description="連線後開啟一次，即可在離線時檢視。"
+              />
+            ) : position.isPending ? (
               <CardLoading rows={3} />
             ) : position.isError ? (
               <ErrorState
@@ -163,7 +173,12 @@ export function DashboardPage() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          {entries.isPending ? (
+          {entries.isPending && isReadOnly ? (
+            <OfflineUnavailableState
+              title="尚未儲存最近交易"
+              description="連線後開啟一次，即可在離線時檢視。"
+            />
+          ) : entries.isPending ? (
             <PageLoading rows={3} />
           ) : entries.isError ? (
             <ErrorState

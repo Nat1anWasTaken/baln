@@ -11,11 +11,13 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useOfflineReadOnly } from "@/auth/auth-context";
 import {
   CreateAccountDialog,
   EditAccountDialog,
 } from "@/features/accounts/account-dialogs";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
+import { OfflineUnavailableState } from "@/components/offline-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,11 +55,14 @@ import type { Account } from "@/lib/schemas";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 function AccountBalance({ account }: { account: Account }) {
+  const isReadOnly = useOfflineReadOnly();
   const balance = useQuery({
     queryKey: ["account-balance", account.id, todayTaipei()],
     queryFn: () => accountsApi.balance(account.id, todayTaipei()),
   });
 
+  if (balance.isPending && isReadOnly)
+    return <span className="text-muted-foreground">—</span>;
   if (balance.isPending)
     return <span className="text-muted-foreground">載入中</span>;
   if (balance.isError) return <span className="text-muted-foreground">—</span>;
@@ -65,6 +70,7 @@ function AccountBalance({ account }: { account: Account }) {
 }
 
 export function AccountsPage() {
+  const isReadOnly = useOfflineReadOnly();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
@@ -101,179 +107,190 @@ export function AccountsPage() {
     onError: (error) => toast.error(error.message),
   });
 
-  const content = accounts.isPending ? (
-    <PageLoading rows={5} />
-  ) : accounts.isError ? (
-    <ErrorState
-      message={accounts.error.message}
-      onRetry={() => void accounts.refetch()}
-    />
-  ) : accounts.data.length === 0 ? (
-    <EmptyState
-      icon={WalletCards}
-      title={search ? "找不到符合的帳戶" : "還沒有帳戶"}
-      description={
-        search
-          ? "請嘗試其他名稱或帳戶代碼。"
-          : "建立資產、負債與收支分類帳戶後，就能開始記帳。"
-      }
-      action={
-        !search ? (
-          <Button type="button" onClick={() => setCreateOpen(true)}>
-            <Plus aria-hidden="true" />
-            建立第一個帳戶
-          </Button>
-        ) : null
-      }
-    />
-  ) : (
-    <>
-      <div className="grid gap-3 md:hidden">
-        {accounts.data.map((account) => (
-          <Card key={account.id}>
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <CardTitle className="truncate">{account.name}</CardTitle>
-                  <CardDescription className="truncate">
-                    {account.key}
-                  </CardDescription>
-                  {account.note ? (
-                    <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
-                      {account.note}
-                    </p>
-                  ) : null}
-                </div>
-                <Badge variant={account.archived ? "outline" : "secondary"}>
-                  {account.archived
-                    ? "已封存"
-                    : accountTypeLabels[account.type]}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between">
-              <p className="font-medium tabular-nums">
-                <AccountBalance account={account} />
-              </p>
-              <div className="flex gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`編輯 ${account.name}`}
-                  onClick={() => setEditing(account)}
-                >
-                  <Pencil aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={
-                    account.archived
-                      ? `恢復 ${account.name}`
-                      : `封存 ${account.name}`
-                  }
-                  onClick={() => setChangingArchive(account)}
-                >
-                  {account.archived ? (
-                    <ArchiveRestore aria-hidden="true" />
-                  ) : (
-                    <Archive aria-hidden="true" />
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`刪除 ${account.name}`}
-                  onClick={() => setDeleting(account)}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card className="hidden md:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>帳戶</TableHead>
-              <TableHead>類型</TableHead>
-              <TableHead>狀態</TableHead>
-              <TableHead className="text-right">截至今日餘額</TableHead>
-              <TableHead className="w-28" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {accounts.data.map((account) => (
-              <TableRow key={account.id}>
-                <TableCell>
-                  <p className="font-medium">{account.name}</p>
-                  <p className="text-xs text-muted-foreground">{account.key}</p>
-                  {account.note ? (
-                    <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
-                      {account.note}
-                    </p>
-                  ) : null}
-                </TableCell>
-                <TableCell>{accountTypeLabels[account.type]}</TableCell>
-                <TableCell>
-                  <Badge variant={account.archived ? "outline" : "secondary"}>
-                    {account.archived ? "已封存" : "使用中"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
-                  <AccountBalance account={account} />
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`編輯 ${account.name}`}
-                      onClick={() => setEditing(account)}
-                    >
-                      <Pencil aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={
-                        account.archived
-                          ? `恢復 ${account.name}`
-                          : `封存 ${account.name}`
-                      }
-                      onClick={() => setChangingArchive(account)}
-                    >
-                      {account.archived ? (
-                        <ArchiveRestore aria-hidden="true" />
-                      ) : (
-                        <Archive aria-hidden="true" />
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`刪除 ${account.name}`}
-                      onClick={() => setDeleting(account)}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
+  const content =
+    accounts.isPending && isReadOnly ? (
+      <OfflineUnavailableState />
+    ) : accounts.isPending ? (
+      <PageLoading rows={5} />
+    ) : accounts.isError ? (
+      <ErrorState
+        message={accounts.error.message}
+        onRetry={() => void accounts.refetch()}
+      />
+    ) : accounts.data.length === 0 ? (
+      <EmptyState
+        icon={WalletCards}
+        title={search ? "找不到符合的帳戶" : "還沒有帳戶"}
+        description={
+          search
+            ? "請嘗試其他名稱或帳戶代碼。"
+            : "建立資產、負債與收支分類帳戶後，就能開始記帳。"
+        }
+        action={
+          !search && !isReadOnly ? (
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Plus aria-hidden="true" />
+              建立第一個帳戶
+            </Button>
+          ) : null
+        }
+      />
+    ) : (
+      <>
+        <div className="grid gap-3 md:hidden">
+          {accounts.data.map((account) => (
+            <Card key={account.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <CardTitle className="truncate">{account.name}</CardTitle>
+                    <CardDescription className="truncate">
+                      {account.key}
+                    </CardDescription>
+                    {account.note ? (
+                      <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
+                        {account.note}
+                      </p>
+                    ) : null}
                   </div>
-                </TableCell>
+                  <Badge variant={account.archived ? "outline" : "secondary"}>
+                    {account.archived
+                      ? "已封存"
+                      : accountTypeLabels[account.type]}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <p className="font-medium tabular-nums">
+                  <AccountBalance account={account} />
+                </p>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`編輯 ${account.name}`}
+                    disabled={isReadOnly}
+                    onClick={() => setEditing(account)}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={
+                      account.archived
+                        ? `恢復 ${account.name}`
+                        : `封存 ${account.name}`
+                    }
+                    disabled={isReadOnly}
+                    onClick={() => setChangingArchive(account)}
+                  >
+                    {account.archived ? (
+                      <ArchiveRestore aria-hidden="true" />
+                    ) : (
+                      <Archive aria-hidden="true" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`刪除 ${account.name}`}
+                    disabled={isReadOnly}
+                    onClick={() => setDeleting(account)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>帳戶</TableHead>
+                <TableHead>類型</TableHead>
+                <TableHead>狀態</TableHead>
+                <TableHead className="text-right">截至今日餘額</TableHead>
+                <TableHead className="w-28" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </>
-  );
+            </TableHeader>
+            <TableBody>
+              {accounts.data.map((account) => (
+                <TableRow key={account.id}>
+                  <TableCell>
+                    <p className="font-medium">{account.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {account.key}
+                    </p>
+                    {account.note ? (
+                      <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line text-muted-foreground">
+                        {account.note}
+                      </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{accountTypeLabels[account.type]}</TableCell>
+                  <TableCell>
+                    <Badge variant={account.archived ? "outline" : "secondary"}>
+                      {account.archived ? "已封存" : "使用中"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    <AccountBalance account={account} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`編輯 ${account.name}`}
+                        disabled={isReadOnly}
+                        onClick={() => setEditing(account)}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={
+                          account.archived
+                            ? `恢復 ${account.name}`
+                            : `封存 ${account.name}`
+                        }
+                        disabled={isReadOnly}
+                        onClick={() => setChangingArchive(account)}
+                      >
+                        {account.archived ? (
+                          <ArchiveRestore aria-hidden="true" />
+                        ) : (
+                          <Archive aria-hidden="true" />
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`刪除 ${account.name}`}
+                        disabled={isReadOnly}
+                        onClick={() => setDeleting(account)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </>
+    );
 
   return (
     <div className="grid gap-5">
@@ -302,7 +319,12 @@ export function AccountsPage() {
           />
           <FieldLabel htmlFor="include-archived">顯示已封存</FieldLabel>
         </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
+        <Button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          disabled={isReadOnly}
+          title={isReadOnly ? "離線模式僅供檢視" : undefined}
+        >
           <Plus aria-hidden="true" />
           新增帳戶
         </Button>
@@ -339,7 +361,7 @@ export function AccountsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!changingArchive}
+              disabled={!changingArchive || isReadOnly}
               loading={archive.isPending}
               onClick={(event) => {
                 event.preventDefault();
@@ -368,7 +390,7 @@ export function AccountsPage() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={!deleting}
+              disabled={!deleting || isReadOnly}
               loading={remove.isPending}
               onClick={(event) => {
                 event.preventDefault();

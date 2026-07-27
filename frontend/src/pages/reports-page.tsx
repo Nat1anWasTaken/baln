@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+import { useOfflineReadOnly } from "@/auth/auth-context";
+import { OfflineUnavailableState } from "@/components/offline-state";
 import {
   CardLoading,
   ErrorState,
@@ -61,6 +63,7 @@ const presetLabels: Record<ReportPreset, string> = {
 const presets = Object.entries(presetLabels) as Array<[ReportPreset, string]>;
 
 export function ReportsPage() {
+  const isReadOnly = useOfflineReadOnly();
   const { startDay } = useMonthStartDay();
   const { comparisonMode, setComparisonMode } = useComparisonMode();
   const initialBounds = reportPresetBounds("current", startDay);
@@ -239,7 +242,9 @@ export function ReportsPage() {
         </CardContent>
       </Card>
 
-      {report.isPending ? (
+      {report.isPending && isReadOnly ? (
+        <OfflineUnavailableState />
+      ) : report.isPending ? (
         <PageLoading variant="reports" />
       ) : report.isError ? (
         <ErrorState
@@ -300,7 +305,12 @@ export function ReportsPage() {
             </Card>
           </Tabs>
 
-          {trend.isPending ? (
+          {trend.isPending && isReadOnly ? (
+            <OfflineUnavailableState
+              title="尚未儲存趨勢資料"
+              description="連線後開啟這個報表期間，即可在離線時檢視。"
+            />
+          ) : trend.isPending ? (
             <CardLoading rows={4} />
           ) : trend.isError ? (
             <ErrorState

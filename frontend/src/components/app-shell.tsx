@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/auth/auth-context";
 import { BrandIcon } from "@/components/brand-icon";
+import { InstallAppMenuItem } from "@/components/install-app-menu-item";
 import {
   ActiveNavigationIndicator,
   AppLink,
@@ -20,6 +21,7 @@ import {
   useAppNavigate,
 } from "@/components/navigation-transition";
 import { PageLoading } from "@/components/page-state";
+import { OfflineBanner } from "@/components/offline-state";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -131,6 +133,7 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
           <PlugZap aria-hidden="true" />
           已連接的應用程式
         </DropdownMenuItem>
+        <InstallAppMenuItem />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => void handleLogout()}
@@ -145,6 +148,7 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
 }
 
 export function AppShell() {
+  const auth = useAuth();
   const location = useLocation();
   const pageName = pageNameForPath(location.pathname);
   const isMobileNavigationActive = (to: string) => {
@@ -217,16 +221,30 @@ export function AppShell() {
             <UserMenu compact />
           </div>
           <ThemeToggle />
-          <Button asChild size="sm" className="hidden sm:inline-flex">
-            <AppNavLink
-              to="/entries/new"
-              state={entryEditorRouteState(location)}
+          {auth.isReadOnly ? (
+            <Button
+              type="button"
+              size="sm"
+              className="hidden sm:inline-flex"
+              disabled
+              title="離線模式僅供檢視"
             >
               <Plus aria-hidden="true" />
               新增交易
-            </AppNavLink>
-          </Button>
+            </Button>
+          ) : (
+            <Button asChild size="sm" className="hidden sm:inline-flex">
+              <AppNavLink
+                to="/entries/new"
+                state={entryEditorRouteState(location)}
+              >
+                <Plus aria-hidden="true" />
+                新增交易
+              </AppNavLink>
+            </Button>
+          )}
         </header>
+        <OfflineBanner />
         <div className="mx-auto w-full max-w-7xl flex-1 overflow-x-clip p-4 md:p-6">
           <Suspense fallback={<PageLoading rows={4} />}>
             <AppRouteTransition>
@@ -242,6 +260,25 @@ export function AppShell() {
       >
         {mobileNavigation.map((item) => {
           const isActive = isMobileNavigationActive(item.to);
+          const disabled = auth.isReadOnly && item.primary;
+
+          if (disabled) {
+            return (
+              <Button
+                key={item.to}
+                type="button"
+                variant="ghost"
+                disabled
+                aria-label="新增交易（離線模式不可用）"
+                className="relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs text-muted-foreground opacity-50"
+              >
+                <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                  <item.icon className="size-5" aria-hidden="true" />
+                </span>
+                <span className="truncate">{item.label}</span>
+              </Button>
+            );
+          }
 
           return (
             <AppLink

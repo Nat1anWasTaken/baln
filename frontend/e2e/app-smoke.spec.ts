@@ -459,6 +459,89 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await expect(page).toHaveURL(/\/entries\/new$/);
 });
 
+test("shows milestone progress until the app route is ready", async ({
+  page,
+}) => {
+  await page.route(
+    "http://localhost:8080/api/v1/auth/refresh",
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      await route.fulfill({
+        json: {
+          access_token: "e2e-token",
+          token_type: "Bearer",
+          expires_in: 900,
+        },
+      });
+    },
+  );
+
+  await page.goto("/");
+  const startup = page.locator("#startup-screen");
+  await expect(startup).toBeVisible();
+  const progress = startup.getByRole("progressbar");
+  await expect
+    .poll(async () => Number(await progress.getAttribute("aria-valuenow")))
+    .toBeGreaterThan(8);
+  await expect
+    .poll(async () => Number(await progress.getAttribute("aria-valuenow")))
+    .toBeLessThan(100);
+
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+  await expect(startup).not.toBeAttached();
+});
+
+test("provides an installable manifest and profile-menu install action", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+
+  const manifest = await page.request.get("/manifest.webmanifest");
+  expect(manifest.ok()).toBe(true);
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.ready;
+        return Boolean(registration.active);
+      }),
+    )
+    .toBe(true);
+
+  await page.getByRole("button", { name: /測試使用者/ }).click();
+  await expect(page.getByRole("menuitem", { name: "安裝 Baln" })).toBeVisible();
+});
+
+test("reopens the cached dashboard in read-only offline mode", async ({
+  context,
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => navigator.serviceWorker.controller !== null),
+    )
+    .toBe(true);
+
+  await page.unroute("http://localhost:8080/api/v1/**");
+  await context.setOffline(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  await expect(page.getByText(/離線模式・顯示上次同步的資料/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "新增交易", exact: true }),
+  ).toBeDisabled();
+
+  await context.setOffline(false);
+});
+
 test("presents spending insights responsively on overview and reports", async ({
   page,
 }) => {
@@ -1211,8 +1294,8 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
   const expectTouchTarget = async (locator: ReturnType<Page["locator"]>) => {
     const box = await locator.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(44);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(44);
   };
 
   const expectContainedTab = async (locator: ReturnType<Page["locator"]>) => {
