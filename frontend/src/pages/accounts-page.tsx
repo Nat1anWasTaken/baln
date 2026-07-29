@@ -51,13 +51,15 @@ import {
 import { accountTypeLabels } from "@/lib/account";
 import { accountsApi } from "@/lib/api-client";
 import { formatMoney, todayTaipei } from "@/lib/format";
+import { invalidateAfterAccountWrite } from "@/lib/query-invalidation";
+import { queryKeys } from "@/lib/query-keys";
 import type { Account } from "@/lib/schemas";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 function AccountBalance({ account }: { account: Account }) {
   const isReadOnly = useOfflineReadOnly();
   const balance = useQuery({
-    queryKey: ["account-balance", account.id, todayTaipei()],
+    queryKey: queryKeys.accounts.balance(account.id, todayTaipei()),
     queryFn: () => accountsApi.balance(account.id, todayTaipei()),
   });
 
@@ -81,7 +83,7 @@ export function AccountsPage() {
   const [deleting, setDeleting] = useState<Account | null>(null);
 
   const accounts = useQuery({
-    queryKey: ["accounts", includeArchived, debouncedSearch],
+    queryKey: queryKeys.accounts.list(includeArchived, debouncedSearch),
     queryFn: () => accountsApi.list(includeArchived, debouncedSearch),
   });
 
@@ -89,7 +91,7 @@ export function AccountsPage() {
     mutationFn: (account: Account) =>
       accountsApi.update(account.id, { archived: !account.archived }),
     onSuccess: async (updated) => {
-      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await invalidateAfterAccountWrite(queryClient);
       toast.success(updated.archived ? "帳戶已封存" : "帳戶已恢復");
       setChangingArchive(null);
     },
@@ -99,8 +101,7 @@ export function AccountsPage() {
   const remove = useMutation({
     mutationFn: (account: Account) => accountsApi.delete(account.id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      await queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      await invalidateAfterAccountWrite(queryClient);
       toast.success("帳戶已刪除");
       setDeleting(null);
     },

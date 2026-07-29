@@ -833,6 +833,42 @@ test("preserves transaction filters when returning from details", async ({
   );
 });
 
+test("revalidates fresh cached data when returning to a page", async ({
+  page,
+}) => {
+  let externalDescription = entry.description;
+  await page.route("http://localhost:8080/api/v1/entries**", async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      url.pathname === "/api/v1/entries" &&
+      route.request().method() === "GET"
+    ) {
+      return route.fulfill({
+        json: {
+          items: [{ ...entry, description: externalDescription }],
+          next_cursor: null,
+        },
+      });
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/entries");
+  await expect(
+    page.getByRole("row").filter({ hasText: entry.description }),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "帳戶", exact: true }).click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  externalDescription = "由另一個 API 用戶端更新的交易";
+
+  await page.getByRole("link", { name: "交易", exact: true }).click();
+  await expect(page).toHaveURL(/\/entries$/);
+  await expect(
+    page.getByRole("row").filter({ hasText: externalDescription }),
+  ).toBeVisible();
+});
+
 test("opens the advanced balanced-postings editor", async ({ page }) => {
   await page.goto("/entries/new");
 

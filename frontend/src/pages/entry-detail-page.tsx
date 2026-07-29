@@ -40,6 +40,8 @@ import { accountTypeLabels } from "@/lib/account";
 import { entriesApi } from "@/lib/api-client";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
 import { formatLedgerDate, formatMoney, formatTimestamp } from "@/lib/format";
+import { invalidateAfterEntryWrite } from "@/lib/query-invalidation";
+import { queryKeys } from "@/lib/query-keys";
 
 export function EntryDetailPage() {
   const isReadOnly = useOfflineReadOnly();
@@ -50,7 +52,7 @@ export function EntryDetailPage() {
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const entry = useQuery({
-    queryKey: ["entry", entryId],
+    queryKey: queryKeys.entries.detail(entryId),
     queryFn: () => entriesApi.get(entryId),
     enabled: Boolean(entryId),
   });
@@ -58,9 +60,7 @@ export function EntryDetailPage() {
   const remove = useMutation({
     mutationFn: () => entriesApi.delete(entryId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["entries"] });
-      await queryClient.invalidateQueries({ queryKey: ["report"] });
-      await queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      await invalidateAfterEntryWrite(queryClient);
       toast.success("交易已刪除");
       navigate(
         { pathname: "/entries", search },

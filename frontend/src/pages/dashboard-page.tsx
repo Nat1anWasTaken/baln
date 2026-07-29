@@ -49,6 +49,7 @@ import {
   todayTaipei,
   toInclusiveDate,
 } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 
 export function DashboardPage() {
   const isReadOnly = useOfflineReadOnly();
@@ -62,24 +63,23 @@ export function DashboardPage() {
     comparisonMode,
   );
   const report = useQuery({
-    queryKey: ["report-summary", bounds.dateFrom, bounds.dateTo],
+    queryKey: queryKeys.reports.summary(bounds.dateFrom, bounds.dateTo),
     queryFn: () => reportsApi.summary(bounds.dateFrom, bounds.dateTo),
   });
   const comparison = useQuery({
-    queryKey: [
-      "report-summary",
+    queryKey: queryKeys.reports.summary(
       comparisonBounds.dateFrom,
       comparisonBounds.dateTo,
-    ],
+    ),
     queryFn: () =>
       reportsApi.summary(comparisonBounds.dateFrom, comparisonBounds.dateTo),
   });
   const position = useQuery({
-    queryKey: ["financial-position", todayTaipei()],
+    queryKey: queryKeys.reports.position(todayTaipei()),
     queryFn: () => reportsApi.position(todayTaipei()),
   });
   const entries = useQuery({
-    queryKey: ["entries-recent"],
+    queryKey: queryKeys.entries.recent,
     queryFn: () => entriesApi.list({ limit: 5 }),
   });
 

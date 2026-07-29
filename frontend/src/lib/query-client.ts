@@ -8,8 +8,9 @@ export const queryClient = new QueryClient({
       staleTime: 30_000,
       gcTime: OFFLINE_MAX_AGE,
       retry: 1,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: "always",
+      refetchOnReconnect: "always",
     },
     mutations: {
       retry: false,

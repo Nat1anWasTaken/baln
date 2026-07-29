@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { API_BASE_URL, oauthApi } from "@/lib/api-client";
 import { formatTimestamp } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 import type { ConnectedApp } from "@/lib/schemas";
 
 const scopeLabels: Record<string, string> = {
@@ -55,13 +56,15 @@ export function ConnectedAppsPage() {
   }
 
   const apps = useQuery({
-    queryKey: ["connected-apps"],
+    queryKey: queryKeys.connectedApps.all,
     queryFn: oauthApi.connectedApps,
   });
   const revoke = useMutation({
     mutationFn: (app: ConnectedApp) => oauthApi.revokeConnectedApp(app.id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["connected-apps"] });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.connectedApps.all,
+      });
       toast.success("已撤銷應用程式的存取權");
       setRevoking(null);
     },

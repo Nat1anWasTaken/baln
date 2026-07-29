@@ -42,6 +42,7 @@ import { ApiError, entriesApi } from "@/lib/api-client";
 import { formatMoney, todayTaipei } from "@/lib/format";
 import { possibleDuplicateFieldsSchema } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+import { invalidateAfterEntryWrite } from "@/lib/query-invalidation";
 import type {
   Account,
   AccountType,
@@ -348,7 +349,7 @@ export function EntryEditor({
           });
     },
     onSuccess: async (saved) => {
-      await queryClient.invalidateQueries();
+      await invalidateAfterEntryWrite(queryClient);
       toast.success(entry ? "交易已更新" : "交易已建立");
       if (onSaved) {
         onSaved(saved);

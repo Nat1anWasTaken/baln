@@ -25,6 +25,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { toExclusiveDate } from "@/lib/format";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
+import { queryKeys } from "@/lib/query-keys";
 
 export function EntriesPage() {
   const isReadOnly = useOfflineReadOnly();
@@ -47,12 +48,17 @@ export function EntriesPage() {
   }, [debouncedSearch, searchParams, setSearchParams]);
 
   const accounts = useQuery({
-    queryKey: ["accounts", true, ""],
+    queryKey: queryKeys.accounts.list(true, ""),
     queryFn: () => accountsApi.list(true),
   });
 
   const entries = useInfiniteQuery({
-    queryKey: ["entries", dateFrom, dateTo, accountKey, debouncedSearch],
+    queryKey: queryKeys.entries.list(
+      dateFrom,
+      dateTo,
+      accountKey,
+      debouncedSearch,
+    ),
     queryFn: ({ pageParam }) =>
       entriesApi.list({
         dateFrom: dateFrom || undefined,

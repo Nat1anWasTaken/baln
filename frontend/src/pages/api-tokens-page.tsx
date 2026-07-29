@@ -42,6 +42,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { API_BASE_URL, apiTokensApi } from "@/lib/api-client";
 import { formatTimestamp } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 import type { ApiToken, CreatedApiToken } from "@/lib/schemas";
 
 type ExpirationChoice = "30" | "90" | "365" | "never";
@@ -115,7 +116,9 @@ function CreateTokenDialog({
         expires_at: expirationTimestamp(expiration),
       }),
     onSuccess: async (token) => {
-      await queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.apiTokens.all,
+      });
       changeOpen(false);
       onCreated(token);
     },
@@ -265,14 +268,16 @@ export function ApiTokensPage() {
   }
 
   const tokens = useQuery({
-    queryKey: ["api-tokens"],
+    queryKey: queryKeys.apiTokens.all,
     queryFn: apiTokensApi.list,
   });
 
   const revoke = useMutation({
     mutationFn: (token: ApiToken) => apiTokensApi.revoke(token.id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.apiTokens.all,
+      });
       toast.success("API 權杖已撤銷");
       setRevoking(null);
     },

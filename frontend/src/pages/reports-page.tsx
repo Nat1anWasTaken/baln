@@ -50,6 +50,7 @@ import {
   type DateBounds,
   type ReportPreset,
 } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 
 const presetLabels: Record<ReportPreset, string> = {
   current: "本期",
@@ -92,30 +93,27 @@ export function ReportsPage() {
   const granularity = trendGranularity(trendBounds);
 
   const report = useQuery({
-    queryKey: [
-      "report-summary",
+    queryKey: queryKeys.reports.summary(
       applied.bounds.dateFrom,
       applied.bounds.dateTo,
-    ],
+    ),
     queryFn: () =>
       reportsApi.summary(applied.bounds.dateFrom, applied.bounds.dateTo),
   });
   const comparison = useQuery({
-    queryKey: [
-      "report-summary",
+    queryKey: queryKeys.reports.summary(
       comparisonBounds.dateFrom,
       comparisonBounds.dateTo,
-    ],
+    ),
     queryFn: () =>
       reportsApi.summary(comparisonBounds.dateFrom, comparisonBounds.dateTo),
   });
   const trend = useQuery({
-    queryKey: [
-      "report-trend",
+    queryKey: queryKeys.reports.trend(
       trendBounds.dateFrom,
       trendBounds.dateTo,
       granularity,
-    ],
+    ),
     queryFn: () =>
       reportsApi.trend(trendBounds.dateFrom, trendBounds.dateTo, granularity),
   });

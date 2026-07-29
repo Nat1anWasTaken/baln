@@ -8,6 +8,7 @@ import { CenteredPage } from "@/components/centered-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { oauthApi } from "@/lib/api-client";
+import { queryKeys } from "@/lib/query-keys";
 
 const scopeLabels: Record<string, string> = {
   "ledger:read": "查看帳戶、交易、餘額與報表",
@@ -20,7 +21,7 @@ export function OAuthConsentPage() {
   const [searchParams] = useSearchParams();
   const requestId = searchParams.get("request_id");
   const consent = useQuery({
-    queryKey: ["oauth-consent", requestId],
+    queryKey: queryKeys.oauthConsent(requestId ?? ""),
     queryFn: () => oauthApi.consentDetails(requestId!),
     enabled: Boolean(requestId),
     retry: false,

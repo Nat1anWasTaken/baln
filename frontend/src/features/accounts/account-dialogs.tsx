@@ -37,6 +37,7 @@ import {
   accountTypes,
 } from "@/lib/account";
 import { accountsApi } from "@/lib/api-client";
+import { invalidateAfterAccountWrite } from "@/lib/query-invalidation";
 import type { Account, AccountType, UpdateAccountRequest } from "@/lib/schemas";
 
 export function CreateAccountDialog({
@@ -69,7 +70,7 @@ export function CreateAccountDialog({
   const create = useMutation({
     mutationFn: accountsApi.create,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await invalidateAfterAccountWrite(queryClient);
       toast.success("帳戶已建立");
       changeOpen(false);
     },
@@ -200,7 +201,7 @@ export function EditAccountDialog({
     mutationFn: (body: UpdateAccountRequest) =>
       accountsApi.update(account!.id, body),
     onSuccess: async () => {
-      await queryClient.invalidateQueries();
+      await invalidateAfterAccountWrite(queryClient);
       toast.success("帳戶已更新");
       setPendingUpdate(null);
       onOpenChange(false);

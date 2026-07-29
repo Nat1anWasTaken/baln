@@ -36,6 +36,7 @@ import {
 import { EntryEditor } from "@/features/entries/entry-editor";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { getEntryEditorBackground } from "@/lib/entry-navigation";
+import { queryKeys } from "@/lib/query-keys";
 import type { EntryResponse } from "@/lib/schemas";
 
 type EditorPresentation = "page" | "sheet";
@@ -60,11 +61,11 @@ function EntryEditorSurface({
   const { entryId } = useParams();
   const isEditing = Boolean(entryId);
   const accounts = useQuery({
-    queryKey: ["accounts", true, ""],
+    queryKey: queryKeys.accounts.list(true, ""),
     queryFn: () => accountsApi.list(true),
   });
   const entry = useQuery({
-    queryKey: ["entry", entryId],
+    queryKey: queryKeys.entries.detail(entryId ?? ""),
     queryFn: () => entriesApi.get(entryId!),
     enabled: isEditing,
   });
