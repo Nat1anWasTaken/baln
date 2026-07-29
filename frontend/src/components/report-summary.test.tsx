@@ -39,6 +39,9 @@ describe("financial summary semantics", () => {
       const card = screen.getByText(label).closest('[data-slot="card"]');
       expect(card).toHaveAttribute("data-finance-tone", tone);
       expect(card?.querySelector(".text-2xl")).toHaveClass(className);
+      expect(card?.querySelector('[data-slot="card-action"]')).toContainElement(
+        card?.querySelector("svg") ?? null,
+      );
     }
     expect(screen.getByText("儲蓄率 76.0%")).toBeVisible();
   });

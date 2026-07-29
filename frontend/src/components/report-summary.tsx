@@ -192,11 +192,13 @@ export function SummaryCards({
     <div className="grid gap-3 sm:grid-cols-3">
       {cards.map((item) => (
         <Card key={item.tone} data-finance-tone={item.tone}>
-          <CardHeader className="flex-row items-center justify-between pb-1">
+          <CardHeader className="pb-1">
             <CardDescription>{item.label}</CardDescription>
-            <span className={`rounded-md p-1.5 ${item.iconClassName}`}>
-              <item.icon className="size-4" aria-hidden="true" />
-            </span>
+            <CardAction>
+              <span className={`block rounded-md p-1.5 ${item.iconClassName}`}>
+                <item.icon className="size-4" aria-hidden="true" />
+              </span>
+            </CardAction>
           </CardHeader>
           <CardContent className="grid gap-1">
             <p

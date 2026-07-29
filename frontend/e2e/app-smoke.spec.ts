@@ -370,6 +370,18 @@ async function mockApi(page: Page) {
   });
 }
 
+async function fillBalancedPostings(page: Page, amount: string) {
+  const accountInputs = page.getByRole("combobox", { name: "帳戶" });
+  await accountInputs.nth(0).click();
+  await page.getByRole("option", { name: "餐飲" }).click();
+  await accountInputs.nth(1).click();
+  await page.getByRole("option", { name: "現金" }).last().click();
+
+  const amountInputs = page.getByLabel("金額", { exact: true });
+  await amountInputs.nth(0).fill(amount);
+  await amountInputs.nth(1).fill(amount);
+}
+
 async function dragMouse(page: Page, target: Locator, distance: number) {
   const bounds = await target.boundingBox();
   expect(bounds).not.toBeNull();
@@ -407,6 +419,27 @@ async function dragTouch(page: Page, target: Locator, distance: number) {
     type: "touchEnd",
     touchPoints: [],
   });
+}
+
+async function expectEqualSummaryIconSizes(page: Page) {
+  const icons = page.locator(
+    '[data-finance-tone] [data-slot="card-action"] > span',
+  );
+  await expect(icons).toHaveCount(3);
+  await expect
+    .poll(() =>
+      icons.evaluateAll((elements) =>
+        elements.map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return [bounds.width, bounds.height];
+        }),
+      ),
+    )
+    .toEqual([
+      [28, 28],
+      [28, 28],
+      [28, 28],
+    ]);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -580,6 +613,7 @@ test("presents spending insights responsively on overview and reports", async ({
   await expect(
     page.getByRole("button", { name: "報表期間：本期" }),
   ).toBeVisible();
+  await expectEqualSummaryIconSizes(page);
   await expect(page.getByText("分類分析", { exact: true })).toBeVisible();
   await expect(page.getByText("支出趨勢", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /餐飲/ })).toBeVisible();
@@ -589,6 +623,7 @@ test("presents spending insights responsively on overview and reports", async ({
   await expect(page.locator("html")).toHaveClass(/dark/);
 
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await expectEqualSummaryIconSizes(page);
   await expect(page.getByText("分類分析", { exact: true })).toBeVisible();
   await page.goto("/");
   await expect(page.getByText("主要支出", { exact: true })).toBeVisible();
@@ -875,14 +910,19 @@ test("revalidates fresh cached data when returning to a page", async ({
   ).toBeVisible();
 });
 
-test("opens the advanced balanced-postings editor", async ({ page }) => {
+test("opens the balanced-postings editor without a mode switch", async ({
+  page,
+}) => {
   await page.goto("/entries/new");
 
   await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
   await expect(
     page.locator('[data-slot="dialog-content"][data-presentation="sheet"]'),
   ).toHaveCount(0);
-  await page.getByRole("tab", { name: "進階分錄" }).click();
+  await expect(
+    page.locator('form[data-presentation="page"]').getByRole("tab"),
+  ).toHaveCount(0);
+  await expect(page.getByText("分錄明細", { exact: true })).toBeVisible();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
 
@@ -904,11 +944,7 @@ test("reviews a possible duplicate from the mobile transaction sheet", async ({
 
   await page.getByLabel("交易日期").fill("2026-07-24");
   await page.getByLabel("交易說明").fill("Email receipt");
-  await page.getByLabel("金額（TWD）").fill("120");
-  await page.getByRole("combobox", { name: "支出分類" }).click();
-  await page.getByRole("option", { name: "餐飲" }).click();
-  await page.getByRole("combobox", { name: "付款帳戶" }).click();
-  await page.getByRole("option", { name: "現金" }).click();
+  await fillBalancedPostings(page, "120");
   await page.getByRole("button", { name: "建立交易" }).click();
 
   const duplicateDialog = page.getByRole("alertdialog", {
@@ -1114,6 +1150,8 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
     await page.goto("/entries/new");
     const dirtySheet = page.getByRole("dialog", { name: "新增交易" });
     const dirtyScroller = dirtySheet.locator("[data-entry-editor-scroll]");
+    await expect(dirtySheet).toBeVisible();
+    await page.waitForTimeout(550);
     await page.getByLabel("交易說明").fill("保留這份草稿");
     const dirtyBounds = await dirtyScroller.boundingBox();
     expect(dirtyBounds).not.toBeNull();
@@ -1175,11 +1213,7 @@ test("keeps a pending mobile transaction sheet fixed", async ({ page }) => {
   await page.goto("/entries/new");
   const sheet = page.getByRole("dialog", { name: "新增交易" });
   await page.getByLabel("交易說明").fill("等待儲存");
-  await page.getByLabel("金額（TWD）").fill("120");
-  await page.getByRole("combobox", { name: "支出分類" }).click();
-  await page.getByRole("option", { name: "餐飲" }).click();
-  await page.getByRole("combobox", { name: "付款帳戶" }).click();
-  await page.getByRole("option", { name: "現金" }).click();
+  await fillBalancedPostings(page, "120");
   await page.getByRole("button", { name: "建立交易" }).click();
   await expect(page.getByRole("button", { name: "建立交易" })).toBeDisabled();
 
@@ -1421,26 +1455,28 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await expectTouchTarget(page.getByRole("radio", { name: "現金" }));
 
     await page.goto("/entries/new");
-    await expectContainedTab(page.getByRole("tab", { name: "引導模式" }));
-    await expectContainedTab(page.getByRole("tab", { name: "支出" }));
+    await expect(
+      page.getByRole("dialog", { name: "新增交易" }).getByRole("tab"),
+    ).toHaveCount(0);
+    await expectTouchTarget(
+      page.getByRole("combobox", { name: "帳戶" }).first(),
+    );
+    await expectTouchTarget(
+      page.getByRole("combobox", { name: "方向" }).first(),
+    );
 
     await page.setViewportSize({ width: 320, height: 844 });
-    await expectContainedTab(page.getByRole("tab", { name: "引導模式" }));
-    await expectContainedTab(page.getByRole("tab", { name: "支出" }));
-    await expectContainedTab(page.getByRole("tab", { name: "退款" }));
-
-    const transactionTypeTabs = page
-      .locator('[data-slot="tabs-list"]')
-      .filter({ has: page.getByRole("tab", { name: "支出" }) });
-    const amountLabel = page.getByText("金額（TWD）", { exact: true });
-    const [tabsBox, amountLabelBox] = await Promise.all([
-      transactionTypeTabs.boundingBox(),
-      amountLabel.boundingBox(),
-    ]);
-    expect(tabsBox).not.toBeNull();
-    expect(amountLabelBox).not.toBeNull();
-    expect(tabsBox!.y + tabsBox!.height).toBeLessThan(amountLabelBox!.y);
-
+    await expectTouchTarget(page.getByLabel("金額", { exact: true }).first());
+    await expectTouchTarget(page.getByRole("button", { name: "新增分錄" }));
+    await expectTouchTarget(
+      page.getByRole("button", { name: "移除第 1 筆分錄" }),
+    );
+    const editorScroller = page.locator("[data-entry-editor-scroll]");
+    expect(
+      await editorScroller.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
     await expectTouchTarget(page.getByRole("button", { name: "關閉新增交易" }));
 
     await page.goto("/accounts");

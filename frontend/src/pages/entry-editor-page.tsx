@@ -282,9 +282,7 @@ export function EntryEditorSheet({
       >
         <DialogHeader>
           <DialogTitle>{isEditing ? "編輯交易" : "新增交易"}</DialogTitle>
-          <DialogDescription>
-            使用引導模式處理常見交易，或用進階模式建立拆分分錄。
-          </DialogDescription>
+          <DialogDescription>輸入交易資料與借貸平衡的分錄。</DialogDescription>
         </DialogHeader>
         <EntryEditorSurface
           presentation="sheet"

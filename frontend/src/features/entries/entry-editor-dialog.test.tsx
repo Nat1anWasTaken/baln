@@ -92,13 +92,17 @@ async function fillEntry(user: ReturnType<typeof userEvent.setup>) {
   await user.clear(screen.getByLabelText("交易日期"));
   await user.type(screen.getByLabelText("交易日期"), "2026-07-24");
   await user.type(screen.getByLabelText("交易說明"), "Email receipt");
-  await user.clear(screen.getByLabelText("金額（TWD）"));
-  await user.type(screen.getByLabelText("金額（TWD）"), "320");
 
-  await user.click(screen.getByRole("combobox", { name: "支出分類" }));
+  const accountInputs = screen.getAllByRole("combobox", { name: "帳戶" });
+  await user.click(accountInputs[0]);
   await user.click(screen.getByRole("option", { name: "餐飲" }));
-  await user.click(screen.getByRole("combobox", { name: "付款帳戶" }));
+  await user.click(accountInputs[1]);
   await user.click(screen.getByRole("option", { name: "現金" }));
+
+  for (const amountInput of screen.getAllByLabelText("金額")) {
+    await user.clear(amountInput);
+    await user.type(amountInput, "320");
+  }
 }
 
 describe("entry duplicate confirmation", () => {
@@ -151,6 +155,14 @@ describe("entry duplicate confirmation", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Apple Pay 午餐")).toBeInTheDocument();
     expect(requests).toHaveLength(1);
+    expect(requests[0].postings).toEqual([
+      {
+        account_key: "expense.restaurant",
+        amount_minor: 320,
+        memo: null,
+      },
+      { account_key: "asset.cash", amount_minor: -320, memo: null },
+    ]);
 
     await user.click(screen.getByRole("button", { name: "取消" }));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
