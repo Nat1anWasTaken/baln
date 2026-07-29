@@ -775,21 +775,27 @@ test("separates account and transaction filters", async ({ page }) => {
       .first();
     const separator = page.locator('[data-slot="separator"]').first();
     const searchInput = page.getByRole("textbox", { name: "搜尋交易" });
+    const filterGrid = page.locator("[data-entry-filter-grid]");
 
     await expect(accountLabel).toBeVisible();
     await expect(separator).toBeVisible();
     await expect(searchInput).toBeVisible();
+    await expect(filterGrid).toBeVisible();
 
-    const [accountBox, separatorBox, searchBox] = await Promise.all([
-      accountLabel.boundingBox(),
-      separator.boundingBox(),
-      searchInput.boundingBox(),
-    ]);
+    const [accountBox, separatorBox, searchBox, filterGridBox] =
+      await Promise.all([
+        accountLabel.boundingBox(),
+        separator.boundingBox(),
+        searchInput.boundingBox(),
+        filterGrid.boundingBox(),
+      ]);
     expect(accountBox).not.toBeNull();
     expect(separatorBox).not.toBeNull();
     expect(searchBox).not.toBeNull();
+    expect(filterGridBox).not.toBeNull();
     expect(accountBox!.y).toBeLessThan(separatorBox!.y);
     expect(separatorBox!.y).toBeLessThan(searchBox!.y);
+    expect(filterGridBox!.width).toBeCloseTo(separatorBox!.width, 0);
   };
 
   await page.setViewportSize({ width: 1280, height: 900 });

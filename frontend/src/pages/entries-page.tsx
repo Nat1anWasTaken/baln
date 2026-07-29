@@ -100,7 +100,7 @@ export function EntriesPage() {
           <CardTitle>篩選條件</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
-          <Field className="md:col-span-4">
+          <Field>
             <FieldLabel>帳戶</FieldLabel>
             <AccountFilterSelector
               value={accountKey}
@@ -114,7 +114,7 @@ export function EntriesPage() {
             />
           </Field>
           <Separator />
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-4" data-entry-filter-grid>
             <Field className="md:col-span-2">
               <FieldLabel htmlFor="entry-search">搜尋交易</FieldLabel>
               <div className="relative">
@@ -151,7 +151,7 @@ export function EntriesPage() {
               />
             </Field>
           </div>
-          <div className="flex items-end gap-2 md:col-span-4 md:justify-end">
+          <div className="flex items-end gap-2 md:justify-end">
             {hasFilters ? (
               <Button type="button" variant="ghost" onClick={clearFilters}>
                 <X aria-hidden="true" />
