@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { accountsApi, entriesApi } from "@/lib/api-client";
+import { ENTRY_REFETCH_INTERVAL_MS } from "@/lib/entry-refresh";
 import { toExclusiveDate } from "@/lib/format";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
 import { queryKeys } from "@/lib/query-keys";
@@ -70,6 +71,8 @@ export function EntriesPage() {
       }),
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    refetchInterval: ENTRY_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
   });
 
   const items = useMemo(

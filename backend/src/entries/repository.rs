@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -7,7 +9,7 @@ use crate::{
     accounts::Account,
     entries::{
         AccountSummary, EntryResponse, PostingResponse,
-        model::{EntryRow, PostingRow},
+        model::{EntryPostingRow, EntryRow, PostingRow},
     },
 };
 
@@ -116,6 +118,69 @@ pub async fn hydrate(pool: &PgPool, row: EntryRow) -> ApiResult<EntryResponse> {
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
+}
+
+pub async fn hydrate_many(
+    pool: &PgPool,
+    user_id: Uuid,
+    rows: Vec<EntryRow>,
+) -> ApiResult<Vec<EntryResponse>> {
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let entry_ids = rows.iter().map(|row| row.id).collect::<Vec<_>>();
+    let posting_rows = sqlx::query_as::<_, EntryPostingRow>(
+        r#"
+        SELECT p.entry_id, p.id, p.account_id, a.key AS account_key,
+               a.name AS account_name, a.type AS account_type, p.amount_minor,
+               p.memo, p.created_at
+          FROM postings p
+          JOIN accounts a ON a.id = p.account_id
+         WHERE p.entry_id = ANY($1) AND p.user_id = $2
+         ORDER BY p.entry_id, p.created_at, p.id
+        "#,
+    )
+    .bind(&entry_ids)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut postings_by_entry = HashMap::<Uuid, Vec<PostingResponse>>::new();
+    for posting in posting_rows {
+        postings_by_entry
+            .entry(posting.entry_id)
+            .or_default()
+            .push(PostingResponse {
+                id: posting.id,
+                account: AccountSummary {
+                    id: posting.account_id,
+                    key: posting.account_key,
+                    name: posting.account_name,
+                    r#type: posting.account_type,
+                },
+                amount_minor: posting.amount_minor,
+                memo: posting.memo,
+                created_at: posting.created_at,
+            });
+    }
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let postings = postings_by_entry.remove(&row.id).unwrap_or_default();
+            EntryResponse {
+                id: row.id,
+                date: row.date,
+                description: row.description,
+                note: row.note,
+                dedup_key: row.dedup_key,
+                postings,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            }
+        })
+        .collect())
 }
 
 pub(crate) async fn hydrate_in_transaction(

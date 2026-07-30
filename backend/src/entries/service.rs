@@ -419,10 +419,7 @@ pub async fn list(pool: &PgPool, user_id: Uuid, query: ListEntriesQuery) -> ApiR
     } else {
         None
     };
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        items.push(repository::hydrate(pool, row).await?);
-    }
+    let items = repository::hydrate_many(pool, user_id, rows).await?;
     Ok(EntryPage { items, next_cursor })
 }
 

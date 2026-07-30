@@ -107,3 +107,16 @@ pub(crate) struct PostingRow {
     pub memo: Option<String>,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow)]
+pub(crate) struct EntryPostingRow {
+    pub entry_id: Uuid,
+    pub id: Uuid,
+    pub account_id: Uuid,
+    pub account_key: String,
+    pub account_name: String,
+    pub account_type: AccountType,
+    pub amount_minor: i64,
+    pub memo: Option<String>,
+    pub created_at: DateTime<Utc>,
+}

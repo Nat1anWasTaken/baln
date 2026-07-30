@@ -49,6 +49,7 @@ import {
   todayTaipei,
   toInclusiveDate,
 } from "@/lib/format";
+import { ENTRY_REFETCH_INTERVAL_MS } from "@/lib/entry-refresh";
 import { queryKeys } from "@/lib/query-keys";
 
 export function DashboardPage() {
@@ -81,6 +82,8 @@ export function DashboardPage() {
   const entries = useQuery({
     queryKey: queryKeys.entries.recent,
     queryFn: () => entriesApi.list({ limit: 5 }),
+    refetchInterval: ENTRY_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
   });
 
   function changeStartDay(day: number) {

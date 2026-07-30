@@ -1,0 +1,1 @@
+export const ENTRY_REFETCH_INTERVAL_MS = 5_000;
