@@ -179,6 +179,8 @@ Baln uses OAuth 2.1 + PKCE with dynamic client registration. Public clients can
 register with `token_endpoint_auth_method=none`; confidential clients can use
 `client_secret_basic` or `client_secret_post`. In accordance with RFC 7591, an
 omitted token endpoint authentication method defaults to `client_secret_basic`.
+For Google Account Linking callback URLs, Baln instead selects
+`client_secret_post` to match Gemini Spark's token exchange profile.
 
 Resource scopes are:
 

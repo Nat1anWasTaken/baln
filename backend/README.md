@@ -121,6 +121,8 @@ binding, 15-minute access tokens, and rotating 30-day refresh tokens. Dynamic
 registration supports public clients with `token_endpoint_auth_method=none`
 and confidential clients using `client_secret_basic` or `client_secret_post`.
 An omitted method defaults to `client_secret_basic` as specified by RFC 7591;
+Google Account Linking callback URLs default to `client_secret_post` for
+Gemini Spark compatibility. Explicit authentication methods are always honored.
 client secrets are returned once and only their SHA-256 hashes are stored.
 ChatGPT's explicit public-client registration remains secretless.
 

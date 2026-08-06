@@ -141,7 +141,7 @@ async fn register_client(
     let token_endpoint_auth_method = request
         .token_endpoint_auth_method
         .as_deref()
-        .unwrap_or("client_secret_basic");
+        .unwrap_or_else(|| default_token_endpoint_auth_method(&request.redirect_uris));
     if !matches!(
         token_endpoint_auth_method,
         "none" | "client_secret_basic" | "client_secret_post"
@@ -1067,6 +1067,30 @@ fn valid_redirect_uri(value: &str) -> bool {
             && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1")))
 }
 
+fn default_token_endpoint_auth_method(redirect_uris: &[String]) -> &'static str {
+    if redirect_uris.iter().any(|value| {
+        let Ok(url) = url::Url::parse(value) else {
+            return false;
+        };
+        matches!(
+            url.host_str(),
+            Some(
+                "gemini.google.com"
+                    | "oauth-redirect.googleusercontent.com"
+                    | "oauth-redirect-sandbox.googleusercontent.com"
+            )
+        )
+    }) {
+        // Gemini Spark uses Google Account Linking, whose token exchange sends
+        // confidential-client credentials in the form body.
+        "client_secret_post"
+    } else {
+        // RFC 7591 section 2 defines client_secret_basic as the default when
+        // token_endpoint_auth_method is omitted.
+        "client_secret_basic"
+    }
+}
+
 fn redirect_with_params(
     redirect_uri: &str,
     values: &[(&str, &str)],
@@ -1157,6 +1181,28 @@ mod tests {
         assert!(valid_redirect_uri("http://localhost:3000/callback"));
         assert!(!valid_redirect_uri("http://example.com/callback"));
         assert!(!valid_redirect_uri("https://example.com/callback#fragment"));
+    }
+
+    #[test]
+    fn google_account_linking_redirects_default_to_post_authentication() {
+        for redirect_uri in [
+            "https://gemini.google.com/mcp/oauth/callback",
+            "https://oauth-redirect.googleusercontent.com/r/project-id",
+            "https://oauth-redirect-sandbox.googleusercontent.com/r/project-id",
+        ] {
+            assert_eq!(
+                default_token_endpoint_auth_method(&[redirect_uri.to_owned()]),
+                "client_secret_post"
+            );
+        }
+    }
+
+    #[test]
+    fn other_redirects_keep_the_rfc_registration_default() {
+        assert_eq!(
+            default_token_endpoint_auth_method(&["https://example.com/oauth/callback".to_owned()]),
+            "client_secret_basic"
+        );
     }
 
     #[test]
@@ -1255,12 +1301,14 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn dynamic_registration_defaults_to_confidential_basic_client(pool: PgPool) {
+    async fn dynamic_registration_defaults_to_confidential_post_for_gemini(pool: PgPool) {
         let value = register_client(
             &pool,
             RegistrationRequest {
                 client_name: Some("Google".to_owned()),
-                redirect_uris: vec!["https://gemini.google.com/mcp/oauth/callback".to_owned()],
+                redirect_uris: vec![
+                    "https://oauth-redirect.googleusercontent.com/r/project-id".to_owned(),
+                ],
                 token_endpoint_auth_method: None,
                 grant_types: Some(vec![
                     "authorization_code".to_owned(),
@@ -1285,11 +1333,54 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(value["token_endpoint_auth_method"], "client_secret_basic");
+        assert_eq!(value["token_endpoint_auth_method"], "client_secret_post");
         assert_eq!(value["client_secret_expires_at"], 0);
         assert!(client_secret.starts_with("baln_mcp_cs_"));
-        assert_eq!(stored.0, "client_secret_basic");
+        assert_eq!(stored.0, "client_secret_post");
         assert_eq!(stored.1.unwrap(), hash(client_secret));
+
+        assert_eq!(
+            authenticate_token_client(
+                &pool,
+                &HeaderMap::new(),
+                &token_request(Some(client_id), Some(client_secret)),
+            )
+            .await
+            .unwrap(),
+            client_id
+        );
+
+        assert_eq!(
+            authenticate_token_client(
+                &pool,
+                &HeaderMap::new(),
+                &token_request(Some(client_id), Some("wrong-secret")),
+            )
+            .await
+            .unwrap_err()
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn dynamic_registration_uses_rfc_default_for_other_clients(pool: PgPool) {
+        let value = register_client(
+            &pool,
+            RegistrationRequest {
+                client_name: Some("Generic MCP client".to_owned()),
+                redirect_uris: vec!["https://example.com/oauth/callback".to_owned()],
+                token_endpoint_auth_method: None,
+                grant_types: None,
+                response_types: None,
+            },
+        )
+        .await
+        .unwrap();
+        let client_id = value["client_id"].as_str().unwrap();
+        let client_secret = value["client_secret"].as_str().unwrap();
+
+        assert_eq!(value["token_endpoint_auth_method"], "client_secret_basic");
 
         let mut headers = HeaderMap::new();
         let credentials = STANDARD.encode(format!("{client_id}:{client_secret}"));
@@ -1302,20 +1393,6 @@ mod tests {
                 .await
                 .unwrap(),
             client_id
-        );
-
-        let mut wrong_headers = HeaderMap::new();
-        let wrong_credentials = STANDARD.encode(format!("{client_id}:wrong-secret"));
-        wrong_headers.insert(
-            header::AUTHORIZATION,
-            HeaderValue::from_str(&format!("Basic {wrong_credentials}")).unwrap(),
-        );
-        assert_eq!(
-            authenticate_token_client(&pool, &wrong_headers, &token_request(None, None))
-                .await
-                .unwrap_err()
-                .0,
-            StatusCode::UNAUTHORIZED
         );
     }
 
