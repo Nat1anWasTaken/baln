@@ -27,10 +27,11 @@ use crate::{
 const ACCESS_TOKEN_PREFIX: &str = "baln_mcp_at_";
 const REFRESH_TOKEN_PREFIX: &str = "baln_mcp_rt_";
 const AUTHORIZATION_CODE_PREFIX: &str = "baln_mcp_code_";
-const SUPPORTED_SCOPES: [&str; 4] = [
-    "ledger:read",
-    "ledger:write",
-    "ledger:delete",
+const RESOURCE_SCOPES: [&str; 3] = ["ledger:read", "ledger:write", "ledger:delete"];
+const AUTHORIZATION_SCOPES: [&str; 4] = [
+    RESOURCE_SCOPES[0],
+    RESOURCE_SCOPES[1],
+    RESOURCE_SCOPES[2],
     "offline_access",
 ];
 
@@ -78,7 +79,7 @@ pub async fn protected_resource_metadata(State(state): State<AppState>) -> Json<
         "resource": format!("{}/mcp", state.config.public_base_url),
         "authorization_servers": [state.config.public_base_url],
         "bearer_methods_supported": ["header"],
-        "scopes_supported": SUPPORTED_SCOPES
+        "scopes_supported": RESOURCE_SCOPES
     }))
 }
 
@@ -94,7 +95,7 @@ pub async fn authorization_server_metadata(State(state): State<AppState>) -> Jso
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none"],
-        "scopes_supported": SUPPORTED_SCOPES
+        "scopes_supported": AUTHORIZATION_SCOPES
     }))
 }
 
@@ -551,7 +552,6 @@ async fn exchange_authorization_code(
         &mut transaction,
         row.grant_id,
         &row.scopes,
-        true,
         state.config.oauth_access_token_ttl_seconds,
         state.config.oauth_refresh_token_ttl_seconds,
     )
@@ -678,7 +678,6 @@ async fn issue_oauth_tokens(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     grant_id: Uuid,
     scopes: &[String],
-    include_refresh: bool,
     access_ttl: i64,
     refresh_ttl: i64,
 ) -> Result<OAuthTokenResponse, (&'static str, String)> {
@@ -693,33 +692,31 @@ async fn issue_oauth_tokens(
     .execute(&mut **transaction)
     .await
     .map_err(token_server_error)?;
-    let refresh_token = if include_refresh && scopes.iter().any(|scope| scope == "offline_access") {
-        let token = format!("{REFRESH_TOKEN_PREFIX}{}", random_secret());
-        let id = Uuid::now_v7();
-        sqlx::query(
-            r#"
-            INSERT INTO oauth_refresh_tokens
-                        (id, family_id, grant_id, token_hash, expires_at)
-                 VALUES ($1, $1, $2, $3, $4)
-            "#,
-        )
-        .bind(id)
-        .bind(grant_id)
-        .bind(hash(&token))
-        .bind(Utc::now() + Duration::seconds(refresh_ttl))
-        .execute(&mut **transaction)
-        .await
-        .map_err(token_server_error)?;
-        Some(token)
-    } else {
-        None
-    };
+    // The authorization server decides whether to issue a refresh token. Do not
+    // require the OIDC-specific `offline_access` scope: OAuth/MCP clients may
+    // advertise the refresh-token grant without requesting that scope.
+    let refresh_token = format!("{REFRESH_TOKEN_PREFIX}{}", random_secret());
+    let refresh_token_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO oauth_refresh_tokens
+                    (id, family_id, grant_id, token_hash, expires_at)
+             VALUES ($1, $1, $2, $3, $4)
+        "#,
+    )
+    .bind(refresh_token_id)
+    .bind(grant_id)
+    .bind(hash(&refresh_token))
+    .bind(Utc::now() + Duration::seconds(refresh_ttl))
+    .execute(&mut **transaction)
+    .await
+    .map_err(token_server_error)?;
     Ok(OAuthTokenResponse {
         access_token,
         token_type: "Bearer",
         expires_in: access_ttl,
         scope: scopes.join(" "),
-        refresh_token,
+        refresh_token: Some(refresh_token),
     })
 }
 
@@ -889,7 +886,7 @@ pub async fn mcp_auth(
                     (
                         header::WWW_AUTHENTICATE,
                         format!(
-                            "Bearer resource_metadata=\"{metadata}\", scope=\"ledger:read ledger:write ledger:delete offline_access\""
+                            "Bearer resource_metadata=\"{metadata}\", scope=\"ledger:read ledger:write ledger:delete\""
                         ),
                     ),
                     (header::CACHE_CONTROL, "no-store".to_owned()),
@@ -907,14 +904,14 @@ pub async fn mcp_auth(
 
 fn parse_scopes(value: Option<&str>) -> Result<Vec<String>, String> {
     let requested = value
-        .unwrap_or("ledger:read ledger:write ledger:delete offline_access")
+        .unwrap_or("ledger:read ledger:write ledger:delete")
         .split_whitespace();
     let mut scopes = Vec::new();
     for scope in requested {
-        if !SUPPORTED_SCOPES.contains(&scope) {
+        if !AUTHORIZATION_SCOPES.contains(&scope) {
             return Err(format!(
                 "Scope “{scope}” is not supported. Supported scopes are {}.",
-                SUPPORTED_SCOPES.join(", ")
+                AUTHORIZATION_SCOPES.join(", ")
             ));
         }
         if !scopes.iter().any(|existing| existing == scope) {
@@ -1035,12 +1032,7 @@ mod tests {
     fn scopes_are_deduplicated_and_unknown_values_are_explained() {
         assert_eq!(
             parse_scopes(None).unwrap(),
-            vec![
-                "ledger:read",
-                "ledger:write",
-                "ledger:delete",
-                "offline_access"
-            ]
+            vec!["ledger:read", "ledger:write", "ledger:delete"]
         );
         assert_eq!(
             parse_scopes(Some("ledger:read ledger:read offline_access")).unwrap(),
@@ -1086,6 +1078,55 @@ mod tests {
         .unwrap();
         assert_eq!(stored.0, "ChatGPT");
         assert_eq!(stored.1, vec!["https://chatgpt.com/aip/oauth/callback"]);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn initial_token_issuance_includes_refresh_without_offline_access(pool: PgPool) {
+        let user_id = Uuid::now_v7();
+        sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'MCP User')")
+            .bind(user_id)
+            .bind(format!("{user_id}@example.com"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let client_id = "baln_client_refresh_test";
+        sqlx::query(
+            "INSERT INTO oauth_clients (id, client_id, client_name, redirect_uris) VALUES ($1, $2, 'Test', $3)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(client_id)
+        .bind(vec!["https://chatgpt.com/aip/oauth/callback"])
+        .execute(&pool)
+        .await
+        .unwrap();
+        let grant_id = Uuid::now_v7();
+        let scopes = vec!["ledger:read".to_owned()];
+        sqlx::query(
+            "INSERT INTO oauth_grants (id, user_id, client_id, resource, scopes) VALUES ($1, $2, $3, 'https://b.nath.tw/mcp', $4)",
+        )
+        .bind(grant_id)
+        .bind(user_id)
+        .bind(client_id)
+        .bind(&scopes)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut transaction = pool.begin().await.unwrap();
+        let response = issue_oauth_tokens(&mut transaction, grant_id, &scopes, 900, 2_592_000)
+            .await
+            .unwrap();
+        transaction.commit().await.unwrap();
+
+        assert_eq!(response.scope, "ledger:read");
+        assert!(response.refresh_token.is_some());
+        let stored_refresh_tokens: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM oauth_refresh_tokens WHERE grant_id = $1")
+                .bind(grant_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored_refresh_tokens, 1);
     }
 
     #[sqlx::test(migrations = "./migrations")]

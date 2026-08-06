@@ -175,11 +175,14 @@ curl http://localhost:8080/api/v1/accounts \
 
 Connect an MCP client to the deployed Baln URL with `/mcp` appended. Local development uses `http://localhost:8080/mcp`.
 
-Baln uses OAuth 2.1 + PKCE. Available scopes are:
+Baln uses OAuth 2.1 + PKCE. Resource scopes are:
 
 ```text
-ledger:read ledger:write ledger:delete offline_access
+ledger:read ledger:write ledger:delete
 ```
+
+The authorization server also accepts the optional `offline_access` scope for
+OIDC-style clients, but refresh tokens do not depend on clients requesting it.
 
 When writing entries, use positive movements from one account to another:
 
