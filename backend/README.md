@@ -117,8 +117,14 @@ https://b.nath.tw/mcp
 
 The MCP OAuth implementation provides dynamic client registration, exact
 redirect-URI matching, Authorization Code with mandatory PKCE S256, resource
-binding, 15-minute access tokens, and rotating 30-day refresh tokens. The
-available scopes are:
+binding, 15-minute access tokens, and rotating 30-day refresh tokens. Dynamic
+registration supports public clients with `token_endpoint_auth_method=none`
+and confidential clients using `client_secret_basic` or `client_secret_post`.
+An omitted method defaults to `client_secret_basic` as specified by RFC 7591;
+client secrets are returned once and only their SHA-256 hashes are stored.
+ChatGPT's explicit public-client registration remains secretless.
+
+The available scopes are:
 
 ```text
 ledger:read ledger:write ledger:delete offline_access

@@ -10,7 +10,7 @@ Baln is a multi-user personal finance ledger built around double-entry bookkeepi
 - Period summaries and monthly income/expense reports
 - Google OpenID Connect login with PKCE
 - Short-lived access tokens, rotating refresh tokens, and personal API tokens
-- OAuth 2.1 + PKCE for MCP clients such as ChatGPT
+- OAuth 2.1 + PKCE for MCP clients such as ChatGPT and Gemini
 - PostgreSQL migrations, health checks, OpenAPI documentation, and Docker deployment
 
 ## Requirements
@@ -175,7 +175,12 @@ curl http://localhost:8080/api/v1/accounts \
 
 Connect an MCP client to the deployed Baln URL with `/mcp` appended. Local development uses `http://localhost:8080/mcp`.
 
-Baln uses OAuth 2.1 + PKCE. Resource scopes are:
+Baln uses OAuth 2.1 + PKCE with dynamic client registration. Public clients can
+register with `token_endpoint_auth_method=none`; confidential clients can use
+`client_secret_basic` or `client_secret_post`. In accordance with RFC 7591, an
+omitted token endpoint authentication method defaults to `client_secret_basic`.
+
+Resource scopes are:
 
 ```text
 ledger:read ledger:write ledger:delete

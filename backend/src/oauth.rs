@@ -4,18 +4,22 @@ use axum::{
     Form, Json, Router,
     body::Body,
     extract::{Path, Query, State},
-    http::{Request, StatusCode, header},
+    http::{HeaderMap, HeaderValue, Request, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{
+    Engine,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
 use chrono::{DateTime, Duration, Utc};
 use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, PgPool};
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::{
@@ -94,7 +98,7 @@ pub async fn authorization_server_metadata(State(state): State<AppState>) -> Jso
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["none"],
+        "token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
         "scopes_supported": AUTHORIZATION_SCOPES
     }))
 }
@@ -134,15 +138,17 @@ async fn register_client(
                 .to_owned(),
         ));
     }
-    if request
+    let token_endpoint_auth_method = request
         .token_endpoint_auth_method
         .as_deref()
-        .unwrap_or("none")
-        != "none"
-    {
+        .unwrap_or("client_secret_basic");
+    if !matches!(
+        token_endpoint_auth_method,
+        "none" | "client_secret_basic" | "client_secret_post"
+    ) {
         return Err((
             "invalid_client_metadata",
-            "Baln supports public OAuth clients with token_endpoint_auth_method set to “none”."
+            "Baln supports token_endpoint_auth_method values of none, client_secret_basic, and client_secret_post."
                 .to_owned(),
         ));
     }
@@ -162,6 +168,9 @@ async fn register_client(
         ));
     }
     let client_id = format!("baln_client_{}", random_secret());
+    let client_secret =
+        (token_endpoint_auth_method != "none").then(|| format!("baln_mcp_cs_{}", random_secret()));
+    let client_secret_hash = client_secret.as_deref().map(hash);
     let client_name = request
         .client_name
         .as_deref()
@@ -170,12 +179,20 @@ async fn register_client(
         .unwrap_or("ChatGPT MCP client")
         .to_owned();
     sqlx::query(
-        "INSERT INTO oauth_clients (id, client_id, client_name, redirect_uris) VALUES ($1, $2, $3, $4)",
+        r#"
+        INSERT INTO oauth_clients (
+            id, client_id, client_name, redirect_uris,
+            token_endpoint_auth_method, client_secret_hash
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
     )
     .bind(Uuid::now_v7())
     .bind(&client_id)
     .bind(&client_name)
     .bind(&request.redirect_uris)
+    .bind(token_endpoint_auth_method)
+    .bind(client_secret_hash)
     .execute(pool)
     .await
     .map_err(|_| {
@@ -184,14 +201,20 @@ async fn register_client(
             "Baln could not register the OAuth client. Try again.".to_owned(),
         )
     })?;
-    Ok(json!({
+    let mut response = json!({
         "client_id": client_id,
+        "client_id_issued_at": Utc::now().timestamp(),
         "client_name": client_name,
         "redirect_uris": request.redirect_uris,
-        "token_endpoint_auth_method": "none",
+        "token_endpoint_auth_method": token_endpoint_auth_method,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"]
-    }))
+    });
+    if let Some(client_secret) = client_secret {
+        response["client_secret"] = Value::String(client_secret);
+        response["client_secret_expires_at"] = Value::from(0);
+    }
+    Ok(response)
 }
 
 #[derive(Debug, Deserialize)]
@@ -454,6 +477,7 @@ async fn load_pending_authorization(pool: &PgPool, id: Uuid) -> ApiResult<Pendin
 struct TokenRequest {
     grant_type: String,
     client_id: Option<String>,
+    client_secret: Option<String>,
     code: Option<String>,
     redirect_uri: Option<String>,
     code_verifier: Option<String>,
@@ -471,7 +495,31 @@ struct OAuthTokenResponse {
     refresh_token: Option<String>,
 }
 
-async fn token(State(state): State<AppState>, Form(request): Form<TokenRequest>) -> Response {
+#[derive(Debug, FromRow)]
+struct TokenClient {
+    token_endpoint_auth_method: String,
+    client_secret_hash: Option<Vec<u8>>,
+}
+
+async fn token(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(mut request): Form<TokenRequest>,
+) -> Response {
+    let client_id = match authenticate_token_client(&state.pool, &headers, &request).await {
+        Ok(client_id) => client_id,
+        Err((status, code, description)) => {
+            let mut response = oauth_error(status, code, description);
+            if status == StatusCode::UNAUTHORIZED {
+                response.headers_mut().insert(
+                    header::WWW_AUTHENTICATE,
+                    HeaderValue::from_static("Basic realm=\"Baln OAuth token\""),
+                );
+            }
+            return response;
+        }
+    };
+    request.client_id = Some(client_id);
     let result = match request.grant_type.as_str() {
         "authorization_code" => exchange_authorization_code(&state, request).await,
         "refresh_token" => refresh_oauth_token(&state, request).await,
@@ -491,6 +539,89 @@ async fn token(State(state): State<AppState>, Form(request): Form<TokenRequest>)
             .into_response(),
         Err((code, description)) => oauth_error(StatusCode::BAD_REQUEST, code, description),
     }
+}
+
+async fn authenticate_token_client(
+    pool: &PgPool,
+    headers: &HeaderMap,
+    request: &TokenRequest,
+) -> Result<String, (StatusCode, &'static str, String)> {
+    let basic_credentials =
+        parse_basic_client_credentials(headers).map_err(|_| invalid_client_authentication())?;
+    let client_id = match (&basic_credentials, request.client_id.as_deref()) {
+        (Some((basic_client_id, _)), Some(form_client_id)) if basic_client_id != form_client_id => {
+            return Err(invalid_client_authentication());
+        }
+        (Some((basic_client_id, _)), _) if !basic_client_id.is_empty() => basic_client_id.clone(),
+        (None, Some(form_client_id)) if !form_client_id.is_empty() => form_client_id.to_owned(),
+        _ => return Err(invalid_client_authentication()),
+    };
+    let client = sqlx::query_as::<_, TokenClient>(
+        r#"
+        SELECT token_endpoint_auth_method, client_secret_hash
+          FROM oauth_clients
+         WHERE client_id = $1
+        "#,
+    )
+    .bind(&client_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(server_oauth_error)?
+    .ok_or_else(invalid_client_authentication)?;
+
+    let authenticated = match client.token_endpoint_auth_method.as_str() {
+        "none" => {
+            basic_credentials.is_none()
+                && request.client_secret.as_deref().is_none_or(str::is_empty)
+        }
+        "client_secret_basic" => {
+            request.client_secret.as_deref().is_none_or(str::is_empty)
+                && basic_credentials.as_ref().is_some_and(|(_, secret)| {
+                    client_secret_matches(client.client_secret_hash.as_deref(), secret)
+                })
+        }
+        "client_secret_post" => {
+            basic_credentials.is_none()
+                && request.client_secret.as_deref().is_some_and(|secret| {
+                    !secret.is_empty()
+                        && client_secret_matches(client.client_secret_hash.as_deref(), secret)
+                })
+        }
+        _ => false,
+    };
+    if authenticated {
+        Ok(client_id)
+    } else {
+        Err(invalid_client_authentication())
+    }
+}
+
+fn parse_basic_client_credentials(headers: &HeaderMap) -> Result<Option<(String, String)>, ()> {
+    let Some(value) = headers.get(header::AUTHORIZATION) else {
+        return Ok(None);
+    };
+    let value = value.to_str().map_err(|_| ())?;
+    let (scheme, encoded) = value.split_once(' ').ok_or(())?;
+    if !scheme.eq_ignore_ascii_case("Basic") {
+        return Err(());
+    }
+    let decoded = STANDARD.decode(encoded.trim()).map_err(|_| ())?;
+    let decoded = String::from_utf8(decoded).map_err(|_| ())?;
+    let (client_id, client_secret) = decoded.split_once(':').ok_or(())?;
+    Ok(Some((client_id.to_owned(), client_secret.to_owned())))
+}
+
+fn client_secret_matches(stored_hash: Option<&[u8]>, presented_secret: &str) -> bool {
+    let presented_hash = hash(presented_secret);
+    stored_hash.is_some_and(|stored_hash| bool::from(stored_hash.ct_eq(presented_hash.as_slice())))
+}
+
+fn invalid_client_authentication() -> (StatusCode, &'static str, String) {
+    (
+        StatusCode::UNAUTHORIZED,
+        "invalid_client",
+        "The OAuth client credentials are missing or invalid.".to_owned(),
+    )
 }
 
 #[derive(Debug, FromRow)]
@@ -1051,6 +1182,19 @@ mod tests {
         );
     }
 
+    fn token_request(client_id: Option<&str>, client_secret: Option<&str>) -> TokenRequest {
+        TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            client_id: client_id.map(str::to_owned),
+            client_secret: client_secret.map(str::to_owned),
+            code: None,
+            redirect_uri: None,
+            code_verifier: None,
+            refresh_token: None,
+            resource: None,
+        }
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     async fn dynamic_registration_persists_a_public_client(pool: PgPool) {
         let value = register_client(
@@ -1069,15 +1213,164 @@ mod tests {
         .await
         .unwrap();
         let client_id = value["client_id"].as_str().unwrap();
-        let stored: (String, Vec<String>) = sqlx::query_as(
-            "SELECT client_name, redirect_uris FROM oauth_clients WHERE client_id = $1",
+        let stored: (String, Vec<String>, String, Option<Vec<u8>>) = sqlx::query_as(
+            r#"
+            SELECT client_name, redirect_uris, token_endpoint_auth_method, client_secret_hash
+              FROM oauth_clients
+             WHERE client_id = $1
+            "#,
         )
         .bind(client_id)
         .fetch_one(&pool)
         .await
         .unwrap();
+
+        assert_eq!(value["token_endpoint_auth_method"], "none");
+        assert!(value["client_secret"].is_null());
         assert_eq!(stored.0, "ChatGPT");
         assert_eq!(stored.1, vec!["https://chatgpt.com/aip/oauth/callback"]);
+        assert_eq!(stored.2, "none");
+        assert!(stored.3.is_none());
+        assert_eq!(
+            authenticate_token_client(
+                &pool,
+                &HeaderMap::new(),
+                &token_request(Some(client_id), None),
+            )
+            .await
+            .unwrap(),
+            client_id
+        );
+        assert_eq!(
+            authenticate_token_client(
+                &pool,
+                &HeaderMap::new(),
+                &token_request(Some(client_id), Some("unexpected-secret")),
+            )
+            .await
+            .unwrap_err()
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn dynamic_registration_defaults_to_confidential_basic_client(pool: PgPool) {
+        let value = register_client(
+            &pool,
+            RegistrationRequest {
+                client_name: Some("Google".to_owned()),
+                redirect_uris: vec!["https://gemini.google.com/mcp/oauth/callback".to_owned()],
+                token_endpoint_auth_method: None,
+                grant_types: Some(vec![
+                    "authorization_code".to_owned(),
+                    "refresh_token".to_owned(),
+                ]),
+                response_types: Some(vec!["code".to_owned()]),
+            },
+        )
+        .await
+        .unwrap();
+        let client_id = value["client_id"].as_str().unwrap();
+        let client_secret = value["client_secret"].as_str().unwrap();
+        let stored: (String, Option<Vec<u8>>) = sqlx::query_as(
+            r#"
+            SELECT token_endpoint_auth_method, client_secret_hash
+              FROM oauth_clients
+             WHERE client_id = $1
+            "#,
+        )
+        .bind(client_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(value["token_endpoint_auth_method"], "client_secret_basic");
+        assert_eq!(value["client_secret_expires_at"], 0);
+        assert!(client_secret.starts_with("baln_mcp_cs_"));
+        assert_eq!(stored.0, "client_secret_basic");
+        assert_eq!(stored.1.unwrap(), hash(client_secret));
+
+        let mut headers = HeaderMap::new();
+        let credentials = STANDARD.encode(format!("{client_id}:{client_secret}"));
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Basic {credentials}")).unwrap(),
+        );
+        assert_eq!(
+            authenticate_token_client(&pool, &headers, &token_request(None, None))
+                .await
+                .unwrap(),
+            client_id
+        );
+
+        let mut wrong_headers = HeaderMap::new();
+        let wrong_credentials = STANDARD.encode(format!("{client_id}:wrong-secret"));
+        wrong_headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Basic {wrong_credentials}")).unwrap(),
+        );
+        assert_eq!(
+            authenticate_token_client(&pool, &wrong_headers, &token_request(None, None))
+                .await
+                .unwrap_err()
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn confidential_post_client_authenticates_only_in_the_request_body(pool: PgPool) {
+        let value = register_client(
+            &pool,
+            RegistrationRequest {
+                client_name: Some("MCP post client".to_owned()),
+                redirect_uris: vec!["https://example.com/oauth/callback".to_owned()],
+                token_endpoint_auth_method: Some("client_secret_post".to_owned()),
+                grant_types: None,
+                response_types: None,
+            },
+        )
+        .await
+        .unwrap();
+        let client_id = value["client_id"].as_str().unwrap();
+        let client_secret = value["client_secret"].as_str().unwrap();
+
+        assert_eq!(
+            authenticate_token_client(
+                &pool,
+                &HeaderMap::new(),
+                &token_request(Some(client_id), Some(client_secret)),
+            )
+            .await
+            .unwrap(),
+            client_id
+        );
+        assert_eq!(
+            authenticate_token_client(
+                &pool,
+                &HeaderMap::new(),
+                &token_request(Some(client_id), Some("wrong-secret")),
+            )
+            .await
+            .unwrap_err()
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+
+        let mut headers = HeaderMap::new();
+        let credentials = STANDARD.encode(format!("{client_id}:{client_secret}"));
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Basic {credentials}")).unwrap(),
+        );
+        assert_eq!(
+            authenticate_token_client(&pool, &headers, &token_request(None, None))
+                .await
+                .unwrap_err()
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[sqlx::test(migrations = "./migrations")]
