@@ -75,8 +75,35 @@ const entry = {
   ],
 };
 
+const budget = {
+  id: "01980000-0000-7000-8000-000000000050",
+  name: "日常開銷",
+  amount_minor: 10_000,
+  start_date: "2026-07-01",
+  period_count: 1,
+  period_unit: "month",
+  accounts: [accounts[0], accounts[1]],
+  show_on_overview: true,
+  overview_position: 0,
+  as_of: "2026-07-24",
+  period_from: "2026-07-01",
+  period_to: "2026-08-01",
+  carry_in_minor: 2_000,
+  available_minor: 12_000,
+  spent_minor: 7_000,
+  remaining_minor: 5_000,
+  status: "active",
+  created_at: "2026-07-01T00:00:00Z",
+  updated_at: "2026-07-01T00:00:00Z",
+};
+
 async function mockApi(page: Page) {
   let visibleAccounts = [...accounts];
+  let visibleBudgets: Array<
+    Omit<typeof budget, "overview_position"> & {
+      overview_position: number | null;
+    }
+  > = [budget];
   let createdEntry: typeof entry | null = null;
   let updatedEntry: typeof entry | null = null;
   let apiTokens: Array<{
@@ -114,6 +141,69 @@ async function mockApi(page: Page) {
           updated_at: "2026-07-24T00:00:00Z",
         },
       });
+    }
+    if (path === "/api/v1/budgets" && method === "GET") {
+      const overviewOnly = url.searchParams.get("overview_only") === "true";
+      return route.fulfill({
+        json: overviewOnly
+          ? visibleBudgets.filter((item) => item.show_on_overview)
+          : visibleBudgets,
+      });
+    }
+    if (path === "/api/v1/budgets" && method === "POST") {
+      const body = route.request().postDataJSON() as {
+        name: string;
+        amount_minor: number;
+        start_date: string;
+        period_count: number;
+        period_unit: "day" | "week" | "month" | "year";
+        account_keys: string[];
+        show_on_overview: boolean;
+      };
+      const created = {
+        ...budget,
+        id: "01980000-0000-7000-8000-000000000051",
+        ...body,
+        accounts: accounts.filter((account) =>
+          body.account_keys.includes(account.key),
+        ),
+        overview_position: body.show_on_overview ? visibleBudgets.length : null,
+        amount_minor: body.amount_minor,
+        available_minor: body.amount_minor,
+        remaining_minor: body.amount_minor,
+        spent_minor: 0,
+        carry_in_minor: 0,
+      };
+      visibleBudgets = [...visibleBudgets, created];
+      return route.fulfill({ status: 201, json: created });
+    }
+    if (path === "/api/v1/budgets/overview-order" && method === "PUT") {
+      const body = route.request().postDataJSON() as { budget_ids: string[] };
+      visibleBudgets = visibleBudgets.map((item) => ({
+        ...item,
+        overview_position: body.budget_ids.indexOf(item.id),
+      }));
+      return route.fulfill({ status: 204 });
+    }
+    if (path.startsWith("/api/v1/budgets/") && method === "PATCH") {
+      const id = path.split("/").at(-1);
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      const current = visibleBudgets.find((item) => item.id === id)!;
+      const updated = {
+        ...current,
+        ...body,
+        overview_position:
+          body.show_on_overview === false ? null : current.overview_position,
+      };
+      visibleBudgets = visibleBudgets.map((item) =>
+        item.id === id ? updated : item,
+      );
+      return route.fulfill({ json: updated });
+    }
+    if (path.startsWith("/api/v1/budgets/") && method === "DELETE") {
+      const id = path.split("/").at(-1);
+      visibleBudgets = visibleBudgets.filter((item) => item.id !== id);
+      return route.fulfill({ status: 204 });
     }
     if (path === "/api/v1/auth/api-tokens" && method === "GET") {
       return route.fulfill({ json: apiTokens });
@@ -1385,6 +1475,53 @@ test("creates, reveals, and revokes a personal API token", async ({ page }) => {
   await expect(page.getByText("還沒有 API 權杖")).toBeVisible();
 });
 
+test("manages budgets with the shared mobile sheet and touch navigation", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ ...devices["Pixel 7"] });
+  const page = await context.newPage();
+  await mockApi(page);
+
+  try {
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "總覽預算" })).toBeVisible();
+    await expect(page.getByText("尚未使用")).toBeVisible();
+    const track = page.locator(".budget-carousel-track");
+    expect(
+      await track.evaluate(
+        (element) => element.scrollWidth >= element.clientWidth,
+      ),
+    ).toBe(true);
+
+    await page.getByRole("link", { name: "預算", exact: true }).click();
+    await expect(page).toHaveURL(/\/budgets$/);
+    await page.getByRole("button", { name: "新增預算" }).click();
+    const sheet = page.getByRole("dialog", { name: "新增預算" });
+    await expect(sheet).toHaveAttribute("data-presentation", "sheet");
+    await expect(sheet).toHaveAttribute("data-size", "near-full");
+    await expect(sheet.locator('[data-slot="dialog-body"]')).toHaveCSS(
+      "overflow-y",
+      "auto",
+    );
+    await page.getByLabel("預算名稱").fill("旅行基金");
+    await page.getByLabel("每期額度").fill("5000");
+    await page.getByRole("checkbox", { name: /現金/ }).check();
+    await page.getByRole("button", { name: "儲存預算" }).click();
+    await expect(sheet).not.toBeVisible();
+    await expect(
+      page
+        .locator('[data-slot="card"]:visible')
+        .filter({ hasText: "旅行基金" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "更多導覽" }).click();
+    await expect(page.getByRole("menuitem", { name: "帳戶" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "報表" })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test("provides touch-sized controls and feedback on coarse pointers", async ({
   browser,
 }) => {
@@ -1735,7 +1872,8 @@ test("animates real route content without layering over the mobile editor", asyn
     element.style.setProperty("--navigation-motion-duration", "1000ms");
   });
   await resetNavigationAnimations();
-  await page.getByRole("link", { name: "帳戶", exact: true }).click();
+  await page.getByRole("button", { name: "更多導覽" }).click();
+  await page.getByRole("menuitem", { name: "帳戶" }).click();
   await expect(page).toHaveURL(/\/accounts$/);
   await expect
     .poll(navigationAnimations)
@@ -1764,7 +1902,8 @@ test("animates real route content without layering over the mobile editor", asyn
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await resetNavigationAnimations();
-  await page.getByRole("link", { name: "帳戶", exact: true }).click();
+  await page.getByRole("button", { name: "更多導覽" }).click();
+  await page.getByRole("menuitem", { name: "帳戶" }).click();
   await expect(page).toHaveURL(/\/accounts$/);
   await expect.poll(navigationAnimations).toEqual([]);
 });
