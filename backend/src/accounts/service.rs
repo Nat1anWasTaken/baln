@@ -139,6 +139,19 @@ pub async fn balance(
 }
 
 pub async fn delete(pool: &PgPool, user_id: Uuid, account_id: Uuid) -> ApiResult<()> {
+    let used_by_budget: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM budget_accounts WHERE user_id = $1 AND account_id = $2)",
+    )
+    .bind(user_id)
+    .bind(account_id)
+    .fetch_one(pool)
+    .await?;
+    if used_by_budget {
+        return Err(ApiError::conflict(
+            "account_in_budget",
+            "remove this account from its budgets before deleting it",
+        ));
+    }
     match repository::delete(pool, user_id, account_id).await? {
         DeleteAccountResult::Deleted => Ok(()),
         DeleteAccountResult::NotFound => Err(ApiError::not_found("account")),

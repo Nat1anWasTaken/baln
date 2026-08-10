@@ -62,6 +62,7 @@ pub fn build_app(state: AppState) -> ApiResult<Router> {
     let api = Router::new()
         .nest("/auth", crate::auth::router())
         .nest("/accounts", crate::accounts::router())
+        .nest("/budgets", crate::budgets::router())
         .nest("/entries", crate::entries::router())
         .nest("/reports", crate::reports::router())
         .nest("/oauth", crate::oauth::account_router());
