@@ -15,7 +15,12 @@ const queryCacheKey = "query-cache";
 const sessionKey = "session";
 const pendingLogoutKey = "pending-logout";
 
-const persistedQueryPrefixes = new Set(["accounts", "entries", "reports"]);
+const persistedQueryPrefixes = new Set([
+  "accounts",
+  "budgets",
+  "entries",
+  "reports",
+]);
 
 export type OfflineSession = {
   user: User;

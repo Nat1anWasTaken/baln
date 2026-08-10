@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useOfflineReadOnly } from "@/auth/auth-context";
 import { EntryCard, EntryTableRow } from "@/components/entry-list-item";
+import { BudgetCarousel } from "@/components/budget-carousel";
 import { AppLink } from "@/components/navigation-transition";
 import { OfflineUnavailableState } from "@/components/offline-state";
 import {
@@ -93,6 +94,7 @@ export function DashboardPage() {
 
   return (
     <div className="grid gap-6">
+      <BudgetCarousel />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">期間概況</p>

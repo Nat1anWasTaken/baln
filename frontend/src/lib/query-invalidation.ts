@@ -7,6 +7,7 @@ export function invalidateAfterEntryWrite(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: queryKeys.entries.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.reports.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.accounts.balances }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
   ]);
 }
 
@@ -15,5 +16,10 @@ export function invalidateAfterAccountWrite(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.entries.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.reports.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
   ]);
+}
+
+export function invalidateAfterBudgetWrite(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all });
 }

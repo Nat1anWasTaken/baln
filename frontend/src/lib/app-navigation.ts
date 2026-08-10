@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   LayoutDashboard,
+  PiggyBank,
   type LucideIcon,
   WalletCards,
 } from "lucide-react";
@@ -17,6 +18,7 @@ export const primaryNavigation: PrimaryNavigationItem[] = [
   { to: "/", label: "總覽", icon: LayoutDashboard, end: true },
   { to: "/entries", label: "交易", icon: ArrowLeftRight },
   { to: "/accounts", label: "帳戶", icon: WalletCards },
+  { to: "/budgets", label: "預算", icon: PiggyBank },
   { to: "/reports", label: "報表", icon: BarChart3 },
 ];
 
@@ -25,6 +27,7 @@ const pageNames: Record<string, string> = {
   "/entries": "交易",
   "/entries/new": "新增交易",
   "/accounts": "帳戶",
+  "/budgets": "預算",
   "/reports": "報表",
   "/settings/api-tokens": "API 權杖",
   "/settings/connected-apps": "已連接的應用程式",

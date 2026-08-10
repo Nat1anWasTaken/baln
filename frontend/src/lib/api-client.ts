@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   accountBalanceSchema,
   accountSchema,
+  budgetStatusSchema,
   apiTokenSchema,
   createdApiTokenSchema,
   connectedAppSchema,
@@ -17,10 +18,12 @@ import {
   tokenResponseSchema,
   userSchema,
   type CreateAccountRequest,
+  type CreateBudgetRequest,
   type CreateApiTokenRequest,
   type CreateEntryRequest,
   type ProblemDetails,
   type UpdateAccountRequest,
+  type UpdateBudgetRequest,
   type EntryWriteRequest,
 } from "@/lib/schemas";
 import {
@@ -47,6 +50,14 @@ const localizedProblems: Record<string, string> = {
     "變更帳戶代碼或類型時，請重新載入帳戶後再試。",
   stale_account_update: "帳戶已被其他操作更新，請重新載入後再試。",
   account_in_use: "這個帳戶已有交易紀錄，請改為封存。",
+  account_in_budget: "這個帳戶仍屬於預算，請先從預算中移除。",
+  invalid_budget_name: "請輸入預算名稱。",
+  invalid_budget_amount: "預算金額必須是正整數。",
+  invalid_budget_period: "預算週期必須是正整數。",
+  invalid_budget_accounts: "請至少選擇一個不重複的帳戶。",
+  unknown_budget_account: "部分預算帳戶不存在或已封存。",
+  rollover_edit_mode_required: "請選擇如何處理既有累計餘額。",
+  invalid_budget_order: "預算排序已變更，請重新載入後再試。",
   empty_update: "請至少修改一個欄位。",
   invalid_description: "交易說明不可為空白。",
   insufficient_postings: "一筆交易至少需要兩個分錄。",
@@ -304,6 +315,35 @@ export const accountsApi = {
       {},
       { schema: accountBalanceSchema },
     ),
+};
+
+export const budgetsApi = {
+  list: (overviewOnly = false) =>
+    request(
+      `/budgets${queryString({ overview_only: overviewOnly })}`,
+      {},
+      { schema: z.array(budgetStatusSchema) },
+    ),
+  get: (id: string) =>
+    request(`/budgets/${id}`, {}, { schema: budgetStatusSchema }),
+  create: (body: CreateBudgetRequest) =>
+    request(
+      "/budgets",
+      { method: "POST", body: JSON.stringify(body) },
+      { schema: budgetStatusSchema },
+    ),
+  update: (id: string, body: UpdateBudgetRequest) =>
+    request(
+      `/budgets/${id}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      { schema: budgetStatusSchema },
+    ),
+  delete: (id: string) => request<void>(`/budgets/${id}`, { method: "DELETE" }),
+  reorderOverview: (budgetIds: string[]) =>
+    request<void>("/budgets/overview-order", {
+      method: "PUT",
+      body: JSON.stringify({ budget_ids: budgetIds }),
+    }),
 };
 
 export type EntryListParams = {

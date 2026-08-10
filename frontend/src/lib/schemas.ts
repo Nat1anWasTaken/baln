@@ -101,6 +101,56 @@ export const accountSchema = z.object({
 
 export type Account = z.infer<typeof accountSchema>;
 
+export const budgetPeriodUnitSchema = z.enum(["day", "week", "month", "year"]);
+export type BudgetPeriodUnit = z.infer<typeof budgetPeriodUnitSchema>;
+export type RolloverEditMode = "recalculate" | "preserve";
+
+export const budgetAccountSchema = z.object({
+  id: z.string().uuid(),
+  key: z.string(),
+  name: z.string(),
+  type: accountTypeSchema,
+  archived: z.boolean(),
+});
+
+export const budgetStatusSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  amount_minor: z.number().int(),
+  start_date: z.string(),
+  period_count: z.number().int().positive(),
+  period_unit: budgetPeriodUnitSchema,
+  accounts: z.array(budgetAccountSchema).min(1),
+  show_on_overview: z.boolean(),
+  overview_position: z.number().int().nullable(),
+  as_of: z.string(),
+  period_from: z.string(),
+  period_to: z.string(),
+  carry_in_minor: z.number().int(),
+  available_minor: z.number().int(),
+  spent_minor: z.number().int(),
+  remaining_minor: z.number().int(),
+  status: z.enum(["upcoming", "active", "overspent"]),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export type BudgetStatus = z.infer<typeof budgetStatusSchema>;
+
+export type CreateBudgetRequest = {
+  name: string;
+  amount_minor: number;
+  start_date: string;
+  period_count: number;
+  period_unit: BudgetPeriodUnit;
+  account_keys: string[];
+  show_on_overview: boolean;
+};
+
+export type UpdateBudgetRequest = Partial<CreateBudgetRequest> & {
+  rollover_edit_mode?: RolloverEditMode;
+};
+
 export const accountBalanceSchema = z.object({
   account_id: z.string().uuid(),
   account_key: z.string(),

@@ -1,5 +1,6 @@
 export const routeModules = {
   accounts: () => import("@/pages/accounts-page"),
+  budgets: () => import("@/pages/budgets-page"),
   apiTokens: () => import("@/pages/api-tokens-page"),
   authCallback: () => import("@/pages/auth-callback-page"),
   connectedApps: () => import("@/pages/connected-apps-page"),
@@ -20,6 +21,7 @@ export function routeModuleKeyForPath(pathname: string): RouteModuleKey {
   if (pathname === "/login") return "login";
   if (pathname === "/auth/callback") return "authCallback";
   if (pathname === "/accounts") return "accounts";
+  if (pathname === "/budgets") return "budgets";
   if (pathname === "/reports") return "reports";
   if (pathname === "/settings/api-tokens") return "apiTokens";
   if (pathname === "/settings/connected-apps") return "connectedApps";

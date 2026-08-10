@@ -2,10 +2,13 @@ import { Suspense, useState } from "react";
 import {
   ChevronUp,
   CircleUserRound,
+  Ellipsis,
   KeyRound,
   PlugZap,
   LogOut,
   Plus,
+  BarChart3,
+  WalletCards,
 } from "lucide-react";
 import { Outlet, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -59,6 +62,7 @@ import {
 
 type MobileNavigationItem = PrimaryNavigationItem & {
   primary?: boolean;
+  more?: boolean;
 };
 
 const mobileNavigation: MobileNavigationItem[] = [
@@ -71,8 +75,13 @@ const mobileNavigation: MobileNavigationItem[] = [
     end: true,
     primary: true,
   },
-  primaryNavigation[2],
-  primaryNavigation[3],
+  primaryNavigation.find((item) => item.to === "/budgets")!,
+  {
+    to: "#more",
+    label: "更多",
+    icon: Ellipsis,
+    more: true,
+  },
 ];
 
 function UserMenu({ compact = false }: { compact?: boolean }) {
@@ -161,6 +170,7 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
 
 export function AppShell() {
   const auth = useAuth();
+  const navigate = useAppNavigate();
   const location = useLocation();
   const pageName = pageNameForPath(location.pathname);
   const isMobileNavigationActive = (to: string) => {
@@ -271,8 +281,60 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 items-center border-t bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 backdrop-blur md:hidden"
       >
         {mobileNavigation.map((item) => {
-          const isActive = isMobileNavigationActive(item.to);
+          const isActive = item.more
+            ? location.pathname === "/accounts" ||
+              location.pathname === "/reports"
+            : isMobileNavigationActive(item.to);
           const disabled = auth.isReadOnly && item.primary;
+
+          if (item.more) {
+            return (
+              <DropdownMenu key={item.to}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label="更多導覽"
+                    aria-current={isActive ? "page" : undefined}
+                    className={`touch-press-frameless relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs ${
+                      isActive
+                        ? "font-semibold text-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {isActive ? (
+                      <ActiveNavigationIndicator className="bg-muted/70" />
+                    ) : null}
+                    <Ellipsis className="size-5" aria-hidden="true" />
+                    <span>更多</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  side="top"
+                  align="end"
+                  sideOffset={10}
+                  className="w-48"
+                >
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      window.requestAnimationFrame(() => navigate("/accounts"))
+                    }
+                  >
+                    <WalletCards aria-hidden="true" />
+                    帳戶
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      window.requestAnimationFrame(() => navigate("/reports"))
+                    }
+                  >
+                    <BarChart3 aria-hidden="true" />
+                    報表
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
 
           if (disabled) {
             return (

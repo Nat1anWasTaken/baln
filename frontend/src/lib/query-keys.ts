@@ -7,6 +7,11 @@ export const queryKeys = {
     balance: (accountId: string, asOf: string) =>
       ["accounts", "balance", accountId, asOf] as const,
   },
+  budgets: {
+    all: ["budgets"] as const,
+    list: (overviewOnly: boolean) => ["budgets", "list", overviewOnly] as const,
+    detail: (budgetId: string) => ["budgets", "detail", budgetId] as const,
+  },
   entries: {
     all: ["entries"] as const,
     list: (

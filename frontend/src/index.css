@@ -165,6 +165,13 @@
 }
 
 @layer components {
+  .budget-carousel-track {
+    scrollbar-width: none;
+  }
+
+  .budget-carousel-track::-webkit-scrollbar {
+    display: none;
+  }
   .app-route-content[data-entry-direction="forward"] {
     animation: app-navigation-in-forward var(--navigation-motion-duration)
       var(--navigation-motion-easing) both;
@@ -305,6 +312,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .budget-carousel-track {
+    scroll-behavior: auto;
+  }
   .app-route-content[data-entry-direction],
   html[data-navigation-direction] .app-page-title,
   html[data-navigation-direction] .app-active-navigation-indicator {
