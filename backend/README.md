@@ -26,6 +26,7 @@ baln/
     ├── src/accounts/           # Account API and balances
     ├── src/entries/            # Atomic Entry + Posting operations
     ├── src/reports/            # Period and monthly summaries
+    ├── src/budgets/            # Recurring budgets and rollover status
     ├── src/bin/admin.rs        # User provisioning CLI
     ├── src/bin/migrate.rs      # Migration CLI
     └── tests/                  # PostgreSQL invariant tests
@@ -264,6 +265,13 @@ GET    /api/v1/accounts/{id}
 PATCH  /api/v1/accounts/{id}
 DELETE /api/v1/accounts/{id}
 GET    /api/v1/accounts/{id}/balance
+
+POST   /api/v1/budgets
+GET    /api/v1/budgets
+GET    /api/v1/budgets/{id}
+PATCH  /api/v1/budgets/{id}
+DELETE /api/v1/budgets/{id}
+PUT    /api/v1/budgets/overview-order
 
 POST   /api/v1/entries
 GET    /api/v1/entries

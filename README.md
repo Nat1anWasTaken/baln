@@ -8,6 +8,7 @@ Baln is a multi-user personal finance ledger built around double-entry bookkeepi
 - Asset, liability, income, expense, and equity accounts
 - Searchable and editable transactions with atomic writes
 - Period summaries and monthly income/expense reports
+- Flexible recurring budgets with account filters, rollover, and an overview carousel
 - Google OpenID Connect login with PKCE
 - Short-lived access tokens, rotating refresh tokens, and personal API tokens
 - OAuth 2.1 + PKCE for MCP clients such as ChatGPT and Gemini

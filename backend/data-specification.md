@@ -1279,3 +1279,13 @@ GET    /reports/monthly
 * API token 擁有使用者的完整 ledger 權限，可設定到期時間或持續有效至撤銷。
 * API token 無法管理其他 API token。
 * 停用使用者會阻止其 API token；撤銷 browser sessions 不影響 API token。
+
+## 19.6 Flexible Budgets
+
+Budget 是建立在核心帳本之上的使用者設定，不改變 Account、Entry 或 Posting 的會計語意。
+
+* 每個 Budget 有開始日期、日／週／月／年週期、基本額度與一組 Account 篩選條件。
+* 符合任一所選 Account 的 Entry，只會將其 expense Posting 合計計入一次；轉帳不計入支出。
+* 每期未使用或超支的金額會正負雙向累計至下一期。
+* Budget 編輯可選擇從開始日期重新計算，或保留目前累計並建立新的 rollover anchor。
+* `budget_accounts` 使用 UUID 關聯 Account；Account key 或顯示名稱變更不會破壞 Budget。
