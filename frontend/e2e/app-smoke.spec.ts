@@ -1524,6 +1524,20 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
       "overflow-y",
       "auto",
     );
+    const budgetCheckbox = page.getByRole("checkbox", { name: /現金/ }).first();
+    const checkboxBounds = await budgetCheckbox.boundingBox();
+    expect(checkboxBounds).not.toBeNull();
+    expect(Math.round(checkboxBounds!.width)).toBe(16);
+    expect(Math.round(checkboxBounds!.height)).toBe(16);
+    const checkboxHitArea = await budgetCheckbox.evaluate((element) => {
+      const style = getComputedStyle(element, "::after");
+      return {
+        width: Number.parseFloat(style.width),
+        height: Number.parseFloat(style.height),
+      };
+    });
+    expect(checkboxHitArea.width).toBeGreaterThanOrEqual(44);
+    expect(checkboxHitArea.height).toBeGreaterThanOrEqual(44);
     await page.getByRole("button", { name: "儲存預算" }).click();
     await expect(page.getByText("請輸入預算名稱。")).toBeVisible();
     await expect(page.getByText("請輸入大於零的整數額度。")).toBeVisible();
@@ -1564,6 +1578,85 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
     await page.getByRole("button", { name: "更多導覽" }).click();
     await expect(page.getByRole("menuitem", { name: "帳戶" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "報表" })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test("keeps the budget dialog within the desktop viewport", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 1024, height: 800 },
+  });
+  const page = await context.newPage();
+  await mockApi(page);
+
+  try {
+    await page.goto("/budgets");
+    await page.getByRole("button", { name: "新增預算" }).click();
+    const desktopDialog = page.getByRole("dialog", { name: "新增預算" });
+    await expect(desktopDialog).toHaveAttribute("data-presentation", "dialog");
+    await expect(desktopDialog).toBeVisible();
+
+    const viewport = page.viewportSize();
+    const desktopBounds = await desktopDialog.boundingBox();
+    expect(viewport).not.toBeNull();
+    expect(desktopBounds).not.toBeNull();
+    expect(desktopBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(desktopBounds!.y).toBeGreaterThanOrEqual(0);
+    expect(desktopBounds!.x + desktopBounds!.width).toBeLessThanOrEqual(
+      viewport!.width,
+    );
+    expect(desktopBounds!.y + desktopBounds!.height).toBeLessThanOrEqual(
+      viewport!.height,
+    );
+
+    const desktopHeader = desktopDialog.locator('[data-slot="dialog-header"]');
+    const desktopBody = desktopDialog.locator('[data-slot="dialog-body"]');
+    const desktopFooter = desktopDialog.locator('[data-slot="dialog-footer"]');
+    await expect(desktopHeader).toBeVisible();
+    await expect(desktopBody).toHaveCSS("overflow-y", "auto");
+    await expect(desktopFooter).toBeVisible();
+
+    const [desktopHeaderBounds, desktopBodyBounds, desktopFooterBounds] =
+      await Promise.all([
+        desktopHeader.boundingBox(),
+        desktopBody.boundingBox(),
+        desktopFooter.boundingBox(),
+      ]);
+    expect(desktopHeaderBounds).not.toBeNull();
+    expect(desktopBodyBounds).not.toBeNull();
+    expect(desktopFooterBounds).not.toBeNull();
+    expect(desktopHeaderBounds!.y).toBeGreaterThanOrEqual(0);
+    expect(
+      desktopFooterBounds!.y + desktopFooterBounds!.height,
+    ).toBeLessThanOrEqual(viewport!.height);
+    expect(
+      desktopHeaderBounds!.y + desktopHeaderBounds!.height,
+    ).toBeLessThanOrEqual(desktopBodyBounds!.y);
+    expect(
+      desktopBodyBounds!.y + desktopBodyBounds!.height,
+    ).toBeLessThanOrEqual(desktopFooterBounds!.y);
+
+    const accountRow = desktopDialog
+      .locator("label")
+      .filter({ hasText: "現金" })
+      .first();
+    const accountNameBounds = await accountRow
+      .locator("span")
+      .filter({ hasText: /^現金$/ })
+      .boundingBox();
+    const accountKeyBounds = await accountRow
+      .locator("span")
+      .filter({ hasText: /^asset\.cash$/ })
+      .boundingBox();
+    expect(accountNameBounds).not.toBeNull();
+    expect(accountKeyBounds).not.toBeNull();
+    expect(accountNameBounds!.x + accountNameBounds!.width).toBeLessThanOrEqual(
+      accountKeyBounds!.x,
+    );
+    await desktopDialog.getByRole("button", { name: "取消" }).click();
   } finally {
     await context.close();
   }

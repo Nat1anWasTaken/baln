@@ -181,16 +181,17 @@ export function BudgetDialog({
       >
         <DialogContent
           mobileSize="near-full"
+          className="md:flex md:max-h-[calc(100dvh-2rem)] md:max-w-2xl md:flex-col md:overflow-hidden"
           closeLabel={budget ? "關閉編輯預算" : "關閉新增預算"}
         >
-          <form onSubmit={submit}>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
             <DialogHeader>
               <DialogTitle>{budget ? "編輯預算" : "新增預算"}</DialogTitle>
               <DialogDescription>
                 設定週期、額度與用來篩選交易的帳戶。
               </DialogDescription>
             </DialogHeader>
-            <DialogBody className="grid gap-5">
+            <DialogBody className="min-h-0 flex-1 overflow-y-auto grid gap-5">
               <Field data-invalid={submitted && !values.name.trim()}>
                 <FieldLabel htmlFor="budget-name">預算名稱</FieldLabel>
                 <Input
@@ -341,7 +342,7 @@ export function BudgetDialog({
                     className="pl-8"
                   />
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                   {accountTypes.map((type) => {
                     const options = accounts.filter((account) => {
                       if (account.type !== type) return false;
@@ -362,7 +363,10 @@ export function BudgetDialog({
                     });
                     if (!options.length) return null;
                     return (
-                      <fieldset key={type} className="grid content-start gap-2">
+                      <fieldset
+                        key={type}
+                        className="grid min-w-0 content-start gap-2"
+                      >
                         <legend className="text-xs font-medium text-muted-foreground">
                           {accountTypeLabels[type]}
                         </legend>
@@ -374,7 +378,7 @@ export function BudgetDialog({
                             return (
                               <label
                                 key={account.id}
-                                className="touch-surface flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm"
+                                className="touch-surface flex min-h-11 min-w-0 items-center gap-3 rounded-lg px-2 text-sm"
                               >
                                 <Checkbox
                                   checked={checked}
@@ -393,7 +397,7 @@ export function BudgetDialog({
                                   {account.name}
                                   {account.archived ? "（已封存）" : ""}
                                 </span>
-                                <span className="truncate text-xs text-muted-foreground">
+                                <span className="min-w-0 max-w-[45%] shrink truncate text-xs text-muted-foreground">
                                   {account.key}
                                 </span>
                               </label>

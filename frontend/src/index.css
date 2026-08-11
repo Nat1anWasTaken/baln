@@ -362,6 +362,11 @@
     min-height: 2.75rem;
   }
 
+  [data-slot="checkbox"] {
+    min-width: 1rem;
+    min-height: 1rem;
+  }
+
   /*
    * Segmented controls keep a padded track around their 44px touch targets.
    * Include that inset in the track height so triggers do not overflow it.
