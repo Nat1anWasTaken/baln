@@ -140,64 +140,70 @@ export function BudgetsPage() {
       <>
         <div className="grid gap-3 md:hidden">
           {filteredBudgets.map((budget) => (
-            <div key={budget.id} className="grid gap-2">
-              <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
-              <div className="flex min-h-11 items-center gap-1 rounded-lg border bg-card px-2">
-                <Switch
-                  aria-label={`${budget.name} 顯示在總覽`}
-                  checked={budget.show_on_overview}
-                  disabled={isReadOnly || visibility.isPending}
-                  onCheckedChange={(show) =>
-                    visibility.mutate({ budget, show })
-                  }
-                />
-                <span className="mr-auto text-sm">總覽</span>
-                {budget.show_on_overview ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`上移 ${budget.name}`}
-                      disabled={isReadOnly || visible[0]?.id === budget.id}
-                      onClick={() => move(budget, -1)}
-                    >
-                      <ArrowUp aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`下移 ${budget.name}`}
-                      disabled={isReadOnly || visible.at(-1)?.id === budget.id}
-                      onClick={() => move(budget, 1)}
-                    >
-                      <ArrowDown aria-hidden="true" />
-                    </Button>
-                  </>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`編輯 ${budget.name}`}
-                  disabled={isReadOnly}
-                  onClick={() => setEditing(budget)}
-                >
-                  <Pencil aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`刪除 ${budget.name}`}
-                  disabled={isReadOnly}
-                  onClick={() => setDeleting(budget)}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
-            </div>
+            <BudgetCard
+              key={budget.id}
+              budget={budget}
+              to={`/budgets/${budget.id}`}
+              footer={
+                <>
+                  <Switch
+                    aria-label={`${budget.name} 顯示在總覽`}
+                    checked={budget.show_on_overview}
+                    disabled={isReadOnly || visibility.isPending}
+                    onCheckedChange={(show) =>
+                      visibility.mutate({ budget, show })
+                    }
+                  />
+                  <span className="mr-auto text-sm">總覽</span>
+                  {budget.show_on_overview ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`上移 ${budget.name}`}
+                        disabled={isReadOnly || visible[0]?.id === budget.id}
+                        onClick={() => move(budget, -1)}
+                      >
+                        <ArrowUp aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`下移 ${budget.name}`}
+                        disabled={
+                          isReadOnly || visible.at(-1)?.id === budget.id
+                        }
+                        onClick={() => move(budget, 1)}
+                      >
+                        <ArrowDown aria-hidden="true" />
+                      </Button>
+                    </>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`編輯 ${budget.name}`}
+                    disabled={isReadOnly}
+                    onClick={() => setEditing(budget)}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`刪除 ${budget.name}`}
+                    disabled={isReadOnly}
+                    onClick={() => setDeleting(budget)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </>
+              }
+            />
           ))}
         </div>
         <Card className="hidden md:block">

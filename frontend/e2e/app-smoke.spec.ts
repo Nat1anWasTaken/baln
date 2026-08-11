@@ -1617,6 +1617,19 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
 
     await page.getByRole("link", { name: "預算", exact: true }).click();
     await expect(page).toHaveURL(/\/budgets$/);
+    const managedBudgetCard = page
+      .locator('[data-slot="card"]:visible')
+      .filter({ hasText: "日常開銷" });
+    await expect(managedBudgetCard).toHaveCount(1);
+    await expect(
+      managedBudgetCard.locator('[data-slot="card-footer"]'),
+    ).toBeVisible();
+    await expect(
+      managedBudgetCard.getByRole("link", { name: "查看預算：日常開銷" }),
+    ).toBeVisible();
+    await expect(
+      managedBudgetCard.getByRole("button", { name: "編輯 日常開銷" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "新增預算" }).click();
     const sheet = page.getByRole("dialog", { name: "新增預算" });
     await expect(sheet).toHaveAttribute("data-presentation", "sheet");

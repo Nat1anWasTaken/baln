@@ -1,4 +1,5 @@
 import { CalendarRange, CircleAlert } from "lucide-react";
+import type { ReactNode } from "react";
 import type { To } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import {
   CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -30,10 +32,12 @@ export function BudgetCard({
   budget,
   to,
   className,
+  footer,
 }: {
   budget: BudgetStatus;
   to?: To;
   className?: string;
+  footer?: ReactNode;
 }) {
   const upcoming = budget.status === "upcoming";
   const overspent = budget.remaining_minor < 0;
@@ -59,11 +63,8 @@ export function BudgetCard({
     (rolloverRemaining / capacity) * 100,
   );
 
-  const card = (
-    <Card
-      className={cn("h-full", className)}
-      data-budget-status={budget.status}
-    >
+  const content = (
+    <>
       <CardHeader>
         <CardTitle className="truncate">{budget.name}</CardTitle>
         <CardDescription>
@@ -204,10 +205,32 @@ export function BudgetCard({
           {budget.accounts.map((account) => account.name).join("、")}
         </p>
       </CardContent>
+    </>
+  );
+
+  const card = (
+    <Card
+      className={cn("h-full", className)}
+      data-budget-status={budget.status}
+    >
+      {to && footer ? (
+        <AppLink
+          to={to}
+          aria-label={`查看預算：${budget.name}`}
+          className="touch-press grid gap-(--card-spacing) rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          {content}
+        </AppLink>
+      ) : (
+        content
+      )}
+      {footer ? (
+        <CardFooter className="min-h-11 gap-1 px-2 py-0">{footer}</CardFooter>
+      ) : null}
     </Card>
   );
 
-  if (!to) return card;
+  if (!to || footer) return card;
 
   return (
     <AppLink

@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { BudgetCard } from "@/components/budget-card";
+import { Button } from "@/components/ui/button";
 import type { BudgetStatus } from "@/lib/schemas";
 
 const budget: BudgetStatus = {
@@ -102,5 +104,26 @@ describe("BudgetCard", () => {
     expect(screen.getAllByText("已超支").length).toBeGreaterThan(0);
     expect(screen.getByText("超支")).toBeVisible();
     expect(screen.getByText("TWD 3,000")).toBeVisible();
+  });
+
+  it("groups management controls in the linked card footer", () => {
+    render(
+      <MemoryRouter>
+        <BudgetCard
+          budget={budget}
+          to="/budgets/budget-id"
+          footer={<Button type="button">編輯預算</Button>}
+        />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "查看預算：日常開銷" });
+    const button = screen.getByRole("button", { name: "編輯預算" });
+
+    expect(link).not.toContainElement(button);
+    expect(link.closest("[data-slot=card]")).toBe(
+      button.closest("[data-slot=card]"),
+    );
+    expect(button.closest("[data-slot=card-footer]")).toBeVisible();
   });
 });
