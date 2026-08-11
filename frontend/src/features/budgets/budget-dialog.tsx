@@ -134,7 +134,20 @@ export function BudgetDialog({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitted(true);
-    if (!valid) return;
+    if (!valid) {
+      const invalidId = !values.name.trim()
+        ? "budget-name"
+        : !Number.isSafeInteger(values.amount_minor) || values.amount_minor <= 0
+          ? "budget-amount"
+          : !values.start_date
+            ? "budget-start-date"
+            : !Number.isSafeInteger(values.period_count) ||
+                values.period_count <= 0
+              ? "budget-period-count"
+              : "budget-account-search";
+      requestAnimationFrame(() => document.getElementById(invalidId)?.focus());
+      return;
+    }
     const normalized = { ...values, name: values.name.trim() };
     if (budget) {
       if (definitionChanged(normalized, budget)) {
@@ -160,7 +173,7 @@ export function BudgetDialog({
   return (
     <>
       <Dialog
-        open={open}
+        open={open && pendingUpdate === null && !discardOpen}
         mobileProps={{ dismissible: !save.isPending }}
         onOpenChange={(next) => {
           if (!next) requestClose();
@@ -182,6 +195,7 @@ export function BudgetDialog({
                 <FieldLabel htmlFor="budget-name">預算名稱</FieldLabel>
                 <Input
                   id="budget-name"
+                  aria-invalid={submitted && !values.name.trim()}
                   value={values.name}
                   onChange={(event) =>
                     setValues((current) => ({
@@ -196,10 +210,21 @@ export function BudgetDialog({
                 ) : null}
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field data-invalid={submitted && values.amount_minor <= 0}>
+                <Field
+                  data-invalid={
+                    submitted &&
+                    (!Number.isSafeInteger(values.amount_minor) ||
+                      values.amount_minor <= 0)
+                  }
+                >
                   <FieldLabel htmlFor="budget-amount">每期額度</FieldLabel>
                   <Input
                     id="budget-amount"
+                    aria-invalid={
+                      submitted &&
+                      (!Number.isSafeInteger(values.amount_minor) ||
+                        values.amount_minor <= 0)
+                    }
                     type="number"
                     min={1}
                     step={1}
@@ -213,11 +238,17 @@ export function BudgetDialog({
                     }
                   />
                   <FieldDescription>以 TWD 整數金額計算。</FieldDescription>
+                  {submitted &&
+                  (!Number.isSafeInteger(values.amount_minor) ||
+                    values.amount_minor <= 0) ? (
+                    <FieldError>請輸入大於零的整數額度。</FieldError>
+                  ) : null}
                 </Field>
-                <Field>
+                <Field data-invalid={submitted && !values.start_date}>
                   <FieldLabel htmlFor="budget-start-date">開始日期</FieldLabel>
                   <Input
                     id="budget-start-date"
+                    aria-invalid={submitted && !values.start_date}
                     type="date"
                     value={values.start_date}
                     onChange={(event) =>
@@ -227,15 +258,29 @@ export function BudgetDialog({
                       }))
                     }
                   />
+                  {submitted && !values.start_date ? (
+                    <FieldError>請選擇開始日期。</FieldError>
+                  ) : null}
                 </Field>
               </div>
               <div className="grid grid-cols-[1fr_1fr] gap-4">
-                <Field>
+                <Field
+                  data-invalid={
+                    submitted &&
+                    (!Number.isSafeInteger(values.period_count) ||
+                      values.period_count <= 0)
+                  }
+                >
                   <FieldLabel htmlFor="budget-period-count">
                     週期長度
                   </FieldLabel>
                   <Input
                     id="budget-period-count"
+                    aria-invalid={
+                      submitted &&
+                      (!Number.isSafeInteger(values.period_count) ||
+                        values.period_count <= 0)
+                    }
                     type="number"
                     min={1}
                     step={1}
@@ -248,6 +293,11 @@ export function BudgetDialog({
                       }))
                     }
                   />
+                  {submitted &&
+                  (!Number.isSafeInteger(values.period_count) ||
+                    values.period_count <= 0) ? (
+                    <FieldError>請輸入大於零的整數週期。</FieldError>
+                  ) : null}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="budget-period-unit">單位</FieldLabel>
@@ -282,7 +332,9 @@ export function BudgetDialog({
                     aria-hidden="true"
                   />
                   <Input
+                    id="budget-account-search"
                     aria-label="搜尋預算帳戶"
+                    aria-invalid={submitted && values.account_keys.length === 0}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="依名稱、代碼或類型搜尋"

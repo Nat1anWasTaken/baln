@@ -1503,6 +1503,11 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
       "overflow-y",
       "auto",
     );
+    await page.getByRole("button", { name: "儲存預算" }).click();
+    await expect(page.getByText("請輸入預算名稱。")).toBeVisible();
+    await expect(page.getByText("請輸入大於零的整數額度。")).toBeVisible();
+    await expect(page.getByText("請至少選擇一個帳戶。")).toBeVisible();
+    await expect(page.getByLabel("預算名稱")).toBeFocused();
     await page.getByLabel("預算名稱").fill("旅行基金");
     await page.getByLabel("每期額度").fill("5000");
     await page.getByRole("checkbox", { name: /現金/ }).check();
@@ -1513,6 +1518,27 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
         .locator('[data-slot="card"]:visible')
         .filter({ hasText: "旅行基金" }),
     ).toBeVisible();
+
+    await page.getByRole("button", { name: "編輯 旅行基金" }).click();
+    const editSheet = page.getByRole("dialog", { name: "編輯預算" });
+    await page.getByLabel("每期額度").fill("6000");
+    await page.getByRole("button", { name: "儲存預算" }).click();
+    await expect(
+      page.getByRole("alertdialog", { name: "如何處理累計餘額？" }),
+    ).toBeVisible();
+    await expect(editSheet).not.toBeVisible();
+    await page.getByRole("button", { name: "返回編輯" }).click();
+    await expect(editSheet).toBeVisible();
+    await page.getByRole("button", { name: "取消" }).click();
+    await expect(
+      page.getByRole("alertdialog", { name: "捨棄未儲存的預算？" }),
+    ).toBeVisible();
+    await expect(editSheet).not.toBeVisible();
+    await page.getByRole("button", { name: "繼續編輯" }).click();
+    await expect(editSheet).toBeVisible();
+    await page.getByRole("button", { name: "取消" }).click();
+    await page.getByRole("button", { name: "捨棄變更" }).click();
+    await expect(editSheet).not.toBeVisible();
 
     await page.getByRole("button", { name: "更多導覽" }).click();
     await expect(page.getByRole("menuitem", { name: "帳戶" })).toBeVisible();

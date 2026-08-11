@@ -207,19 +207,32 @@ export function BudgetsPage() {
                     </p>
                   </TableCell>
                   <TableCell>
-                    <p className="font-medium tabular-nums">
-                      {formatMoney(budget.spent_minor)} /{" "}
-                      {formatMoney(budget.available_minor)}
-                    </p>
-                    <Badge
-                      variant={
-                        budget.remaining_minor < 0 ? "destructive" : "secondary"
-                      }
-                    >
-                      {budget.remaining_minor < 0
-                        ? `超支 ${formatMoney(-budget.remaining_minor)}`
-                        : `剩餘 ${formatMoney(budget.remaining_minor)}`}
-                    </Badge>
+                    {budget.status === "upcoming" ? (
+                      <>
+                        <p className="font-medium">尚未開始</p>
+                        <Badge variant="secondary">
+                          將於 {formatShortDate(budget.start_date)} 開始
+                        </Badge>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium tabular-nums">
+                          {formatMoney(budget.spent_minor)} /{" "}
+                          {formatMoney(budget.available_minor)}
+                        </p>
+                        <Badge
+                          variant={
+                            budget.remaining_minor < 0
+                              ? "destructive"
+                              : "secondary"
+                          }
+                        >
+                          {budget.remaining_minor < 0
+                            ? `超支 ${formatMoney(-budget.remaining_minor)}`
+                            : `剩餘 ${formatMoney(budget.remaining_minor)}`}
+                        </Badge>
+                      </>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Switch

@@ -126,7 +126,7 @@ export function BudgetCarousel() {
       <div
         ref={track}
         onScroll={syncActive}
-        className="budget-carousel-track -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 outline-none overscroll-x-contain focus-visible:ring-2 focus-visible:ring-ring/50 md:-mx-6 md:px-6"
+        className="budget-carousel-track flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 outline-none overscroll-x-contain focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         {items.map((budget, index) => (
           <article
