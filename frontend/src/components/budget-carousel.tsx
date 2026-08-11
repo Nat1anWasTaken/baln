@@ -82,18 +82,14 @@ export function BudgetCarousel() {
   }
 
   return (
-    <section
-      aria-roledescription="carousel"
-      aria-label="總覽預算"
-      className="grid gap-3"
-    >
+    <section aria-label="總覽預算" className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">預算快覽</p>
           <h2 className="font-heading text-xl font-semibold">目前預算</h2>
         </div>
         {items.length > 1 ? (
-          <div className="flex gap-1">
+          <div className="flex gap-1 md:hidden">
             <Button
               type="button"
               variant="outline"
@@ -126,21 +122,26 @@ export function BudgetCarousel() {
       <div
         ref={track}
         onScroll={syncActive}
-        className="budget-carousel-track flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 outline-none overscroll-x-contain focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-roledescription="carousel"
+        aria-label="總覽預算"
+        className="budget-carousel-track flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 outline-none overscroll-x-contain focus-visible:ring-2 focus-visible:ring-ring/50 md:hidden"
       >
         {items.map((budget, index) => (
           <article
             key={budget.id}
             aria-roledescription="slide"
             aria-label={`${index + 1} / ${items.length}`}
-            className="w-full shrink-0 snap-start sm:w-[24rem] lg:w-[calc((100%-1.5rem)/3)]"
+            className="w-full shrink-0 snap-start sm:w-[24rem]"
           >
             <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
           </article>
         ))}
       </div>
       {items.length > 1 ? (
-        <div className="flex justify-center gap-2" aria-label="預算位置">
+        <div
+          className="flex justify-center gap-2 md:hidden"
+          aria-label="預算位置"
+        >
           {items.map((budget, index) => (
             <Button
               key={budget.id}
@@ -159,6 +160,13 @@ export function BudgetCarousel() {
           ))}
         </div>
       ) : null}
+      <div className="hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-3">
+        {items.map((budget) => (
+          <article key={budget.id}>
+            <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
