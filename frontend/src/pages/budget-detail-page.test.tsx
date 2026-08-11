@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -95,7 +96,15 @@ const days = {
   next_cursor: null,
 };
 
-function renderPage(initialEntry = "/budgets/" + budgetId) {
+function renderPage(
+  initialEntry:
+    | string
+    | {
+        pathname: string;
+        search?: string;
+        state: { budgetReturnTo: string };
+      } = "/budgets/" + budgetId,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -132,6 +141,45 @@ describe("BudgetDetailPage", () => {
     expect(screen.getByLabelText("預算支出與剩餘趨勢圖")).toBeInTheDocument();
   });
 
+  it("returns to the overview when opened from an overview budget card", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([])),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/details`, () =>
+        HttpResponse.json(detail),
+      ),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/days`, () =>
+        HttpResponse.json(days),
+      ),
+    );
+
+    renderPage({
+      pathname: `/budgets/${budgetId}`,
+      state: { budgetReturnTo: "/" },
+    });
+
+    expect(
+      await screen.findByRole("link", { name: "返回總覽" }),
+    ).toHaveAttribute("href", "/");
+  });
+
+  it("defaults direct budget links to the budgets page", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([])),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/details`, () =>
+        HttpResponse.json(detail),
+      ),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/days`, () =>
+        HttpResponse.json(days),
+      ),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("link", { name: "返回預算" }),
+    ).toHaveAttribute("href", "/budgets");
+  });
+
   it("links daily rows to the filtered transaction view", async () => {
     server.use(
       http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([])),
@@ -157,6 +205,7 @@ describe("BudgetDetailPage", () => {
   });
 
   it("uses a non-positive URL period and exposes the previous-period link", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([])),
       http.get(`${API_BASE_URL}/budgets/${budgetId}/details`, () =>
@@ -172,7 +221,11 @@ describe("BudgetDetailPage", () => {
       ),
     );
 
-    renderPage(`/budgets/${budgetId}?period=-1`);
+    renderPage({
+      pathname: `/budgets/${budgetId}`,
+      search: "?period=-1",
+      state: { budgetReturnTo: "/" },
+    });
     await screen.findByText("每月餐飲");
 
     expect(
@@ -181,5 +234,11 @@ describe("BudgetDetailPage", () => {
     expect(
       screen.getByRole("link", { name: "查看下一期預算" }),
     ).toHaveAttribute("href", `/budgets/${budgetId}`);
+
+    await user.click(screen.getByRole("link", { name: "查看上一期預算" }));
+
+    expect(
+      await screen.findByRole("link", { name: "返回總覽" }),
+    ).toHaveAttribute("href", "/");
   });
 });

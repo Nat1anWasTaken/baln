@@ -133,7 +133,11 @@ export function BudgetCarousel() {
             aria-label={`${index + 1} / ${items.length}`}
             className="w-full shrink-0 snap-start sm:w-[24rem]"
           >
-            <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
+            <BudgetCard
+              budget={budget}
+              to={`/budgets/${budget.id}`}
+              state={{ budgetReturnTo: "/" }}
+            />
           </article>
         ))}
       </div>
@@ -163,7 +167,11 @@ export function BudgetCarousel() {
       <div className="hidden gap-3 md:grid md:grid-cols-2 lg:grid-cols-3">
         {items.map((budget) => (
           <article key={budget.id}>
-            <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
+            <BudgetCard
+              budget={budget}
+              to={`/budgets/${budget.id}`}
+              state={{ budgetReturnTo: "/" }}
+            />
           </article>
         ))}
       </div>

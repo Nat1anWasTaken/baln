@@ -1,6 +1,6 @@
 import { CalendarRange, CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import type { To } from "react-router-dom";
+import type { LinkProps, To } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { AppLink } from "@/components/navigation-transition";
@@ -31,11 +31,13 @@ export function budgetPeriodLabel(budget: BudgetStatus) {
 export function BudgetCard({
   budget,
   to,
+  state,
   className,
   footer,
 }: {
   budget: BudgetStatus;
   to?: To;
+  state?: LinkProps["state"];
   className?: string;
   footer?: ReactNode;
 }) {
@@ -216,6 +218,7 @@ export function BudgetCard({
       {to && footer ? (
         <AppLink
           to={to}
+          state={state}
           aria-label={`查看預算：${budget.name}`}
           className="touch-press grid gap-(--card-spacing) rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
@@ -235,6 +238,7 @@ export function BudgetCard({
   return (
     <AppLink
       to={to}
+      state={state}
       aria-label={`查看預算：${budget.name}`}
       className="touch-press block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
     >

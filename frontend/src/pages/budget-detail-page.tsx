@@ -101,6 +101,29 @@ function dayEntryUrl(budgetId: string, date: string) {
   return `/entries?${params.toString()}`;
 }
 
+const overviewReturnDestination = {
+  to: "/",
+  label: "返回總覽",
+  state: { budgetReturnTo: "/" },
+} as const;
+const budgetsReturnDestination = {
+  to: "/budgets",
+  label: "返回預算",
+  state: undefined,
+} as const;
+
+function budgetReturnDestination(state: unknown) {
+  if (
+    typeof state === "object" &&
+    state !== null &&
+    "budgetReturnTo" in state &&
+    state.budgetReturnTo === "/"
+  ) {
+    return overviewReturnDestination;
+  }
+  return budgetsReturnDestination;
+}
+
 function compactDate(value: string) {
   const [, month, day] = value.split("-");
   return `${Number(month)}/${Number(day)}`;
@@ -366,6 +389,7 @@ export function BudgetDetailPage() {
   const navigate = useAppNavigate();
   const queryClient = useQueryClient();
   const periodOffset = parsePeriodOffset(location.search);
+  const returnDestination = budgetReturnDestination(location.state);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -374,10 +398,20 @@ export function BudgetDetailPage() {
     if (raw !== null && `?period=${raw}` !== periodSearch(periodOffset)) {
       navigate(
         { pathname: location.pathname, search: periodSearch(periodOffset) },
-        { replace: true, transitionIntent: "none" },
+        {
+          replace: true,
+          state: returnDestination.state,
+          transitionIntent: "none",
+        },
       );
     }
-  }, [location.pathname, location.search, navigate, periodOffset]);
+  }, [
+    location.pathname,
+    location.search,
+    navigate,
+    periodOffset,
+    returnDestination.state,
+  ]);
 
   const detail = useQuery({
     queryKey: queryKeys.budgets.detail(budgetId, periodOffset),
@@ -408,7 +442,10 @@ export function BudgetDetailPage() {
     onSuccess: async () => {
       await invalidateAfterBudgetWrite(queryClient);
       toast.success("預算已刪除");
-      navigate("/budgets", { replace: true, transitionIntent: "back" });
+      navigate(returnDestination.to, {
+        replace: true,
+        transitionIntent: "back",
+      });
     },
     onError: (error) => toast.error(error.message),
   });
@@ -440,9 +477,9 @@ export function BudgetDetailPage() {
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost">
-          <AppLink to="/budgets" transitionIntent="back">
+          <AppLink to={returnDestination.to} transitionIntent="back">
             <ArrowLeft aria-hidden="true" />
-            返回預算
+            {returnDestination.label}
           </AppLink>
         </Button>
         <div className="flex gap-2">
@@ -499,6 +536,7 @@ export function BudgetDetailPage() {
                     pathname: `/budgets/${budgetId}`,
                     search: periodSearch(periodOffset - 1),
                   }}
+                  state={returnDestination.state}
                   aria-label="查看上一期預算"
                 >
                   <ChevronLeft aria-hidden="true" />
@@ -523,6 +561,7 @@ export function BudgetDetailPage() {
                     pathname: `/budgets/${budgetId}`,
                     search: periodSearch(periodOffset + 1),
                   }}
+                  state={returnDestination.state}
                   aria-label="查看下一期預算"
                 >
                   下一期
