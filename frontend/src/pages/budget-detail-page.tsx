@@ -629,7 +629,7 @@ export function BudgetDetailPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>支出步調</CardTitle>
