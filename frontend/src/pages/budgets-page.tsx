@@ -5,9 +5,10 @@ import {
   Pencil,
   PiggyBank,
   Plus,
+  Search,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { useOfflineReadOnly } from "@/auth/auth-context";
@@ -27,6 +28,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -46,6 +49,7 @@ import type { BudgetStatus } from "@/lib/schemas";
 export function BudgetsPage() {
   const isReadOnly = useOfflineReadOnly();
   const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<BudgetStatus | null>(null);
   const [deleting, setDeleting] = useState<BudgetStatus | null>(null);
@@ -80,6 +84,20 @@ export function BudgetsPage() {
 
   const visible =
     budgets.data?.filter((budget) => budget.show_on_overview) ?? [];
+  const filteredBudgets = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("zh-TW");
+    if (!query) return budgets.data ?? [];
+
+    return (budgets.data ?? []).filter(
+      (budget) =>
+        budget.name.toLocaleLowerCase("zh-TW").includes(query) ||
+        budget.accounts.some(
+          (account) =>
+            account.name.toLocaleLowerCase("zh-TW").includes(query) ||
+            account.key.toLocaleLowerCase("zh-TW").includes(query),
+        ),
+    );
+  }, [budgets.data, search]);
   function move(budget: BudgetStatus, direction: -1 | 1) {
     const index = visible.findIndex((item) => item.id === budget.id);
     const next = index + direction;
@@ -99,13 +117,17 @@ export function BudgetsPage() {
         message={budgets.error.message}
         onRetry={() => void budgets.refetch()}
       />
-    ) : budgets.data.length === 0 ? (
+    ) : filteredBudgets.length === 0 ? (
       <EmptyState
         icon={PiggyBank}
-        title="還沒有預算"
-        description="建立第一個預算，依你的週期與帳戶掌握支出額度。"
+        title={search.trim() ? "找不到符合的預算" : "還沒有預算"}
+        description={
+          search.trim()
+            ? "請嘗試其他預算名稱、帳戶名稱或帳戶代碼。"
+            : "建立第一個預算，依你的週期與帳戶掌握支出額度。"
+        }
         action={
-          !isReadOnly ? (
+          !search.trim() && !isReadOnly ? (
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus aria-hidden="true" />
               建立第一個預算
@@ -116,7 +138,7 @@ export function BudgetsPage() {
     ) : (
       <>
         <div className="grid gap-3 md:hidden">
-          {budgets.data.map((budget) => (
+          {filteredBudgets.map((budget) => (
             <div key={budget.id} className="grid gap-2">
               <BudgetCard budget={budget} />
               <div className="flex min-h-11 items-center gap-1 rounded-lg border bg-card px-2">
@@ -189,7 +211,7 @@ export function BudgetsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {budgets.data.map((budget) => (
+              {filteredBudgets.map((budget) => (
                 <TableRow key={budget.id}>
                   <TableCell>
                     <p className="font-medium">{budget.name}</p>
@@ -306,7 +328,23 @@ export function BudgetsPage() {
 
   return (
     <div className="grid gap-5">
-      <div className="flex justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <Field className="flex-1">
+          <FieldLabel htmlFor="budget-search">搜尋預算</FieldLabel>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              id="budget-search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="預算名稱、帳戶名稱或帳戶代碼"
+              className="pl-8"
+            />
+          </div>
+        </Field>
         <Button
           type="button"
           disabled={isReadOnly || accounts.isPending || accounts.isError}
