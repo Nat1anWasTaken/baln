@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   accountBalanceSchema,
   accountSchema,
+  budgetDayPageSchema,
+  budgetDetailSchema,
   budgetStatusSchema,
   apiTokenSchema,
   createdApiTokenSchema,
@@ -58,6 +60,7 @@ const localizedProblems: Record<string, string> = {
   unknown_budget_account: "部分預算帳戶不存在或已封存。",
   rollover_edit_mode_required: "請選擇如何處理既有累計餘額。",
   invalid_budget_order: "預算排序已變更，請重新載入後再試。",
+  invalid_period_offset: "無法顯示指定的預算週期。",
   empty_update: "請至少修改一個欄位。",
   invalid_description: "交易說明不可為空白。",
   insufficient_postings: "一筆交易至少需要兩個分錄。",
@@ -326,6 +329,33 @@ export const budgetsApi = {
     ),
   get: (id: string) =>
     request(`/budgets/${id}`, {}, { schema: budgetStatusSchema }),
+  details: (id: string, periodOffset = 0) =>
+    request(
+      `/budgets/${id}/details${queryString({ period_offset: periodOffset })}`,
+      {},
+      { schema: budgetDetailSchema },
+    ),
+  days: (
+    id: string,
+    {
+      periodOffset = 0,
+      cursor,
+      limit,
+    }: {
+      periodOffset?: number;
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ) =>
+    request(
+      `/budgets/${id}/days${queryString({
+        period_offset: periodOffset,
+        cursor,
+        limit,
+      })}`,
+      {},
+      { schema: budgetDayPageSchema },
+    ),
   create: (body: CreateBudgetRequest) =>
     request(
       "/budgets",
@@ -350,6 +380,7 @@ export type EntryListParams = {
   dateFrom?: string;
   dateTo?: string;
   accountKey?: string;
+  budgetId?: string;
   q?: string;
   cursor?: string;
   limit?: number;
@@ -362,6 +393,7 @@ export const entriesApi = {
         date_from: params.dateFrom,
         date_to: params.dateTo,
         account_key: params.accountKey,
+        budget_id: params.budgetId,
         q: params.q,
         cursor: params.cursor,
         limit: params.limit,

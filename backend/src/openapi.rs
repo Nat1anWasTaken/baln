@@ -41,6 +41,8 @@ use utoipa::{
         crate::budgets::routes::create,
         crate::budgets::routes::list,
         crate::budgets::routes::get_one,
+        crate::budgets::routes::details,
+        crate::budgets::routes::days,
         crate::budgets::routes::update,
         crate::budgets::routes::delete,
         crate::budgets::routes::reorder,
@@ -71,10 +73,17 @@ use utoipa::{
         crate::entries::PossibleDuplicateMatch,
         crate::entries::EntryPage,
         crate::budgets::BudgetPeriodUnit,
+        crate::budgets::BudgetPeriodKind,
         crate::budgets::RolloverEditMode,
         crate::budgets::BudgetStatusKind,
         crate::budgets::BudgetAccount,
         crate::budgets::BudgetStatus,
+        crate::budgets::BudgetPace,
+        crate::budgets::BudgetTrendBucket,
+        crate::budgets::BudgetTrend,
+        crate::budgets::BudgetDetails,
+        crate::budgets::BudgetDay,
+        crate::budgets::BudgetDaysPage,
         crate::budgets::CreateBudgetRequest,
         crate::budgets::UpdateBudgetRequest,
         crate::budgets::ReorderBudgetsRequest,
@@ -99,5 +108,20 @@ impl Modify for SecurityAddon {
                 Some("Short-lived session JWT or user-generated personal API token".to_owned());
             components.add_security_scheme("bearer_auth", SecurityScheme::Http(bearer));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use utoipa::OpenApi;
+
+    #[test]
+    fn budget_detail_and_day_routes_are_documented() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("OpenAPI serializes");
+        assert!(document["paths"]["/api/v1/budgets/{id}/details"].is_object());
+        assert!(document["paths"]["/api/v1/budgets/{id}/days"].is_object());
+        assert!(document["components"]["schemas"]["BudgetDetails"].is_object());
+        assert!(document["components"]["schemas"]["BudgetDaysPage"].is_object());
     }
 }

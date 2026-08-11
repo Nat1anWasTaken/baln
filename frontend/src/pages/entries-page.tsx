@@ -9,6 +9,7 @@ import { AppLink } from "@/components/navigation-transition";
 import { OfflineUnavailableState } from "@/components/offline-state";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import { AccountFilterSelector } from "@/features/entries/account-filter-selector";
+import { BudgetFilterSelector } from "@/features/entries/budget-filter-selector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -22,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { accountsApi, entriesApi } from "@/lib/api-client";
+import { accountsApi, budgetsApi, entriesApi } from "@/lib/api-client";
 import { ENTRY_REFETCH_INTERVAL_MS } from "@/lib/entry-refresh";
 import { toExclusiveDate } from "@/lib/format";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
@@ -37,6 +38,7 @@ export function EntriesPage() {
   const dateFrom = searchParams.get("from") ?? "";
   const dateTo = searchParams.get("to") ?? "";
   const accountKey = searchParams.get("account") ?? "all";
+  const budgetId = searchParams.get("budget") ?? "all";
   const listSearch = searchParams.size ? `?${searchParams.toString()}` : "";
 
   useEffect(() => {
@@ -52,12 +54,17 @@ export function EntriesPage() {
     queryKey: queryKeys.accounts.list(true, ""),
     queryFn: () => accountsApi.list(true),
   });
+  const budgets = useQuery({
+    queryKey: queryKeys.budgets.list(false),
+    queryFn: () => budgetsApi.list(false),
+  });
 
   const entries = useInfiniteQuery({
     queryKey: queryKeys.entries.list(
       dateFrom,
       dateTo,
       accountKey,
+      budgetId,
       debouncedSearch,
     ),
     queryFn: ({ pageParam }) =>
@@ -65,6 +72,7 @@ export function EntriesPage() {
         dateFrom: dateFrom || undefined,
         dateTo: dateTo ? toExclusiveDate(dateTo) : undefined,
         accountKey: accountKey === "all" ? undefined : accountKey,
+        budgetId: budgetId === "all" ? undefined : budgetId,
         q: debouncedSearch || undefined,
         cursor: pageParam || undefined,
         limit: 50,
@@ -93,7 +101,11 @@ export function EntriesPage() {
   }
 
   const hasFilters = Boolean(
-    debouncedSearch || dateFrom || dateTo || accountKey !== "all",
+    debouncedSearch ||
+    dateFrom ||
+    dateTo ||
+    accountKey !== "all" ||
+    budgetId !== "all",
   );
 
   return (
@@ -114,6 +126,17 @@ export function EntriesPage() {
                 accounts.isError ? accounts.error.message : undefined
               }
               onRetry={() => void accounts.refetch()}
+            />
+          </Field>
+          <Field>
+            <FieldLabel>預算</FieldLabel>
+            <BudgetFilterSelector
+              value={budgetId}
+              onValueChange={(value) => setFilter("budget", value)}
+              budgets={budgets.data ?? []}
+              isLoading={budgets.isPending}
+              errorMessage={budgets.isError ? budgets.error.message : undefined}
+              onRetry={() => void budgets.refetch()}
             />
           </Field>
           <Separator />
@@ -196,7 +219,7 @@ export function EntriesPage() {
           title={hasFilters ? "找不到符合的交易" : "還沒有交易"}
           description={
             hasFilters
-              ? "請調整搜尋文字、日期或帳戶篩選。"
+              ? "請調整搜尋文字、日期、帳戶或預算篩選。"
               : "新增第一筆收入、支出、轉帳或退款。"
           }
           action={

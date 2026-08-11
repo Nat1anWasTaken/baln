@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { useOfflineReadOnly } from "@/auth/auth-context";
 import { BudgetCard, budgetPeriodLabel } from "@/components/budget-card";
+import { AppLink } from "@/components/navigation-transition";
 import { OfflineUnavailableState } from "@/components/offline-state";
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import {
@@ -140,7 +141,7 @@ export function BudgetsPage() {
         <div className="grid gap-3 md:hidden">
           {filteredBudgets.map((budget) => (
             <div key={budget.id} className="grid gap-2">
-              <BudgetCard budget={budget} />
+              <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
               <div className="flex min-h-11 items-center gap-1 rounded-lg border bg-card px-2">
                 <Switch
                   aria-label={`${budget.name} 顯示在總覽`}
@@ -214,7 +215,12 @@ export function BudgetsPage() {
               {filteredBudgets.map((budget) => (
                 <TableRow key={budget.id}>
                   <TableCell>
-                    <p className="font-medium">{budget.name}</p>
+                    <AppLink
+                      to={`/budgets/${budget.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {budget.name}
+                    </AppLink>
                     <p className="text-xs text-muted-foreground">
                       {budget.accounts
                         .map((account) => account.name)

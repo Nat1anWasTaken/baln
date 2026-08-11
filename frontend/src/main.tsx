@@ -23,6 +23,24 @@ import { preloadAppRoute } from "@/lib/route-modules";
 import { completeStartupTask, failStartup } from "@/lib/startup-progress";
 import "@/index.css";
 
+// A production preview can leave its PWA worker attached to localhost. Clear it
+// in development so it cannot keep serving an older UI over the Vite source.
+if (import.meta.env.DEV && "serviceWorker" in navigator) {
+  void navigator.serviceWorker
+    .getRegistrations()
+    .then(async (registrations) => {
+      await Promise.all(
+        registrations.map((registration) => registration.unregister()),
+      );
+      if ("caches" in window) {
+        const cacheNames = await window.caches.keys();
+        await Promise.all(
+          cacheNames.map((cacheName) => window.caches.delete(cacheName)),
+        );
+      }
+    });
+}
+
 completeStartupTask("runtime", "正在載入介面");
 configureConnectivityEvents();
 

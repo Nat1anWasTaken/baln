@@ -1289,3 +1289,33 @@ Budget 是建立在核心帳本之上的使用者設定，不改變 Account、En
 * 每期未使用或超支的金額會正負雙向累計至下一期。
 * Budget 編輯可選擇從開始日期重新計算，或保留目前累計並建立新的 rollover anchor。
 * `budget_accounts` 使用 UUID 關聯 Account；Account key 或顯示名稱變更不會破壞 Budget。
+
+## 19.7 Budget detail and day views
+
+Budget overview responses remain backward compatible with `BudgetStatus`. Detail
+views are ledger-derived and expose the selected period without storing a second
+copy of any amount:
+
+```text
+GET /api/v1/budgets/{id}/details?period_offset=0
+GET /api/v1/budgets/{id}/days?period_offset=0&cursor=...&limit=50
+```
+
+`period_offset` is zero for the current period and may be negative for a past
+period. Positive offsets are rejected. A detail response includes the selected
+`BudgetStatus`, `period_kind`, previous/next navigation flags, pace metrics, and
+at most 120 contiguous trend buckets aligned to the selected period. Future
+entries in the current period remain included in budget totals, while an
+upcoming budget keeps the existing empty-spend behavior.
+
+The day endpoint returns every calendar date in the selected period in reverse
+chronological order. `limit` defaults to 50 and is clamped to 1 through 200;
+`next_cursor` is an opaque token. Each day reports signed expense spend,
+remaining amount after that date, matching entry count, and whether the date is
+in the future. Refunds therefore reduce spend and increase the remaining amount.
+
+`GET /api/v1/entries` accepts an optional `budget_id`. The budget must belong to
+the authenticated user; otherwise the request returns not found. When supplied,
+the filter matches entries containing a posting to any account currently linked
+to that budget, and is combined with all existing date, account, text, and cursor
+filters.

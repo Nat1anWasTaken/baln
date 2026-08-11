@@ -1,11 +1,14 @@
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Datelike, Days, Months, NaiveDate};
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
     ApiError, ApiResult,
     budgets::{
-        BudgetPeriodUnit, BudgetStatus, BudgetStatusKind, CreateBudgetRequest,
+        BudgetDay, BudgetDaysPage, BudgetDetails, BudgetPace, BudgetPeriodKind, BudgetPeriodUnit,
+        BudgetStatus, BudgetStatusKind, BudgetTrend, BudgetTrendBucket, CreateBudgetRequest,
         ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest, model::BudgetRow, repository,
     },
 };
@@ -146,11 +149,15 @@ async fn carry_in(pool: &PgPool, row: &BudgetRow, current_start: NaiveDate) -> A
         .ok_or_else(|| ApiError::internal("budget carry overflow"))
 }
 
-async fn status(pool: &PgPool, row: BudgetRow, as_of: NaiveDate) -> ApiResult<BudgetStatus> {
-    let index = period_index(&row, as_of)?;
+async fn status_at_index(
+    pool: &PgPool,
+    row: BudgetRow,
+    index: i64,
+    as_of: NaiveDate,
+) -> ApiResult<BudgetStatus> {
     let period_from = boundary(&row, index)?;
     let period_to = boundary(&row, index + 1)?;
-    let upcoming = as_of < row.start_date;
+    let upcoming = period_from > as_of;
     let carry_in_minor = if upcoming {
         0
     } else {
@@ -197,6 +204,236 @@ async fn status(pool: &PgPool, row: BudgetRow, as_of: NaiveDate) -> ApiResult<Bu
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
+}
+
+async fn status(pool: &PgPool, row: BudgetRow, as_of: NaiveDate) -> ApiResult<BudgetStatus> {
+    status_at_index(pool, row.clone(), period_index(&row, as_of)?, as_of).await
+}
+
+fn period_for_offset(
+    row: &BudgetRow,
+    as_of: NaiveDate,
+    period_offset: i32,
+) -> ApiResult<(i64, i64, NaiveDate, NaiveDate)> {
+    if period_offset > 0 {
+        return Err(ApiError::bad_request(
+            "invalid_period_offset",
+            "period_offset must be zero or negative",
+        ));
+    }
+    let current_index = period_index(row, as_of)?;
+    let index = current_index
+        .checked_add(i64::from(period_offset))
+        .ok_or_else(|| {
+            ApiError::bad_request("invalid_period_offset", "period_offset is out of range")
+        })?;
+    if index < 0 {
+        return Err(ApiError::bad_request(
+            "invalid_period_offset",
+            "period_offset refers to a period before the budget started",
+        ));
+    }
+    Ok((
+        current_index,
+        index,
+        boundary(row, index)?,
+        boundary(row, index + 1)?,
+    ))
+}
+
+fn period_kind(
+    period_from: NaiveDate,
+    current_index: i64,
+    index: i64,
+    as_of: NaiveDate,
+) -> BudgetPeriodKind {
+    if period_from > as_of {
+        BudgetPeriodKind::Upcoming
+    } else if index == current_index {
+        BudgetPeriodKind::Current
+    } else {
+        BudgetPeriodKind::Past
+    }
+}
+
+fn trend_ranges(
+    date_from: NaiveDate,
+    date_to: NaiveDate,
+) -> ApiResult<(i64, Vec<(NaiveDate, NaiveDate)>)> {
+    let total_days = (date_to - date_from).num_days();
+    if total_days <= 0 {
+        return Err(ApiError::internal("budget period has no calendar days"));
+    }
+    let bucket_days = (total_days + 119) / 120;
+    let mut ranges = Vec::with_capacity(((total_days + bucket_days - 1) / bucket_days) as usize);
+    let mut from = date_from;
+    while from < date_to {
+        let to = from
+            .checked_add_days(Days::new(
+                bucket_days
+                    .try_into()
+                    .map_err(|_| ApiError::internal("budget trend bucket is out of range"))?,
+            ))
+            .unwrap_or(date_to)
+            .min(date_to);
+        ranges.push((from, to));
+        from = to;
+    }
+    Ok((bucket_days, ranges))
+}
+
+pub async fn details(
+    pool: &PgPool,
+    user_id: Uuid,
+    id: Uuid,
+    period_offset: i32,
+    as_of: NaiveDate,
+) -> ApiResult<BudgetDetails> {
+    let row = repository::get(pool, user_id, id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("budget"))?;
+    let (current_index, index, period_from, period_to) =
+        period_for_offset(&row, as_of, period_offset)?;
+    let upcoming = period_from > as_of;
+    let budget = status_at_index(pool, row.clone(), index, as_of).await?;
+    let elapsed_to = if upcoming {
+        period_from
+    } else {
+        as_of
+            .checked_add_days(Days::new(1))
+            .unwrap_or(period_to)
+            .min(period_to)
+    };
+    let spent_through_as_of_minor = if upcoming {
+        0
+    } else {
+        repository::spent(pool, user_id, id, period_from, elapsed_to).await?
+    };
+    let total_days = (period_to - period_from).num_days();
+    let elapsed_days = if upcoming {
+        0
+    } else {
+        (elapsed_to - period_from).num_days().clamp(0, total_days)
+    };
+    let remaining_days = total_days.saturating_sub(elapsed_days);
+    let pace = BudgetPace {
+        total_days,
+        elapsed_days,
+        remaining_days,
+        spent_through_as_of_minor,
+        future_spent_minor: budget
+            .spent_minor
+            .checked_sub(spent_through_as_of_minor)
+            .ok_or_else(|| ApiError::internal("budget future spend overflow"))?,
+        average_daily_spend_minor: (elapsed_days > 0)
+            .then(|| spent_through_as_of_minor / elapsed_days),
+        spendable_per_day_minor: (remaining_days > 0)
+            .then(|| budget.remaining_minor / remaining_days),
+    };
+    let (bucket_days, ranges) = trend_ranges(period_from, period_to)?;
+    let rows = repository::trend(pool, user_id, id, &ranges, upcoming).await?;
+    let mut cumulative = 0_i64;
+    let mut points = Vec::with_capacity(rows.len());
+    for row in rows {
+        cumulative = cumulative
+            .checked_add(row.spent_minor)
+            .ok_or_else(|| ApiError::internal("budget trend spend overflow"))?;
+        let remaining_minor = budget
+            .available_minor
+            .checked_sub(cumulative)
+            .ok_or_else(|| ApiError::internal("budget trend remaining overflow"))?;
+        points.push(BudgetTrendBucket {
+            date_from: row.date_from,
+            date_to: row.date_to,
+            spent_minor: row.spent_minor,
+            remaining_minor,
+        });
+    }
+    Ok(BudgetDetails {
+        budget,
+        period_offset,
+        period_kind: period_kind(period_from, current_index, index, as_of),
+        has_previous: index > 0,
+        has_next: index < current_index,
+        pace,
+        trend: BudgetTrend {
+            bucket_days,
+            points,
+        },
+    })
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct BudgetDayCursor {
+    date: NaiveDate,
+}
+
+fn encode_day_cursor(date: NaiveDate) -> String {
+    URL_SAFE_NO_PAD
+        .encode(serde_json::to_vec(&BudgetDayCursor { date }).expect("cursor serializes"))
+}
+
+fn decode_day_cursor(cursor: &str) -> ApiResult<BudgetDayCursor> {
+    let bytes = URL_SAFE_NO_PAD
+        .decode(cursor)
+        .map_err(|_| ApiError::bad_request("invalid_cursor", "cursor is not valid base64url"))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|_| ApiError::bad_request("invalid_cursor", "cursor payload is invalid"))
+}
+
+pub async fn days(
+    pool: &PgPool,
+    user_id: Uuid,
+    id: Uuid,
+    period_offset: i32,
+    cursor: Option<&str>,
+    limit: Option<i64>,
+    as_of: NaiveDate,
+) -> ApiResult<BudgetDaysPage> {
+    let row = repository::get(pool, user_id, id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("budget"))?;
+    let (_current_index, index, period_from, period_to) =
+        period_for_offset(&row, as_of, period_offset)?;
+    let upcoming = period_from > as_of;
+    let budget = status_at_index(pool, row, index, as_of).await?;
+    let cursor_date = cursor
+        .map(decode_day_cursor)
+        .transpose()?
+        .map(|value| value.date);
+    let requested_limit = limit.unwrap_or(50).clamp(1, 200);
+    let rows = repository::days(
+        pool,
+        user_id,
+        id,
+        period_from,
+        period_to,
+        cursor_date,
+        requested_limit + 1,
+        as_of,
+        upcoming,
+        budget.available_minor,
+    )
+    .await?;
+    let has_more = rows.len() > requested_limit as usize;
+    let rows = rows
+        .into_iter()
+        .take(requested_limit as usize)
+        .collect::<Vec<_>>();
+    let next_cursor = has_more
+        .then(|| rows.last().map(|row| encode_day_cursor(row.date)))
+        .flatten();
+    let items = rows
+        .into_iter()
+        .map(|row| BudgetDay {
+            date: row.date,
+            spent_minor: row.spent_minor,
+            remaining_minor: row.remaining_minor,
+            entry_count: row.entry_count,
+            is_future: row.is_future,
+        })
+        .collect();
+    Ok(BudgetDaysPage { items, next_cursor })
 }
 
 pub async fn list(
@@ -454,6 +691,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn detail_trend_is_contiguous_and_capped_at_120_buckets() {
+        let from = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let to = from.checked_add_days(Days::new(365)).unwrap();
+        let (bucket_days, ranges) = trend_ranges(from, to).unwrap();
+        assert_eq!(bucket_days, 4);
+        assert_eq!(ranges.len(), 92);
+        assert_eq!(ranges.first().unwrap().0, from);
+        assert_eq!(ranges.last().unwrap().1, to);
+        assert!(ranges.windows(2).all(|pair| pair[0].1 == pair[1].0));
+    }
+
+    #[test]
+    fn day_cursor_is_opaque_and_rejects_invalid_payloads() {
+        let date = NaiveDate::from_ymd_opt(2026, 7, 24).unwrap();
+        let cursor = encode_day_cursor(date);
+        assert_ne!(cursor, date.to_string());
+        assert_eq!(decode_day_cursor(&cursor).unwrap().date, date);
+        assert!(matches!(
+            decode_day_cursor("not-a-cursor"),
+            Err(ApiError::Problem {
+                code: "invalid_cursor",
+                ..
+            })
+        ));
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     async fn rollover_counts_matching_expenses_once_and_ignores_transfers(pool: PgPool) {
         let user_id = Uuid::now_v7();
@@ -519,5 +783,137 @@ mod tests {
         assert_eq!(budget.spent_minor, 200);
         assert_eq!(budget.available_minor, 1_400);
         assert_eq!(budget.remaining_minor, 1_200);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn details_and_days_recompute_signed_refunds_and_future_commitments(pool: PgPool) {
+        let user_id = Uuid::now_v7();
+        sqlx::query("INSERT INTO users (id,email,display_name) VALUES ($1,$2,'Detail User')")
+            .bind(user_id)
+            .bind(format!("{user_id}@example.com"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let cash = Uuid::now_v7();
+        let savings = Uuid::now_v7();
+        let food = Uuid::now_v7();
+        sqlx::query("INSERT INTO accounts (id,user_id,key,name,type) VALUES ($1,$4,'asset.cash.detail','Cash','asset'),($2,$4,'asset.savings.detail','Savings','asset'),($3,$4,'expense.food.detail','Food','expense')")
+            .bind(cash)
+            .bind(savings)
+            .bind(food)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        create(
+            &pool,
+            user_id,
+            CreateBudgetRequest {
+                name: "Detail budget".into(),
+                amount_minor: 1_000,
+                start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                period_count: 1,
+                period_unit: BudgetPeriodUnit::Month,
+                account_keys: vec!["asset.cash.detail".into()],
+                show_on_overview: false,
+            },
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        )
+        .await
+        .unwrap();
+        for (date, postings) in [
+            ("2026-01-10", vec![(food, 600_i64), (cash, -600_i64)]),
+            ("2026-01-15", vec![(food, -100_i64), (cash, 100_i64)]),
+            ("2026-01-20", vec![(savings, 500_i64), (cash, -500_i64)]),
+            ("2026-02-03", vec![(food, 200_i64), (cash, -200_i64)]),
+            ("2026-02-20", vec![(food, 300_i64), (cash, -300_i64)]),
+        ] {
+            let entry_id = Uuid::now_v7();
+            let mut transaction = pool.begin().await.unwrap();
+            sqlx::query(
+                "INSERT INTO entries (id,user_id,date,description) VALUES ($1,$2,$3,'detail test')",
+            )
+            .bind(entry_id)
+            .bind(user_id)
+            .bind(NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap())
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+            for (account_id, amount) in postings {
+                sqlx::query("INSERT INTO postings (id,user_id,entry_id,account_id,amount_minor) VALUES ($1,$2,$3,$4,$5)")
+                    .bind(Uuid::now_v7())
+                    .bind(user_id)
+                    .bind(entry_id)
+                    .bind(account_id)
+                    .bind(amount)
+                    .execute(&mut *transaction)
+                    .await
+                    .unwrap();
+            }
+            transaction.commit().await.unwrap();
+        }
+
+        let budget_id = repository::list(&pool, user_id, false)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap()
+            .id;
+        let detail = details(
+            &pool,
+            user_id,
+            budget_id,
+            0,
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(detail.period_kind, BudgetPeriodKind::Current);
+        assert_eq!(detail.budget.carry_in_minor, 500);
+        assert_eq!(detail.budget.spent_minor, 500);
+        assert_eq!(detail.budget.remaining_minor, 1_000);
+        assert_eq!(detail.pace.spent_through_as_of_minor, 200);
+        assert_eq!(detail.pace.future_spent_minor, 300);
+        assert_eq!(detail.trend.points.len(), 28);
+        assert_eq!(detail.trend.points.last().unwrap().remaining_minor, 1_000);
+
+        let days_page = days(
+            &pool,
+            user_id,
+            budget_id,
+            0,
+            None,
+            Some(200),
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(days_page.items.len(), 28);
+        assert!(
+            days_page
+                .items
+                .windows(2)
+                .all(|pair| pair[0].date > pair[1].date)
+        );
+        let future = days_page
+            .items
+            .iter()
+            .find(|day| day.date == NaiveDate::from_ymd_opt(2026, 2, 20).unwrap())
+            .unwrap();
+        assert_eq!(future.spent_minor, 300);
+        assert_eq!(future.entry_count, 1);
+        assert!(future.is_future);
+        let refund_period = details(
+            &pool,
+            user_id,
+            budget_id,
+            -1,
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(refund_period.period_kind, BudgetPeriodKind::Past);
+        assert_eq!(refund_period.budget.spent_minor, 500);
+        assert_eq!(refund_period.budget.remaining_minor, 500);
     }
 }

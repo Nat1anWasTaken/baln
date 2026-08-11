@@ -206,6 +206,7 @@ export function AppShell() {
         location.pathname !== "/entries/new"
       );
     }
+    if (to === "/budgets") return location.pathname.startsWith("/budgets");
     return location.pathname === to;
   };
 

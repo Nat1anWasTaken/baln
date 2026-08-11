@@ -397,12 +397,20 @@ pub async fn list(pool: &PgPool, user_id: Uuid, query: ListEntriesQuery) -> ApiR
     }
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let cursor = query.cursor.as_deref().map(decode_cursor).transpose()?;
+    if let Some(budget_id) = query.budget_id
+        && crate::budgets::repository::get(pool, user_id, budget_id)
+            .await?
+            .is_none()
+    {
+        return Err(ApiError::not_found("budget"));
+    }
     let rows = repository::list_rows(
         pool,
         user_id,
         query.date_from,
         query.date_to,
         clean(query.account_key.as_deref()),
+        query.budget_id,
         clean(query.q.as_deref()),
         cursor.as_ref().map(|cursor| cursor.date),
         cursor.as_ref().map(|cursor| cursor.id),
@@ -1624,6 +1632,7 @@ mod tests {
                 date_from: None,
                 date_to: None,
                 account_key: Some("expense.restaurant".to_owned()),
+                budget_id: None,
                 q: Some("優惠".to_owned()),
                 cursor: None,
                 limit: Some(10),
@@ -1633,5 +1642,103 @@ mod tests {
         .unwrap();
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.items[0].description, "麥當勞 早餐");
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn list_budget_filter_matches_current_accounts_and_validates_ownership(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        let other_user_id = seed(&pool).await;
+        let budget = crate::budgets::service::create(
+            &pool,
+            user_id,
+            crate::budgets::CreateBudgetRequest {
+                name: "Cash budget".to_owned(),
+                amount_minor: 1_000,
+                start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                period_count: 1,
+                period_unit: crate::budgets::BudgetPeriodUnit::Month,
+                account_keys: vec!["asset.cash".to_owned()],
+                show_on_overview: false,
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 24).unwrap(),
+        )
+        .await
+        .unwrap();
+        let matching = create_named(&pool, user_id, "Budget dinner", "budget:match", 100).await;
+        let mut non_matching_request = request();
+        non_matching_request.description = "Bank dinner".to_owned();
+        non_matching_request.dedup_key = Some("budget:no-match".to_owned());
+        non_matching_request.postings = vec![
+            PostingInput {
+                account_key: "expense.restaurant".to_owned(),
+                amount_minor: 200,
+                memo: None,
+            },
+            PostingInput {
+                account_key: "asset.bank".to_owned(),
+                amount_minor: -200,
+                memo: None,
+            },
+        ];
+        create(&pool, user_id, non_matching_request).await.unwrap();
+
+        let page = list(
+            &pool,
+            user_id,
+            ListEntriesQuery {
+                date_from: None,
+                date_to: None,
+                account_key: Some("expense.restaurant".to_owned()),
+                budget_id: Some(budget.id),
+                q: Some("Budget".to_owned()),
+                cursor: None,
+                limit: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            page.items.iter().map(|entry| entry.id).collect::<Vec<_>>(),
+            vec![matching.id]
+        );
+
+        let other_budget = crate::budgets::service::create(
+            &pool,
+            other_user_id,
+            crate::budgets::CreateBudgetRequest {
+                name: "Other cash budget".to_owned(),
+                amount_minor: 1_000,
+                start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                period_count: 1,
+                period_unit: crate::budgets::BudgetPeriodUnit::Month,
+                account_keys: vec!["asset.cash".to_owned()],
+                show_on_overview: false,
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 24).unwrap(),
+        )
+        .await
+        .unwrap();
+        let error = list(
+            &pool,
+            user_id,
+            ListEntriesQuery {
+                date_from: None,
+                date_to: None,
+                account_key: None,
+                budget_id: Some(other_budget.id),
+                q: None,
+                cursor: None,
+                limit: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "not_found",
+                ..
+            }
+        ));
     }
 }

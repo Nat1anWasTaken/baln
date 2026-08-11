@@ -73,6 +73,7 @@ pub struct ListEntriesQuery {
     pub date_from: Option<NaiveDate>,
     pub date_to: Option<NaiveDate>,
     pub account_key: Option<String>,
+    pub budget_id: Option<Uuid>,
     pub q: Option<String>,
     pub cursor: Option<String>,
     pub limit: Option<i64>,

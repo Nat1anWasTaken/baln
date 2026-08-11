@@ -39,6 +39,11 @@ const BudgetsPage = lazy(() =>
     default: module.BudgetsPage,
   })),
 );
+const BudgetDetailPage = lazy(() =>
+  routeModules.budgetDetail().then((module) => ({
+    default: module.BudgetDetailPage,
+  })),
+);
 const EntriesPage = lazy(() =>
   routeModules.entries().then((module) => ({
     default: module.EntriesPage,
@@ -152,6 +157,7 @@ export default function App() {
             />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/budgets" element={<BudgetsPage />} />
+            <Route path="/budgets/:budgetId" element={<BudgetDetailPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route
               path="/settings/api-tokens"

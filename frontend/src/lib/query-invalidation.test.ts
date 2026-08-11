@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   invalidateAfterAccountWrite,
+  invalidateAfterBudgetWrite,
   invalidateAfterEntryWrite,
 } from "@/lib/query-invalidation";
 import { queryKeys } from "@/lib/query-keys";
@@ -15,6 +16,12 @@ function queryClientWithLedgerData() {
   });
   client.setQueryData(queryKeys.entries.recent, { items: [] });
   client.setQueryData(queryKeys.entries.detail("entry-id"), {});
+  client.setQueryData(queryKeys.entries.list("", "", "all", "all", ""), {
+    pages: [],
+    pageParams: [],
+  });
+  client.setQueryData(queryKeys.budgets.detail("budget-id", -1), {});
+  client.setQueryData(queryKeys.budgets.days("budget-id", -1), {});
   client.setQueryData(
     queryKeys.reports.summary("2026-07-01", "2026-08-01"),
     {},
@@ -84,5 +91,22 @@ describe("ledger query invalidation", () => {
       ),
     ).toBe(true);
     expect(isInvalidated(client, queryKeys.apiTokens.all)).toBe(false);
+  });
+
+  it("invalidates budget-filtered entries and budget detail views after a budget write", async () => {
+    const client = queryClientWithLedgerData();
+
+    await invalidateAfterBudgetWrite(client);
+
+    expect(isInvalidated(client, queryKeys.entries.recent)).toBe(true);
+    expect(
+      isInvalidated(client, queryKeys.entries.list("", "", "all", "all", "")),
+    ).toBe(true);
+    expect(
+      isInvalidated(client, queryKeys.budgets.detail("budget-id", -1)),
+    ).toBe(true);
+    expect(isInvalidated(client, queryKeys.budgets.days("budget-id", -1))).toBe(
+      true,
+    );
   });
 });

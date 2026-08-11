@@ -4,7 +4,9 @@ pub(crate) mod routes;
 pub(crate) mod service;
 
 pub use model::{
-    BudgetAccount, BudgetPeriodUnit, BudgetStatus, BudgetStatusKind, CreateBudgetRequest,
-    ListBudgetsQuery, ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest,
+    BudgetAccount, BudgetDay, BudgetDaysPage, BudgetDaysQuery, BudgetDetails, BudgetDetailsQuery,
+    BudgetPace, BudgetPeriodKind, BudgetPeriodUnit, BudgetStatus, BudgetStatusKind, BudgetTrend,
+    BudgetTrendBucket, CreateBudgetRequest, ListBudgetsQuery, ReorderBudgetsRequest,
+    RolloverEditMode, UpdateBudgetRequest,
 };
 pub use routes::router;

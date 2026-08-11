@@ -34,6 +34,7 @@ const pageNames: Record<string, string> = {
 };
 
 export function pageNameForPath(pathname: string) {
+  if (/^\/budgets\/[^/]+$/.test(pathname)) return "預算明細";
   return (
     pageNames[pathname] ??
     (pathname.endsWith("/edit") ? "編輯交易" : "交易明細")

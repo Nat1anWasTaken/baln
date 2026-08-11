@@ -135,7 +135,7 @@ export function BudgetCarousel() {
             aria-label={`${index + 1} / ${items.length}`}
             className="w-full shrink-0 snap-start sm:w-[24rem] lg:w-[calc((100%-1.5rem)/3)]"
           >
-            <BudgetCard budget={budget} />
+            <BudgetCard budget={budget} to={`/budgets/${budget.id}`} />
           </article>
         ))}
       </div>

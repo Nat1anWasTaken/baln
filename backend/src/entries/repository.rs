@@ -291,6 +291,7 @@ pub async fn list_rows(
     date_from: Option<NaiveDate>,
     date_to: Option<NaiveDate>,
     account_key: Option<&str>,
+    budget_id: Option<Uuid>,
     query: Option<&str>,
     cursor_date: Option<NaiveDate>,
     cursor_id: Option<Uuid>,
@@ -315,9 +316,20 @@ pub async fn list_rows(
                )
            )
            AND (
-               $5::text IS NULL
-               OR e.description ILIKE '%' || $5 || '%'
-               OR COALESCE(e.note, '') ILIKE '%' || $5 || '%'
+               $5::uuid IS NULL OR EXISTS (
+                   SELECT 1
+                     FROM postings budget_posting
+                     JOIN budget_accounts ba ON ba.account_id = budget_posting.account_id
+                    WHERE budget_posting.entry_id = e.id
+                      AND budget_posting.user_id = e.user_id
+                      AND ba.user_id = e.user_id
+                      AND ba.budget_id = $5
+               )
+           )
+           AND (
+               $6::text IS NULL
+               OR e.description ILIKE '%' || $6 || '%'
+               OR COALESCE(e.note, '') ILIKE '%' || $6 || '%'
                OR EXISTS (
                    SELECT 1
                      FROM postings p
@@ -325,23 +337,24 @@ pub async fn list_rows(
                     WHERE p.entry_id = e.id
                       AND p.user_id = e.user_id
                       AND (
-                          COALESCE(p.memo, '') ILIKE '%' || $5 || '%'
-                          OR a.name ILIKE '%' || $5 || '%'
+                          COALESCE(p.memo, '') ILIKE '%' || $6 || '%'
+                          OR a.name ILIKE '%' || $6 || '%'
                       )
                )
            )
            AND (
-               $6::date IS NULL
-               OR (e.date, e.id) < ($6, $7)
+               $7::date IS NULL
+               OR (e.date, e.id) < ($7, $8)
            )
          ORDER BY e.date DESC, e.id DESC
-         LIMIT $8
+         LIMIT $9
         "#,
     )
     .bind(user_id)
     .bind(date_from)
     .bind(date_to)
     .bind(account_key)
+    .bind(budget_id)
     .bind(query)
     .bind(cursor_date)
     .bind(cursor_id)

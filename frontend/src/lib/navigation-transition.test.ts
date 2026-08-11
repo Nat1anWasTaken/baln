@@ -23,6 +23,17 @@ describe("navigation transition direction", () => {
   );
 
   it.each([
+    ["/budgets", "/budgets/budget-1", "forward"],
+    ["/budgets/budget-1", "/budgets", "back"],
+    ["/budgets/budget-1", "/budgets/budget-2", "forward"],
+  ] as const)(
+    "orders the budget hierarchy from %s to %s as %s",
+    (from, to, expected) => {
+      expect(getNavigationDirection(from, to)).toBe(expected);
+    },
+  );
+
+  it.each([
     ["/entries", "/entries/entry-1", "forward"],
     ["/entries/entry-1", "/entries", "back"],
     ["/entries/entry-1", "/entries/entry-1/edit", "forward"],

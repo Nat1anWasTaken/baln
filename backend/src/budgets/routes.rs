@@ -12,8 +12,8 @@ use crate::{
     app::AppState,
     auth::AuthenticatedUser,
     budgets::{
-        BudgetStatus, CreateBudgetRequest, ListBudgetsQuery, ReorderBudgetsRequest,
-        UpdateBudgetRequest, service,
+        BudgetDaysPage, BudgetDaysQuery, BudgetDetails, BudgetDetailsQuery, BudgetStatus,
+        CreateBudgetRequest, ListBudgetsQuery, ReorderBudgetsRequest, UpdateBudgetRequest, service,
     },
 };
 
@@ -27,6 +27,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create).get(list))
         .route("/overview-order", put(reorder))
+        .route("/{id}/details", get(details))
+        .route("/{id}/days", get(days))
         .route("/{id}", get(get_one).patch(update).delete(delete))
 }
 
@@ -61,6 +63,53 @@ pub(crate) async fn get_one(
         .find(|v| v.id == id)
         .map(Json)
         .ok_or_else(|| crate::ApiError::not_found("budget"))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/budgets/{id}/details",
+    tag = "budgets",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path), BudgetDetailsQuery),
+    responses((status = 200, body = BudgetDetails), (status = 400), (status = 404))
+)]
+pub(crate) async fn details(
+    State(state): State<AppState>,
+    AuthenticatedUser(user): AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Query(query): Query<BudgetDetailsQuery>,
+) -> ApiResult<Json<BudgetDetails>> {
+    Ok(Json(
+        service::details(&state.pool, user.id, id, query.period_offset, today(&state)).await?,
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/budgets/{id}/days",
+    tag = "budgets",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path), BudgetDaysQuery),
+    responses((status = 200, body = BudgetDaysPage), (status = 400), (status = 404))
+)]
+pub(crate) async fn days(
+    State(state): State<AppState>,
+    AuthenticatedUser(user): AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Query(query): Query<BudgetDaysQuery>,
+) -> ApiResult<Json<BudgetDaysPage>> {
+    Ok(Json(
+        service::days(
+            &state.pool,
+            user.id,
+            id,
+            query.period_offset,
+            query.cursor.as_deref(),
+            query.limit,
+            today(&state),
+        )
+        .await?,
+    ))
 }
 #[utoipa::path(patch,path="/api/v1/budgets/{id}",tag="budgets",security(("bearer_auth"=[])),params(("id"=Uuid,Path)),request_body=UpdateBudgetRequest,responses((status=200,body=BudgetStatus),(status=404)))]
 pub(crate) async fn update(

@@ -21,5 +21,8 @@ export function invalidateAfterAccountWrite(queryClient: QueryClient) {
 }
 
 export function invalidateAfterBudgetWrite(queryClient: QueryClient) {
-  return queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.entries.all }),
+  ]);
 }

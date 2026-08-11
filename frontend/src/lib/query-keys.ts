@@ -10,7 +10,10 @@ export const queryKeys = {
   budgets: {
     all: ["budgets"] as const,
     list: (overviewOnly: boolean) => ["budgets", "list", overviewOnly] as const,
-    detail: (budgetId: string) => ["budgets", "detail", budgetId] as const,
+    detail: (budgetId: string, offset = 0) =>
+      ["budgets", "detail", budgetId, offset] as const,
+    days: (budgetId: string, offset = 0) =>
+      ["budgets", "days", budgetId, offset] as const,
   },
   entries: {
     all: ["entries"] as const,
@@ -18,8 +21,18 @@ export const queryKeys = {
       dateFrom: string,
       dateTo: string,
       accountKey: string,
+      budgetId: string,
       search: string,
-    ) => ["entries", "list", dateFrom, dateTo, accountKey, search] as const,
+    ) =>
+      [
+        "entries",
+        "list",
+        dateFrom,
+        dateTo,
+        accountKey,
+        budgetId,
+        search,
+      ] as const,
     recent: ["entries", "recent"] as const,
     detail: (entryId: string) => ["entries", "detail", entryId] as const,
   },

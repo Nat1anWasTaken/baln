@@ -137,6 +137,63 @@ export const budgetStatusSchema = z.object({
 
 export type BudgetStatus = z.infer<typeof budgetStatusSchema>;
 
+export const budgetPaceSchema = z.object({
+  total_days: z.number().int().nonnegative(),
+  elapsed_days: z.number().int().nonnegative(),
+  remaining_days: z.number().int().nonnegative(),
+  spent_through_as_of_minor: z.number().int(),
+  future_spent_minor: z.number().int(),
+  average_daily_spend_minor: z.number().nullable(),
+  spendable_per_day_minor: z.number().nullable(),
+});
+
+export type BudgetPace = z.infer<typeof budgetPaceSchema>;
+
+export const budgetTrendPointSchema = z.object({
+  date_from: z.string(),
+  date_to: z.string(),
+  spent_minor: z.number().int(),
+  remaining_minor: z.number().int(),
+});
+
+export type BudgetTrendPoint = z.infer<typeof budgetTrendPointSchema>;
+
+export const budgetTrendSchema = z.object({
+  bucket_days: z.number().int().positive(),
+  points: z.array(budgetTrendPointSchema),
+});
+
+export type BudgetTrend = z.infer<typeof budgetTrendSchema>;
+
+export const budgetDetailSchema = z.object({
+  budget: budgetStatusSchema,
+  period_offset: z.number().int(),
+  period_kind: z.enum(["upcoming", "current", "past"]),
+  has_previous: z.boolean(),
+  has_next: z.boolean(),
+  pace: budgetPaceSchema,
+  trend: budgetTrendSchema,
+});
+
+export type BudgetDetail = z.infer<typeof budgetDetailSchema>;
+
+export const budgetDaySchema = z.object({
+  date: z.string(),
+  spent_minor: z.number().int(),
+  remaining_minor: z.number().int(),
+  entry_count: z.number().int().nonnegative(),
+  is_future: z.boolean(),
+});
+
+export type BudgetDay = z.infer<typeof budgetDaySchema>;
+
+export const budgetDayPageSchema = z.object({
+  items: z.array(budgetDaySchema),
+  next_cursor: z.string().nullable(),
+});
+
+export type BudgetDayPage = z.infer<typeof budgetDayPageSchema>;
+
 export type CreateBudgetRequest = {
   name: string;
   amount_minor: number;

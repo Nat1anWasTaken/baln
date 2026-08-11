@@ -40,6 +40,12 @@ function entryDepth(pathname: string) {
   return null;
 }
 
+function budgetDepth(pathname: string) {
+  if (pathname === "/budgets") return 0;
+  if (/^\/budgets\/[^/]+$/.test(pathname)) return 1;
+  return null;
+}
+
 function settingsIndex(pathname: string) {
   return settingsOrder.findIndex((path) => pathname === path);
 }
@@ -72,6 +78,13 @@ export function getNavigationDirection(
   if (fromEntryDepth !== null && toEntryDepth !== null) {
     if (toEntryDepth === fromEntryDepth) return "forward";
     return toEntryDepth > fromEntryDepth ? "forward" : "back";
+  }
+
+  const fromBudgetDepth = budgetDepth(fromPathname);
+  const toBudgetDepth = budgetDepth(toPathname);
+  if (fromBudgetDepth !== null && toBudgetDepth !== null) {
+    if (toBudgetDepth === fromBudgetDepth) return "forward";
+    return toBudgetDepth > fromBudgetDepth ? "forward" : "back";
   }
 
   const fromPrimaryIndex = primaryIndex(fromPathname);

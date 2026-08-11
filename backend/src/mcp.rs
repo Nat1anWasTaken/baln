@@ -229,6 +229,7 @@ impl BalnMcp {
                                 date_from: input.date_from,
                                 date_to: input.date_to,
                                 account_key: input.account_key,
+                                budget_id: None,
                                 q: input.query,
                                 cursor: input.cursor,
                                 limit: input.limit,

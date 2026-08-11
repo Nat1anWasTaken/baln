@@ -8,6 +8,8 @@ describe("route module preloading", () => {
     ["/login", "login"],
     ["/auth/callback", "authCallback"],
     ["/accounts", "accounts"],
+    ["/budgets", "budgets"],
+    ["/budgets/budget-1", "budgetDetail"],
     ["/reports", "reports"],
     ["/settings/api-tokens", "apiTokens"],
     ["/settings/connected-apps", "connectedApps"],

@@ -150,6 +150,91 @@ async function mockApi(page: Page) {
           : visibleBudgets,
       });
     }
+    if (
+      path.startsWith("/api/v1/budgets/") &&
+      path.endsWith("/details") &&
+      method === "GET"
+    ) {
+      const budgetId = path.split("/").at(-2);
+      const current = visibleBudgets.find((item) => item.id === budgetId);
+      if (!current) return route.fulfill({ status: 404, json: {} });
+
+      const rawOffset = Number(url.searchParams.get("period_offset") ?? "0");
+      const periodOffset = Number.isSafeInteger(rawOffset) ? rawOffset : 0;
+      return route.fulfill({
+        json: {
+          budget: current,
+          period_offset: periodOffset,
+          period_kind: periodOffset < 0 ? "past" : "current",
+          has_previous: true,
+          has_next: periodOffset < 0,
+          pace: {
+            total_days: 31,
+            elapsed_days: 24,
+            remaining_days: 7,
+            spent_through_as_of_minor: 7_000,
+            future_spent_minor: 0,
+            average_daily_spend_minor: 292,
+            spendable_per_day_minor: 714,
+          },
+          trend: {
+            bucket_days: 1,
+            points: [
+              {
+                date_from: "2026-07-23",
+                date_to: "2026-07-24",
+                spent_minor: 6_880,
+                remaining_minor: 5_120,
+              },
+              {
+                date_from: "2026-07-24",
+                date_to: "2026-07-25",
+                spent_minor: 7_000,
+                remaining_minor: 5_000,
+              },
+            ],
+          },
+        },
+      });
+    }
+    if (
+      path.startsWith("/api/v1/budgets/") &&
+      path.endsWith("/days") &&
+      method === "GET"
+    ) {
+      const budgetId = path.split("/").at(-2);
+      const current = visibleBudgets.find((item) => item.id === budgetId);
+      if (!current) return route.fulfill({ status: 404, json: {} });
+
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              date: "2026-07-23",
+              spent_minor: 6_880,
+              remaining_minor: 5_120,
+              entry_count: 1,
+              is_future: false,
+            },
+            {
+              date: "2026-07-24",
+              spent_minor: 120,
+              remaining_minor: 5_000,
+              entry_count: 1,
+              is_future: false,
+            },
+            {
+              date: "2026-07-25",
+              spent_minor: 0,
+              remaining_minor: 5_000,
+              entry_count: 0,
+              is_future: true,
+            },
+          ],
+          next_cursor: null,
+        },
+      });
+    }
     if (path === "/api/v1/budgets" && method === "POST") {
       const body = route.request().postDataJSON() as {
         name: string;
@@ -454,7 +539,15 @@ async function mockApi(page: Page) {
       return route.fulfill({ json: updatedEntry ?? entry });
     }
     if (path === "/api/v1/entries" && method === "GET") {
-      return route.fulfill({ json: { items: [entry], next_cursor: null } });
+      const budgetId = url.searchParams.get("budget_id");
+      const matchesBudget =
+        !budgetId || visibleBudgets.some((item) => item.id === budgetId);
+      return route.fulfill({
+        json: {
+          items: matchesBudget ? [entry] : [],
+          next_cursor: null,
+        },
+      });
     }
     return route.fulfill({ status: 404, json: {} });
   });
@@ -1589,6 +1682,79 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
   } finally {
     await context.close();
   }
+});
+
+test("opens budget detail, navigates periods, and drills into a filtered day responsively", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/budgets");
+  await page.getByRole("link", { name: "查看預算：日常開銷" }).click();
+
+  await expect(page).toHaveURL(`/budgets/${budget.id}`);
+  await expect(
+    page.getByText("日常開銷", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText("可用額度", { exact: true })).toBeVisible();
+  await expect(page.getByText("已使用與排程", { exact: true })).toBeVisible();
+  await expect(page.getByText("支出步調", { exact: true })).toBeVisible();
+  await expect(page.getByText("每日可用", { exact: true })).toBeVisible();
+  await expect(page.getByText("目前日均支出", { exact: true })).toBeVisible();
+  await expect(page.getByText("每日明細", { exact: true })).toBeVisible();
+  await expect(
+    page.locator('[data-budget-day-row="mobile"]').first(),
+  ).toBeVisible();
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const rootWidth = document.documentElement.scrollWidth;
+        const bodyWidth = document.body?.scrollWidth ?? 0;
+        return Math.max(rootWidth, bodyWidth) <= window.innerWidth + 1;
+      }),
+    )
+    .toBe(true);
+
+  const previousPeriod = page.getByRole("link", {
+    name: "查看上一期預算",
+  });
+  await expect(previousPeriod).toBeVisible();
+  await expect(previousPeriod).toHaveAttribute(
+    "href",
+    `/budgets/${budget.id}?period=-1`,
+  );
+  await expect(page.getByRole("button", { name: "下一期" })).toBeDisabled();
+  await previousPeriod.click();
+  await expect(page).toHaveURL(`/budgets/${budget.id}?period=-1`);
+  await expect(page.getByText("第 1 個前期", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "查看下一期預算" }),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(
+    page.locator('[data-budget-day-row="desktop"]').first(),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  const dayLink = page
+    .locator('[data-budget-day-row="mobile"]')
+    .filter({ hasText: "2026/07/24" });
+  await expect(dayLink).toBeVisible();
+  await dayLink.click();
+  await expect(page).toHaveURL(
+    `/entries?from=2026-07-24&to=2026-07-24&budget=${budget.id}`,
+  );
+  await expect(
+    page.getByRole("radiogroup", { name: "所有預算" }),
+  ).toBeVisible();
+  await expect(page.getByRole("radio", { name: "日常開銷" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(
+    page.getByText(entry.description, { exact: true }).first(),
+  ).toBeVisible();
 });
 
 test("keeps the budget dialog within the desktop viewport", async ({
