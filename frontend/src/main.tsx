@@ -7,7 +7,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "@/App";
 import { AuthProvider } from "@/auth/auth-context";
 import { NavigationTransitionProvider } from "@/components/navigation-transition";
-import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
+import { PwaUpdateProvider } from "@/components/pwa-update-prompt";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { configureConnectivityEvents } from "@/lib/connectivity";
@@ -36,9 +36,10 @@ const router = createBrowserRouter([
     element: (
       <NavigationTransitionProvider>
         <AuthProvider>
-          <App />
-          <PwaUpdatePrompt />
-          <Toaster position="top-center" richColors />
+          <PwaUpdateProvider>
+            <App />
+            <Toaster position="top-center" richColors />
+          </PwaUpdateProvider>
         </AuthProvider>
       </NavigationTransitionProvider>
     ),

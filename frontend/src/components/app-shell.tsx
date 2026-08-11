@@ -6,8 +6,10 @@ import {
   KeyRound,
   PlugZap,
   LogOut,
+  LoaderCircle,
   Plus,
   BarChart3,
+  RefreshCw,
   WalletCards,
 } from "lucide-react";
 import { Outlet, useLocation } from "react-router-dom";
@@ -29,6 +31,7 @@ import {
 } from "@/components/navigation-transition";
 import { PageLoading } from "@/components/page-state";
 import { OfflineBanner } from "@/components/offline-state";
+import { usePwaUpdate } from "@/components/pwa-update-prompt";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,6 +90,7 @@ const mobileNavigation: MobileNavigationItem[] = [
 function UserMenu({ compact = false }: { compact?: boolean }) {
   const auth = useAuth();
   const navigate = useAppNavigate();
+  const { checkForUpdate, isChecking } = usePwaUpdate();
   const [installInstructionsPlatform, setInstallInstructionsPlatform] =
     useState<InstructionPlatform | null>(null);
 
@@ -96,6 +100,15 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
       navigate("/login", { replace: true, transitionIntent: "none" });
     } catch {
       toast.error("登出失敗，請再試一次。");
+    }
+  }
+
+  async function handleCheckForUpdate() {
+    try {
+      const hasUpdate = await checkForUpdate();
+      if (!hasUpdate) toast.success("Baln 已是最新版本");
+    } catch {
+      toast.error("無法檢查更新，請稍後再試。");
     }
   }
 
@@ -149,6 +162,17 @@ function UserMenu({ compact = false }: { compact?: boolean }) {
           已連接的應用程式
         </DropdownMenuItem>
         <InstallAppMenuItem onInstructions={setInstallInstructionsPlatform} />
+        <DropdownMenuItem
+          disabled={isChecking}
+          onSelect={() => void handleCheckForUpdate()}
+        >
+          {isChecking ? (
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+          ) : (
+            <RefreshCw aria-hidden="true" />
+          )}
+          檢查更新
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => void handleLogout()}

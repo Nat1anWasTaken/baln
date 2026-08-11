@@ -635,6 +635,27 @@ test("provides an installable manifest and profile-menu install action", async (
   await expect(page.getByRole("menuitem", { name: "安裝 Baln" })).toBeVisible();
 });
 
+test("checks for service worker updates from the profile menu", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
+
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.ready;
+        return Boolean(registration.active);
+      }),
+    )
+    .toBe(true);
+
+  await page.getByRole("button", { name: /測試使用者/ }).click();
+  await expect(page.getByRole("menuitem", { name: "檢查更新" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "檢查更新" }).click();
+  await expect(page.getByText("Baln 已是最新版本")).toBeVisible();
+});
+
 test("keeps iOS install instructions open after the profile menu closes", async ({
   page,
 }) => {
