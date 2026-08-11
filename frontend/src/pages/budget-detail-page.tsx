@@ -57,6 +57,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -472,6 +473,14 @@ export function BudgetDetailPage() {
   const statusLabel = periodKindLabel(value);
   const canEdit = !isReadOnly && !accounts.isPending && !accounts.isError;
   const spendable = value.pace.spendable_per_day_minor;
+  const elapsedPercent =
+    value.pace.total_days > 0
+      ? (value.pace.elapsed_days / value.pace.total_days) * 100
+      : 0;
+  const spentPercent =
+    budget.available_minor > 0
+      ? (value.pace.spent_through_as_of_minor / budget.available_minor) * 100
+      : 0;
 
   return (
     <div className="grid gap-5">
@@ -630,41 +639,48 @@ export function BudgetDetailPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>支出步調</CardTitle>
             <CardDescription>依本期進度計算</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="flex flex-1 flex-col gap-5">
             {value.period_kind === "upcoming" ? (
-              <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm">
-                <CalendarRange
-                  className="mt-0.5 size-4 shrink-0"
-                  aria-hidden="true"
-                />
+              <div className="flex flex-1 items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm">
+                <CalendarRange className="size-4 shrink-0" aria-hidden="true" />
                 預算開始後，這裡會顯示每日步調。
               </div>
             ) : (
               <>
-                <dl className="grid grid-cols-2 gap-3">
+                <dl className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-muted-foreground">
                       目前日均支出
                     </dt>
-                    <dd className="mt-1 font-semibold tabular-nums">
+                    <dd
+                      className={cn(
+                        "mt-1 text-2xl font-semibold tabular-nums",
+                        value.pace.average_daily_spend_minor !== null &&
+                          value.pace.average_daily_spend_minor < 0
+                          ? "text-finance-income"
+                          : "text-finance-expense",
+                      )}
+                    >
                       {value.pace.average_daily_spend_minor === null
                         ? "—"
                         : formatMoney(value.pace.average_daily_spend_minor)}
                     </dd>
                   </div>
-                  <div className="text-right">
+                  <div className="sm:text-right">
                     <dt className="text-xs text-muted-foreground">每日可用</dt>
                     <dd
                       className={cn(
-                        "mt-1 font-semibold tabular-nums",
-                        spendable !== null &&
-                          spendable < 0 &&
-                          "text-destructive",
+                        "mt-1 text-2xl font-semibold tabular-nums",
+                        spendable === null
+                          ? "text-muted-foreground"
+                          : spendable < 0
+                            ? "text-destructive"
+                            : "text-finance-income",
                       )}
                     >
                       {spendable === null
@@ -675,10 +691,47 @@ export function BudgetDetailPage() {
                     </dd>
                   </div>
                 </dl>
-                <p className="text-xs text-muted-foreground">
-                  已過 {formatInteger(value.pace.elapsed_days)} 天 · 剩餘{" "}
-                  {formatInteger(value.pace.remaining_days)} 天
-                </p>
+                <div className="flex flex-1 flex-col justify-end gap-4">
+                  <div className="grid gap-3 rounded-lg bg-muted/50 p-3">
+                    <div className="grid gap-1.5">
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
+                        <span>期間進度</span>
+                        <span>
+                          {formatInteger(value.pace.elapsed_days)} /{" "}
+                          {formatInteger(value.pace.total_days)} 天
+                        </span>
+                      </div>
+                      <Progress
+                        aria-label="預算期間進度"
+                        value={elapsedPercent}
+                        indicatorClassName="bg-finance-net"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
+                        <span>已使用額度</span>
+                        <span>
+                          {formatMoney(value.pace.spent_through_as_of_minor)}
+                        </span>
+                      </div>
+                      <Progress
+                        aria-label="預算已使用額度"
+                        value={spentPercent}
+                        indicatorClassName={cn(
+                          value.pace.spent_through_as_of_minor < 0
+                            ? "bg-finance-income"
+                            : overspent
+                              ? "bg-destructive"
+                              : "bg-finance-expense",
+                        )}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    已過 {formatInteger(value.pace.elapsed_days)} 天 · 剩餘{" "}
+                    {formatInteger(value.pace.remaining_days)} 天
+                  </p>
+                </div>
                 {overspent ? (
                   <p className="flex items-start gap-1.5 text-xs text-destructive">
                     <CircleAlert

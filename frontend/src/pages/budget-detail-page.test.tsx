@@ -136,6 +136,10 @@ describe("BudgetDetailPage", () => {
     expect(await screen.findByText("每月餐飲")).toBeVisible();
     expect(screen.getByText("可用額度")).toBeVisible();
     expect(screen.getByText("每日可用")).toBeVisible();
+    expect(screen.getByText("TWD 273")).toHaveClass("text-finance-expense");
+    expect(screen.getByText("TWD 364")).toHaveClass("text-finance-income");
+    expect(screen.getByLabelText("預算期間進度")).toBeVisible();
+    expect(screen.getByLabelText("預算已使用額度")).toBeVisible();
     expect((await screen.findAllByText("未來日期")).length).toBeGreaterThan(0);
     expect(screen.getByText(/未來 TWD 500/)).toBeVisible();
     expect(screen.getByLabelText("預算支出與剩餘趨勢圖")).toBeInTheDocument();
