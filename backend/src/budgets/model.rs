@@ -16,6 +16,16 @@ pub enum BudgetPeriodUnit {
     Year,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize, ToSchema, Type)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "budget_rollover_mode", rename_all = "snake_case")]
+pub enum BudgetRolloverMode {
+    #[default]
+    Accumulate,
+    SurplusOnly,
+    Reset,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RolloverEditMode {
@@ -46,6 +56,8 @@ pub struct CreateBudgetRequest {
     pub start_date: NaiveDate,
     pub period_count: i32,
     pub period_unit: BudgetPeriodUnit,
+    #[serde(default)]
+    pub rollover_mode: BudgetRolloverMode,
     pub account_keys: Vec<String>,
     #[serde(default)]
     pub show_on_overview: bool,
@@ -58,6 +70,7 @@ pub struct UpdateBudgetRequest {
     pub start_date: Option<NaiveDate>,
     pub period_count: Option<i32>,
     pub period_unit: Option<BudgetPeriodUnit>,
+    pub rollover_mode: Option<BudgetRolloverMode>,
     pub account_keys: Option<Vec<String>>,
     pub show_on_overview: Option<bool>,
     pub rollover_edit_mode: Option<RolloverEditMode>,
@@ -99,6 +112,7 @@ pub(crate) struct BudgetRow {
     pub start_date: NaiveDate,
     pub period_count: i32,
     pub period_unit: BudgetPeriodUnit,
+    pub rollover_mode: BudgetRolloverMode,
     pub show_on_overview: bool,
     pub overview_position: Option<i64>,
     pub rollover_anchor_date: NaiveDate,
@@ -124,6 +138,7 @@ pub struct BudgetStatus {
     pub start_date: NaiveDate,
     pub period_count: i32,
     pub period_unit: BudgetPeriodUnit,
+    pub rollover_mode: BudgetRolloverMode,
     pub accounts: Vec<BudgetAccount>,
     pub show_on_overview: bool,
     pub overview_position: Option<i64>,

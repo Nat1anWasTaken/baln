@@ -23,7 +23,7 @@ pub(crate) async fn list(
 ) -> ApiResult<Vec<BudgetRow>> {
     Ok(sqlx::query_as::<_, BudgetRow>(
         r#"
-        SELECT id, user_id, name, amount_minor, start_date, period_count, period_unit,
+        SELECT id, user_id, name, amount_minor, start_date, period_count, period_unit, rollover_mode,
                show_on_overview, overview_position, rollover_anchor_date,
                rollover_anchor_minor, created_at, updated_at
           FROM budgets
@@ -40,7 +40,7 @@ pub(crate) async fn list(
 pub(crate) async fn get(pool: &PgPool, user_id: Uuid, id: Uuid) -> ApiResult<Option<BudgetRow>> {
     Ok(sqlx::query_as::<_, BudgetRow>(
         r#"
-        SELECT id, user_id, name, amount_minor, start_date, period_count, period_unit,
+        SELECT id, user_id, name, amount_minor, start_date, period_count, period_unit, rollover_mode,
                show_on_overview, overview_position, rollover_anchor_date,
                rollover_anchor_minor, created_at, updated_at
           FROM budgets WHERE user_id = $1 AND id = $2

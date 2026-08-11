@@ -103,6 +103,10 @@ export type Account = z.infer<typeof accountSchema>;
 
 export const budgetPeriodUnitSchema = z.enum(["day", "week", "month", "year"]);
 export type BudgetPeriodUnit = z.infer<typeof budgetPeriodUnitSchema>;
+export const budgetRolloverModeSchema = z
+  .enum(["accumulate", "surplus_only", "reset"])
+  .default("accumulate");
+export type BudgetRolloverMode = z.infer<typeof budgetRolloverModeSchema>;
 export type RolloverEditMode = "recalculate" | "preserve";
 
 export const budgetAccountSchema = z.object({
@@ -120,6 +124,7 @@ export const budgetStatusSchema = z.object({
   start_date: z.string(),
   period_count: z.number().int().positive(),
   period_unit: budgetPeriodUnitSchema,
+  rollover_mode: budgetRolloverModeSchema,
   accounts: z.array(budgetAccountSchema).min(1),
   show_on_overview: z.boolean(),
   overview_position: z.number().int().nullable(),
@@ -200,6 +205,7 @@ export type CreateBudgetRequest = {
   start_date: string;
   period_count: number;
   period_unit: BudgetPeriodUnit;
+  rollover_mode: BudgetRolloverMode;
   account_keys: string[];
   show_on_overview: boolean;
 };

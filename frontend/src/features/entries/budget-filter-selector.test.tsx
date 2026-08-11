@@ -15,6 +15,7 @@ const budget: BudgetStatus = {
   start_date: "2026-07-01",
   period_count: 1,
   period_unit: "month",
+  rollover_mode: "accumulate",
   accounts: [
     {
       id: "01980000-0000-7000-8000-000000000001",

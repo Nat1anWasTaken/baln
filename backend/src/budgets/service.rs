@@ -8,8 +8,9 @@ use crate::{
     ApiError, ApiResult,
     budgets::{
         BudgetDay, BudgetDaysPage, BudgetDetails, BudgetPace, BudgetPeriodKind, BudgetPeriodUnit,
-        BudgetStatus, BudgetStatusKind, BudgetTrend, BudgetTrendBucket, CreateBudgetRequest,
-        ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest, model::BudgetRow, repository,
+        BudgetRolloverMode, BudgetStatus, BudgetStatusKind, BudgetTrend, BudgetTrendBucket,
+        CreateBudgetRequest, ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest,
+        model::BudgetRow, repository,
     },
 };
 
@@ -123,30 +124,69 @@ fn period_index(row: &BudgetRow, date: NaiveDate) -> ApiResult<i64> {
     Ok(index)
 }
 
+fn rollover_after_period(
+    mode: BudgetRolloverMode,
+    carry: i64,
+    amount: i64,
+    spent: i64,
+) -> ApiResult<i64> {
+    let remaining = carry
+        .checked_add(amount)
+        .and_then(|value| value.checked_sub(spent))
+        .ok_or_else(|| ApiError::internal("budget carry overflow"))?;
+    Ok(match mode {
+        BudgetRolloverMode::Accumulate => remaining,
+        BudgetRolloverMode::SurplusOnly => remaining.max(0),
+        BudgetRolloverMode::Reset => 0,
+    })
+}
+
 async fn carry_in(pool: &PgPool, row: &BudgetRow, current_start: NaiveDate) -> ApiResult<i64> {
     let anchor_index = period_index(row, row.rollover_anchor_date)?;
     let current_index = period_index(row, current_start)?;
     let completed = current_index.saturating_sub(anchor_index);
-    let historical_spent = if row.rollover_anchor_date < current_start {
-        repository::spent(
-            pool,
-            row.user_id,
-            row.id,
-            row.rollover_anchor_date,
-            current_start,
-        )
-        .await?
-    } else {
-        0
-    };
-    row.rollover_anchor_minor
-        .checked_add(
-            row.amount_minor
-                .checked_mul(completed)
-                .ok_or_else(|| ApiError::internal("budget carry overflow"))?,
-        )
-        .and_then(|v| v.checked_sub(historical_spent))
-        .ok_or_else(|| ApiError::internal("budget carry overflow"))
+    if completed == 0 {
+        return Ok(row.rollover_anchor_minor);
+    }
+    match row.rollover_mode {
+        BudgetRolloverMode::Reset => return Ok(0),
+        BudgetRolloverMode::Accumulate => {
+            let historical_spent = repository::spent(
+                pool,
+                row.user_id,
+                row.id,
+                row.rollover_anchor_date,
+                current_start,
+            )
+            .await?;
+            return row
+                .rollover_anchor_minor
+                .checked_add(
+                    row.amount_minor
+                        .checked_mul(completed)
+                        .ok_or_else(|| ApiError::internal("budget carry overflow"))?,
+                )
+                .and_then(|value| value.checked_sub(historical_spent))
+                .ok_or_else(|| ApiError::internal("budget carry overflow"));
+        }
+        BudgetRolloverMode::SurplusOnly => {}
+    }
+
+    let mut ranges = Vec::with_capacity(completed.try_into().unwrap_or(0));
+    for index in anchor_index..current_index {
+        ranges.push((boundary(row, index)?, boundary(row, index + 1)?));
+    }
+    let periods = repository::trend(pool, row.user_id, row.id, &ranges, false).await?;
+    let mut carry = row.rollover_anchor_minor;
+    for period in periods {
+        carry = rollover_after_period(
+            row.rollover_mode,
+            carry,
+            row.amount_minor,
+            period.spent_minor,
+        )?;
+    }
+    Ok(carry)
 }
 
 async fn status_at_index(
@@ -190,6 +230,7 @@ async fn status_at_index(
         start_date: row.start_date,
         period_count: row.period_count,
         period_unit: row.period_unit,
+        rollover_mode: row.rollover_mode,
         accounts,
         show_on_overview: row.show_on_overview,
         overview_position: row.overview_position,
@@ -478,10 +519,10 @@ pub async fn create(
     } else {
         None
     };
-    sqlx::query(r#"INSERT INTO budgets (id,user_id,name,amount_minor,start_date,period_count,period_unit,show_on_overview,overview_position,rollover_anchor_date)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$5)"#)
+    sqlx::query(r#"INSERT INTO budgets (id,user_id,name,amount_minor,start_date,period_count,period_unit,rollover_mode,show_on_overview,overview_position,rollover_anchor_date)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$5)"#)
         .bind(id).bind(user_id).bind(name).bind(request.amount_minor).bind(request.start_date)
-        .bind(request.period_count).bind(request.period_unit).bind(request.show_on_overview).bind(position)
+        .bind(request.period_count).bind(request.period_unit).bind(request.rollover_mode).bind(request.show_on_overview).bind(position)
         .execute(&mut *transaction).await?;
     repository::replace_accounts(&mut transaction, user_id, id, &account_ids).await?;
     transaction.commit().await?;
@@ -512,6 +553,7 @@ pub async fn update(
     let start = request.start_date.unwrap_or(old.start_date);
     let count = request.period_count.unwrap_or(old.period_count);
     let unit = request.period_unit.unwrap_or(old.period_unit);
+    let rollover_mode = request.rollover_mode.unwrap_or(old.rollover_mode);
     let account_keys = request
         .account_keys
         .clone()
@@ -521,6 +563,7 @@ pub async fn update(
         || start != old.start_date
         || count != old.period_count
         || unit != old.period_unit
+        || rollover_mode != old.rollover_mode
         || request.account_keys.is_some();
     if definition_changed && request.rollover_edit_mode.is_none() {
         return Err(ApiError::bad_request(
@@ -555,6 +598,7 @@ pub async fn update(
     new_shape.start_date = start;
     new_shape.period_count = count;
     new_shape.period_unit = unit;
+    new_shape.rollover_mode = rollover_mode;
     let (anchor_date, anchor_minor) = if !definition_changed {
         (old.rollover_anchor_date, old.rollover_anchor_minor)
     } else if request.rollover_edit_mode == Some(RolloverEditMode::Preserve) {
@@ -565,10 +609,10 @@ pub async fn update(
     } else {
         (start, 0)
     };
-    sqlx::query(r#"UPDATE budgets SET name=$3,amount_minor=$4,start_date=$5,period_count=$6,period_unit=$7,
-        show_on_overview=$8,overview_position=$9,rollover_anchor_date=$10,rollover_anchor_minor=$11,updated_at=now()
+    sqlx::query(r#"UPDATE budgets SET name=$3,amount_minor=$4,start_date=$5,period_count=$6,period_unit=$7,rollover_mode=$8,
+        show_on_overview=$9,overview_position=$10,rollover_anchor_date=$11,rollover_anchor_minor=$12,updated_at=now()
         WHERE user_id=$1 AND id=$2"#).bind(user_id).bind(id).bind(name).bind(amount).bind(start).bind(count).bind(unit)
-        .bind(show).bind(position).bind(anchor_date).bind(anchor_minor).execute(&mut *transaction).await?;
+        .bind(rollover_mode).bind(show).bind(position).bind(anchor_date).bind(anchor_minor).execute(&mut *transaction).await?;
     if request.account_keys.is_some() {
         repository::replace_accounts(&mut transaction, user_id, id, &account_ids).await?;
     }
@@ -646,6 +690,7 @@ mod tests {
             start_date: start,
             period_count: count,
             period_unit: unit,
+            rollover_mode: BudgetRolloverMode::Accumulate,
             show_on_overview: false,
             overview_position: None,
             rollover_anchor_date: start,
@@ -673,6 +718,25 @@ mod tests {
             period_index(&r, NaiveDate::from_ymd_opt(2024, 3, 30).unwrap()).unwrap(),
             1
         );
+    }
+
+    #[test]
+    fn rollover_modes_handle_surplus_and_overspending_independently() {
+        let accumulate = rollover_after_period(BudgetRolloverMode::Accumulate, 0, 1_000, 1_200)
+            .and_then(|carry| {
+                rollover_after_period(BudgetRolloverMode::Accumulate, carry, 1_000, 100)
+            })
+            .unwrap();
+        let surplus_only = rollover_after_period(BudgetRolloverMode::SurplusOnly, 0, 1_000, 1_200)
+            .and_then(|carry| {
+                rollover_after_period(BudgetRolloverMode::SurplusOnly, carry, 1_000, 100)
+            })
+            .unwrap();
+        let reset = rollover_after_period(BudgetRolloverMode::Reset, 400, 1_000, 100).unwrap();
+
+        assert_eq!(accumulate, 700);
+        assert_eq!(surplus_only, 900);
+        assert_eq!(reset, 0);
     }
     #[test]
     fn fixed_periods_are_half_open() {
@@ -741,6 +805,7 @@ mod tests {
                 start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
                 period_count: 1,
                 period_unit: BudgetPeriodUnit::Month,
+                rollover_mode: BudgetRolloverMode::Accumulate,
                 account_keys: vec!["asset.cash".into()],
                 show_on_overview: true,
             },
@@ -814,6 +879,7 @@ mod tests {
                 start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
                 period_count: 1,
                 period_unit: BudgetPeriodUnit::Month,
+                rollover_mode: BudgetRolloverMode::Accumulate,
                 account_keys: vec!["asset.cash.detail".into()],
                 show_on_overview: false,
             },

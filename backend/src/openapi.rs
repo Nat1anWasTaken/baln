@@ -73,6 +73,7 @@ use utoipa::{
         crate::entries::PossibleDuplicateMatch,
         crate::entries::EntryPage,
         crate::budgets::BudgetPeriodUnit,
+        crate::budgets::BudgetRolloverMode,
         crate::budgets::BudgetPeriodKind,
         crate::budgets::RolloverEditMode,
         crate::budgets::BudgetStatusKind,

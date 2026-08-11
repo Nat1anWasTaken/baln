@@ -82,6 +82,7 @@ const budget = {
   start_date: "2026-07-01",
   period_count: 1,
   period_unit: "month",
+  rollover_mode: "accumulate",
   accounts: [accounts[0], accounts[1]],
   show_on_overview: true,
   overview_position: 0,
@@ -242,6 +243,7 @@ async function mockApi(page: Page) {
         start_date: string;
         period_count: number;
         period_unit: "day" | "week" | "month" | "year";
+        rollover_mode: "accumulate" | "surplus_only" | "reset";
         account_keys: string[];
         show_on_overview: boolean;
       };
@@ -1599,7 +1601,7 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
   try {
     await page.goto("/");
     await expect(page.getByRole("region", { name: "總覽預算" })).toBeVisible();
-    await expect(page.getByText("尚未使用")).toBeVisible();
+    await expect(page.getByText("本期尚未使用").first()).toBeVisible();
     const track = page.locator(".budget-carousel-track");
     const slide = track.getByRole("article");
     const [trackBounds, slideBounds] = await Promise.all([
@@ -1637,6 +1639,14 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
     await expect(sheet.locator('[data-slot="dialog-body"]')).toHaveCSS(
       "overflow-y",
       "auto",
+    );
+    await expect(
+      sheet.getByRole("combobox", { name: "餘額沿襲方式" }),
+    ).toContainText("累加餘額");
+    await sheet.getByRole("combobox", { name: "餘額沿襲方式" }).click();
+    await page.getByRole("option", { name: "只沿襲剩餘" }).click();
+    await expect(sheet).toContainText(
+      "只把未使用的餘額帶入下一期；超支不會延續。",
     );
     const budgetCheckbox = page.getByRole("checkbox", { name: /現金/ }).first();
     const checkboxBounds = await budgetCheckbox.boundingBox();

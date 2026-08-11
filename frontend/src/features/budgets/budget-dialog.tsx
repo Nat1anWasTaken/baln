@@ -40,6 +40,7 @@ import { invalidateAfterBudgetWrite } from "@/lib/query-invalidation";
 import type {
   Account,
   BudgetPeriodUnit,
+  BudgetRolloverMode,
   BudgetStatus,
   CreateBudgetRequest,
   RolloverEditMode,
@@ -56,6 +57,7 @@ function defaults(budget?: BudgetStatus): Values {
         start_date: budget.start_date,
         period_count: budget.period_count,
         period_unit: budget.period_unit,
+        rollover_mode: budget.rollover_mode,
         account_keys: budget.accounts.map((account) => account.key),
         show_on_overview: budget.show_on_overview,
       }
@@ -65,6 +67,7 @@ function defaults(budget?: BudgetStatus): Values {
         start_date: todayTaipei(),
         period_count: 1,
         period_unit: "month",
+        rollover_mode: "accumulate",
         account_keys: [],
         show_on_overview: true,
       };
@@ -78,6 +81,7 @@ function definitionChanged(values: Values, budget: BudgetStatus) {
     values.start_date !== budget.start_date ||
     values.period_count !== budget.period_count ||
     values.period_unit !== budget.period_unit ||
+    values.rollover_mode !== budget.rollover_mode ||
     currentKeys.join("\0") !== nextKeys.join("\0")
   );
 }
@@ -320,6 +324,33 @@ export function BudgetDialog({
                   />
                 </Field>
               </div>
+              <Field>
+                <FieldLabel htmlFor="budget-rollover-mode">
+                  餘額沿襲方式
+                </FieldLabel>
+                <Combobox
+                  id="budget-rollover-mode"
+                  value={values.rollover_mode}
+                  onValueChange={(value) =>
+                    setValues((current) => ({
+                      ...current,
+                      rollover_mode: value as BudgetRolloverMode,
+                    }))
+                  }
+                  options={[
+                    { value: "accumulate", label: "累加餘額" },
+                    { value: "surplus_only", label: "只沿襲剩餘" },
+                    { value: "reset", label: "每期重設" },
+                  ]}
+                />
+                <FieldDescription>
+                  {values.rollover_mode === "accumulate"
+                    ? "每期剩餘或超支都會帶入下一期。"
+                    : values.rollover_mode === "surplus_only"
+                      ? "只把未使用的餘額帶入下一期；超支不會延續。"
+                      : "每一期都只使用當期額度，不沿襲剩餘或超支。"}
+                </FieldDescription>
+              </Field>
               <Field
                 data-invalid={submitted && values.account_keys.length === 0}
               >
