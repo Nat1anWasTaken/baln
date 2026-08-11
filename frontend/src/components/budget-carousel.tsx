@@ -133,7 +133,7 @@ export function BudgetCarousel() {
             key={budget.id}
             aria-roledescription="slide"
             aria-label={`${index + 1} / ${items.length}`}
-            className="w-[min(86vw,24rem)] shrink-0 snap-start sm:w-[24rem] lg:w-[calc((100%-1.5rem)/3)]"
+            className="w-full shrink-0 snap-start sm:w-[24rem] lg:w-[calc((100%-1.5rem)/3)]"
           >
             <BudgetCard budget={budget} />
           </article>

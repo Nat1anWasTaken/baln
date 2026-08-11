@@ -1508,6 +1508,14 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
     await expect(page.getByRole("region", { name: "總覽預算" })).toBeVisible();
     await expect(page.getByText("尚未使用")).toBeVisible();
     const track = page.locator(".budget-carousel-track");
+    const slide = track.getByRole("article");
+    const [trackBounds, slideBounds] = await Promise.all([
+      track.boundingBox(),
+      slide.boundingBox(),
+    ]);
+    expect(trackBounds).not.toBeNull();
+    expect(slideBounds).not.toBeNull();
+    expect(Math.abs(slideBounds!.width - trackBounds!.width)).toBeLessThan(1);
     expect(
       await track.evaluate(
         (element) => element.scrollWidth >= element.clientWidth,
