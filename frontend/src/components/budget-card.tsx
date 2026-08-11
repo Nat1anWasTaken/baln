@@ -1,6 +1,8 @@
 import { CalendarRange, CircleAlert } from "lucide-react";
+import type { To } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
+import { AppLink } from "@/components/navigation-transition";
 import {
   Card,
   CardAction,
@@ -26,30 +28,38 @@ export function budgetPeriodLabel(budget: BudgetStatus) {
 
 export function BudgetCard({
   budget,
+  to,
   className,
 }: {
   budget: BudgetStatus;
+  to?: To;
   className?: string;
 }) {
   const upcoming = budget.status === "upcoming";
   const overspent = budget.remaining_minor < 0;
+  const currentUnused = Math.max(
+    0,
+    budget.amount_minor - Math.max(budget.spent_minor, 0),
+  );
+  const rolloverRemaining = Math.max(0, budget.remaining_minor - currentUnused);
   const capacity = Math.max(
-    Math.abs(budget.available_minor),
-    Math.max(budget.spent_minor, 0),
+    Math.max(budget.spent_minor, 0) + currentUnused + rolloverRemaining,
     1,
   );
   const spentPercent = Math.min(
     100,
     Math.max(0, (Math.max(budget.spent_minor, 0) / capacity) * 100),
   );
-  const remainingPercent = overspent
-    ? 0
-    : Math.min(
-        100 - spentPercent,
-        Math.max(0, (budget.remaining_minor / capacity) * 100),
-      );
+  const currentUnusedPercent = Math.min(
+    100 - spentPercent,
+    (currentUnused / capacity) * 100,
+  );
+  const rolloverPercent = Math.min(
+    100 - spentPercent - currentUnusedPercent,
+    (rolloverRemaining / capacity) * 100,
+  );
 
-  return (
+  const card = (
     <Card
       className={cn("h-full", className)}
       data-budget-status={budget.status}
@@ -90,7 +100,7 @@ export function BudgetCard({
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">
-                  {overspent ? "超支" : "尚未使用"}
+                  {overspent ? "超支" : "可用餘額"}
                 </p>
                 <p
                   className={cn(
@@ -107,12 +117,13 @@ export function BudgetCard({
                 role="progressbar"
                 aria-label={`${budget.name} 預算使用狀況`}
                 aria-valuemin={0}
-                aria-valuemax={Math.max(
-                  budget.available_minor,
-                  budget.spent_minor,
-                  0,
-                )}
+                aria-valuemax={capacity}
                 aria-valuenow={Math.max(budget.spent_minor, 0)}
+                aria-valuetext={
+                  overspent
+                    ? `已使用 ${formatMoney(budget.spent_minor)}，超支 ${formatMoney(-budget.remaining_minor)}`
+                    : `已使用 ${formatMoney(budget.spent_minor)}，本期尚未使用 ${formatMoney(currentUnused)}，前期沿襲可用 ${formatMoney(rolloverRemaining)}`
+                }
                 className="flex h-2 overflow-hidden rounded-full bg-muted"
               >
                 <span
@@ -124,13 +135,59 @@ export function BudgetCard({
                 />
                 <span
                   className="h-full bg-finance-income transition-[width] duration-(--motion-duration-control) ease-(--motion-easing-standard)"
-                  style={{ width: `${remainingPercent}%` }}
+                  style={{ width: `${currentUnusedPercent}%` }}
+                />
+                <span
+                  className="h-full bg-finance-rollover transition-[width] duration-(--motion-duration-control) ease-(--motion-easing-standard)"
+                  style={{ width: `${rolloverPercent}%` }}
                 />
               </div>
-              <div className="flex justify-between gap-3 text-xs text-muted-foreground tabular-nums">
-                <span>基本額度 {formatMoney(budget.amount_minor)}</span>
-                <span>累計 {formatMoney(budget.carry_in_minor)}</span>
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-3 tabular-nums">
+                <div className="grid min-w-0 gap-1 border-r pr-2">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span
+                      className="size-2 shrink-0 rounded-full bg-finance-income"
+                      aria-hidden="true"
+                    />
+                    本期尚未使用
+                  </p>
+                  <p className="truncate font-heading text-sm font-semibold text-finance-income">
+                    {formatMoney(currentUnused)}
+                  </p>
+                </div>
+                <div className="grid min-w-0 gap-1 pl-1">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "size-2 shrink-0 rounded-full",
+                        budget.carry_in_minor < 0
+                          ? "bg-destructive"
+                          : "bg-finance-rollover",
+                      )}
+                      aria-hidden="true"
+                    />
+                    {budget.carry_in_minor < 0 ? "前期超支抵扣" : "前期沿襲"}
+                  </p>
+                  <p
+                    className={cn(
+                      "truncate font-heading text-sm font-semibold",
+                      budget.carry_in_minor < 0
+                        ? "text-destructive"
+                        : "text-finance-rollover",
+                    )}
+                  >
+                    {formatMoney(
+                      budget.carry_in_minor < 0
+                        ? Math.abs(budget.carry_in_minor)
+                        : rolloverRemaining,
+                    )}
+                  </p>
+                </div>
               </div>
+              <p className="flex justify-between gap-3 text-xs text-muted-foreground tabular-nums">
+                <span>本期額度 {formatMoney(budget.amount_minor)}</span>
+                <span>總額度 {formatMoney(budget.available_minor)}</span>
+              </p>
             </div>
             {budget.available_minor <= 0 ? (
               <p className="flex items-start gap-1.5 text-xs text-destructive">
@@ -148,5 +205,17 @@ export function BudgetCard({
         </p>
       </CardContent>
     </Card>
+  );
+
+  if (!to) return card;
+
+  return (
+    <AppLink
+      to={to}
+      aria-label={`查看預算：${budget.name}`}
+      className="touch-press block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      {card}
+    </AppLink>
   );
 }

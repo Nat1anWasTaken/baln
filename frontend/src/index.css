@@ -24,6 +24,7 @@
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-finance-net: var(--finance-net);
+  --color-finance-rollover: var(--finance-rollover);
   --color-finance-expense: var(--finance-expense);
   --color-finance-income: var(--finance-income);
   --color-ring: var(--ring);
@@ -80,6 +81,7 @@
   --finance-income: oklch(0.43 0.12 150);
   --finance-expense: oklch(0.5 0.18 25);
   --finance-net: oklch(0.43 0.14 255);
+  --finance-rollover: oklch(0.47 0.15 275);
   --radius: 0.625rem;
   --motion-duration-control: 200ms;
   --motion-duration-floating: 260ms;
@@ -130,6 +132,7 @@
   --finance-income: oklch(0.76 0.13 150);
   --finance-expense: oklch(0.74 0.15 25);
   --finance-net: oklch(0.75 0.12 255);
+  --finance-rollover: oklch(0.76 0.12 275);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

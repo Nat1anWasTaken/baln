@@ -35,15 +35,56 @@ const budget: BudgetStatus = {
 };
 
 describe("BudgetCard", () => {
-  it("labels spent, unused, base, and rollover amounts", () => {
+  it("separates current unused and previous rollover amounts", () => {
     render(<BudgetCard budget={budget} />);
     expect(screen.getByText("已使用")).toBeVisible();
-    expect(screen.getByText("尚未使用")).toBeVisible();
-    expect(screen.getByText(/基本額度/)).toHaveTextContent("TWD 10,000");
-    expect(screen.getByText(/累計/)).toHaveTextContent("TWD 2,000");
+    expect(screen.getByText("可用餘額")).toBeVisible();
+    expect(screen.getByText("本期尚未使用")).toBeVisible();
+    expect(screen.getByText("前期沿襲")).toBeVisible();
+    expect(screen.getByText(/本期額度/)).toHaveTextContent("TWD 10,000");
+    expect(screen.getByText(/總額度/)).toHaveTextContent("TWD 12,000");
+    expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-income");
+    expect(screen.getByText("TWD 2,000")).toHaveClass("text-finance-rollover");
     expect(screen.getByRole("progressbar")).toHaveAttribute(
       "aria-valuenow",
       "7000",
+    );
+    expect(
+      screen.getByRole("progressbar").getAttribute("aria-valuetext"),
+    ).toContain("前期沿襲可用");
+  });
+
+  it("labels negative rollover as a previous-period deduction", () => {
+    render(
+      <BudgetCard
+        budget={{
+          ...budget,
+          carry_in_minor: -2_000,
+          available_minor: 8_000,
+          spent_minor: 7_000,
+          remaining_minor: 1_000,
+        }}
+      />,
+    );
+    expect(screen.getByText("前期超支抵扣")).toBeVisible();
+    expect(screen.getByText("TWD 2,000")).toHaveClass("text-destructive");
+  });
+
+  it("uses rollover after the current period allowance is spent", () => {
+    render(
+      <BudgetCard
+        budget={{
+          ...budget,
+          spent_minor: 11_000,
+          remaining_minor: 1_000,
+        }}
+      />,
+    );
+    expect(screen.getByText("本期尚未使用").parentElement).toHaveTextContent(
+      "TWD 0",
+    );
+    expect(screen.getByText("前期沿襲").parentElement).toHaveTextContent(
+      "TWD 1,000",
     );
   });
 
