@@ -88,7 +88,7 @@ export function BudgetCard({
           </Badge>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="@container/budget-card grid gap-4">
         {upcoming ? (
           <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm">
             <CalendarRange
@@ -99,23 +99,29 @@ export function BudgetCard({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-3">
               <div>
                 <p className="text-xs text-muted-foreground">已使用</p>
-                <p className="font-heading text-xl font-semibold tabular-nums text-finance-expense">
+                <p className="font-heading text-[clamp(0.75rem,5cqw,1.25rem)] leading-tight font-semibold whitespace-nowrap tabular-nums text-finance-expense">
                   {formatMoney(budget.spent_minor)}
                 </p>
               </div>
-              <div className="text-right">
+              <div className="min-w-0 text-right">
                 <p className="text-xs text-muted-foreground">
                   {overspent ? "超支" : "可用餘額"}
                 </p>
                 {overspent ? (
-                  <p className="font-heading text-xl font-semibold tabular-nums text-destructive">
+                  <p
+                    data-budget-available-amount
+                    className="font-heading text-[clamp(0.75rem,5cqw,1.25rem)] leading-tight font-semibold whitespace-nowrap tabular-nums text-destructive"
+                  >
                     {formatMoney(Math.abs(budget.remaining_minor))}
                   </p>
                 ) : remainingBreakdown.adjustment ? (
-                  <p className="flex flex-wrap items-baseline justify-end gap-x-1.5 font-heading text-xl font-semibold tabular-nums">
+                  <p
+                    data-budget-available-amount
+                    className="flex items-baseline justify-end gap-x-1.5 font-heading text-[clamp(0.75rem,5cqw,1.25rem)] leading-tight font-semibold whitespace-nowrap tabular-nums"
+                  >
                     <span className="text-finance-income">
                       {formatMoney(currentUnused)}
                     </span>
@@ -135,7 +141,10 @@ export function BudgetCard({
                     </span>
                   </p>
                 ) : (
-                  <p className="font-heading text-xl font-semibold tabular-nums text-finance-income">
+                  <p
+                    data-budget-available-amount
+                    className="font-heading text-[clamp(0.75rem,5cqw,1.25rem)] leading-tight font-semibold whitespace-nowrap tabular-nums text-finance-income"
+                  >
                     {formatMoney(currentUnused)}
                   </p>
                 )}
@@ -171,7 +180,7 @@ export function BudgetCard({
                   style={{ width: `${rolloverPercent}%` }}
                 />
               </div>
-              <p className="flex flex-wrap items-baseline justify-end gap-x-1.5 text-xs">
+              <p className="flex items-baseline justify-end gap-x-1.5 text-xs whitespace-nowrap">
                 <span className="text-finance-income">當期剩餘</span>
                 {remainingBreakdown.adjustment ? (
                   <>

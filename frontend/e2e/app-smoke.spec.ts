@@ -677,6 +677,35 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await expect(page).toHaveURL(/\/entries\/new$/);
 });
 
+test("keeps split budget balances on one line across card widths", async ({
+  page,
+}) => {
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+
+    const amounts = page.locator("[data-budget-available-amount]");
+    await expect
+      .poll(() =>
+        amounts.evaluateAll((elements) => {
+          const element = elements.find(
+            (candidate) => candidate.getClientRects().length > 0,
+          );
+          if (!element) return null;
+          const childTops = [...element.children].map((child) =>
+            Math.round(child.getBoundingClientRect().top),
+          );
+          return {
+            fits: element.scrollWidth <= element.clientWidth + 1,
+            singleLine: new Set(childTops).size <= 1,
+            whiteSpace: getComputedStyle(element).whiteSpace,
+          };
+        }),
+      )
+      .toEqual({ fits: true, singleLine: true, whiteSpace: "nowrap" });
+  }
+});
+
 test("shows milestone progress until the app route is ready", async ({
   page,
 }) => {

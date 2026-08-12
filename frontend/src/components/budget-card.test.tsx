@@ -48,6 +48,12 @@ describe("BudgetCard", () => {
     expect(screen.getByText(/總額度/)).toHaveTextContent("TWD 12,000");
     expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-income");
     expect(screen.getByText("TWD 2,000")).toHaveClass("text-finance-rollover");
+    expect(screen.getByText("TWD 3,000").parentElement).toHaveClass(
+      "whitespace-nowrap",
+    );
+    expect(screen.getByText("TWD 3,000").parentElement).not.toHaveClass(
+      "flex-wrap",
+    );
     expect(screen.getByRole("progressbar")).toHaveAttribute(
       "aria-valuenow",
       "7000",
