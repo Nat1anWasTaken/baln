@@ -408,12 +408,12 @@
 
   [data-slot="switch"][data-size="default"][data-state="unchecked"]
     [data-slot="switch-thumb"] {
-    transform: translateX(2px);
+    translate: 2px;
   }
 
   [data-slot="switch"][data-size="default"][data-state="checked"]
     [data-slot="switch-thumb"] {
-    transform: translateX(18px);
+    translate: 18px;
   }
 
   [data-slot="switch"]:active:not(:disabled) {

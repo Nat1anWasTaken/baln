@@ -1991,6 +1991,15 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     expect(Math.round(switchBounds!.width)).toBe(40);
     expect(Math.round(switchBounds!.height)).toBe(24);
 
+    const thumbBounds = await archivedSwitch
+      .locator('[data-slot="switch-thumb"]')
+      .boundingBox();
+    expect(thumbBounds).not.toBeNull();
+    expect(thumbBounds!.x).toBeGreaterThanOrEqual(switchBounds!.x);
+    expect(thumbBounds!.x + thumbBounds!.width).toBeLessThanOrEqual(
+      switchBounds!.x + switchBounds!.width,
+    );
+
     const switchHitArea = await archivedSwitch.evaluate((element) => {
       const style = getComputedStyle(element, "::after");
       return {
@@ -2000,6 +2009,16 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     });
     expect(switchHitArea.width).toBeGreaterThanOrEqual(44);
     expect(switchHitArea.height).toBeGreaterThanOrEqual(44);
+
+    await page.getByText("顯示已封存", { exact: true }).click();
+    await expect(archivedSwitch).toBeChecked();
+    const checkedThumbBounds = await archivedSwitch
+      .locator('[data-slot="switch-thumb"]')
+      .boundingBox();
+    expect(checkedThumbBounds).not.toBeNull();
+    expect(
+      checkedThumbBounds!.x + checkedThumbBounds!.width,
+    ).toBeLessThanOrEqual(switchBounds!.x + switchBounds!.width);
   } finally {
     await context.close();
   }

@@ -43,7 +43,7 @@ function SwitchField({
     <FieldLabel
       htmlFor={id}
       className={cn(
-        "min-h-11 cursor-pointer items-center gap-3 has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50",
+        "min-h-11 cursor-pointer items-center gap-3 has-data-checked:bg-transparent has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50 dark:has-data-checked:bg-transparent",
         containerClassName,
       )}
     >
