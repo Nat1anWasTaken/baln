@@ -470,6 +470,14 @@ export function BudgetDetailPage() {
   const value = detail.data;
   const budget = value.budget;
   const overspent = budget.remaining_minor < 0;
+  const currentRemaining = Math.max(
+    0,
+    budget.amount_minor - Math.max(budget.spent_minor, 0),
+  );
+  const rolloverRemaining = Math.max(
+    0,
+    budget.remaining_minor - currentRemaining,
+  );
   const statusLabel = periodKindLabel(value);
   const canEdit = !isReadOnly && !accounts.isPending && !accounts.isError;
   const spendable = value.pace.spendable_per_day_minor;
@@ -623,17 +631,41 @@ export function BudgetDetailPage() {
             <CardDescription>{overspent ? "超支" : "剩餘"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <p
-              className={cn(
-                "text-2xl font-semibold tabular-nums",
-                overspent ? "text-destructive" : "text-finance-income",
-              )}
-            >
-              {formatMoney(Math.abs(budget.remaining_minor))}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {overspent ? "已超過本期可用額度" : "已扣除未來排程支出"}
-            </p>
+            {overspent ? (
+              <>
+                <p className="text-2xl font-semibold tabular-nums text-destructive">
+                  {formatMoney(Math.abs(budget.remaining_minor))}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  已超過本期可用額度
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tabular-nums">
+                  <span className="text-finance-rollover">
+                    {formatMoney(rolloverRemaining)}
+                  </span>
+                  <span className="text-muted-foreground" aria-hidden="true">
+                    +
+                  </span>
+                  <span className="text-finance-income">
+                    {formatMoney(currentRemaining)}
+                  </span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
+                  <span className="text-finance-rollover">往期沿襲</span>
+                  <span className="text-muted-foreground" aria-hidden="true">
+                    +
+                  </span>
+                  <span className="text-finance-income">當期剩餘</span>
+                </p>
+                <span className="sr-only">
+                  往期沿襲 {formatMoney(rolloverRemaining)} 加上當期剩餘
+                  {formatMoney(currentRemaining)}
+                </span>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
