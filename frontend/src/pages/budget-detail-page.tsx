@@ -643,26 +643,26 @@ export function BudgetDetailPage() {
             ) : (
               <>
                 <p className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tabular-nums">
-                  <span className="text-finance-rollover">
-                    {formatMoney(rolloverRemaining)}
-                  </span>
-                  <span className="text-muted-foreground" aria-hidden="true">
-                    +
-                  </span>
                   <span className="text-finance-income">
                     {formatMoney(currentRemaining)}
                   </span>
-                </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                  <span className="text-finance-rollover">往期沿襲</span>
                   <span className="text-muted-foreground" aria-hidden="true">
                     +
                   </span>
+                  <span className="text-finance-rollover">
+                    {formatMoney(rolloverRemaining)}
+                  </span>
+                </p>
+                <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
                   <span className="text-finance-income">當期剩餘</span>
+                  <span className="text-muted-foreground" aria-hidden="true">
+                    +
+                  </span>
+                  <span className="text-finance-rollover">往期沿襲</span>
                 </p>
                 <span className="sr-only">
-                  往期沿襲 {formatMoney(rolloverRemaining)} 加上當期剩餘
-                  {formatMoney(currentRemaining)}
+                  當期剩餘 {formatMoney(currentRemaining)} 加上往期沿襲
+                  {formatMoney(rolloverRemaining)}
                 </span>
               </>
             )}

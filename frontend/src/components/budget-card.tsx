@@ -105,14 +105,23 @@ export function BudgetCard({
                 <p className="text-xs text-muted-foreground">
                   {overspent ? "超支" : "可用餘額"}
                 </p>
-                <p
-                  className={cn(
-                    "font-heading text-xl font-semibold tabular-nums",
-                    overspent ? "text-destructive" : "text-finance-income",
-                  )}
-                >
-                  {formatMoney(Math.abs(budget.remaining_minor))}
-                </p>
+                {overspent ? (
+                  <p className="font-heading text-xl font-semibold tabular-nums text-destructive">
+                    {formatMoney(Math.abs(budget.remaining_minor))}
+                  </p>
+                ) : (
+                  <p className="flex flex-wrap items-baseline justify-end gap-x-1.5 font-heading text-xl font-semibold tabular-nums">
+                    <span className="text-finance-income">
+                      {formatMoney(currentUnused)}
+                    </span>
+                    <span className="text-muted-foreground" aria-hidden="true">
+                      +
+                    </span>
+                    <span className="text-finance-rollover">
+                      {formatMoney(rolloverRemaining)}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             <div className="grid gap-2">
@@ -145,48 +154,13 @@ export function BudgetCard({
                   style={{ width: `${rolloverPercent}%` }}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-3 tabular-nums">
-                <div className="grid min-w-0 gap-1 border-r pr-2">
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span
-                      className="size-2 shrink-0 rounded-full bg-finance-income"
-                      aria-hidden="true"
-                    />
-                    本期尚未使用
-                  </p>
-                  <p className="truncate font-heading text-sm font-semibold text-finance-income">
-                    {formatMoney(currentUnused)}
-                  </p>
-                </div>
-                <div className="grid min-w-0 gap-1 pl-1">
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span
-                      className={cn(
-                        "size-2 shrink-0 rounded-full",
-                        budget.carry_in_minor < 0
-                          ? "bg-destructive"
-                          : "bg-finance-rollover",
-                      )}
-                      aria-hidden="true"
-                    />
-                    {budget.carry_in_minor < 0 ? "前期超支抵扣" : "前期沿襲"}
-                  </p>
-                  <p
-                    className={cn(
-                      "truncate font-heading text-sm font-semibold",
-                      budget.carry_in_minor < 0
-                        ? "text-destructive"
-                        : "text-finance-rollover",
-                    )}
-                  >
-                    {formatMoney(
-                      budget.carry_in_minor < 0
-                        ? Math.abs(budget.carry_in_minor)
-                        : rolloverRemaining,
-                    )}
-                  </p>
-                </div>
-              </div>
+              <p className="flex flex-wrap items-baseline justify-end gap-x-1.5 text-xs">
+                <span className="text-finance-income">當期剩餘</span>
+                <span className="text-muted-foreground" aria-hidden="true">
+                  +
+                </span>
+                <span className="text-finance-rollover">往期沿襲</span>
+              </p>
               <p className="flex justify-between gap-3 text-xs text-muted-foreground tabular-nums">
                 <span>本期額度 {formatMoney(budget.amount_minor)}</span>
                 <span>總額度 {formatMoney(budget.available_minor)}</span>

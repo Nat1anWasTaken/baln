@@ -42,8 +42,8 @@ describe("BudgetCard", () => {
     render(<BudgetCard budget={budget} />);
     expect(screen.getByText("已使用")).toBeVisible();
     expect(screen.getByText("可用餘額")).toBeVisible();
-    expect(screen.getByText("本期尚未使用")).toBeVisible();
-    expect(screen.getByText("前期沿襲")).toBeVisible();
+    expect(screen.getByText("當期剩餘")).toBeVisible();
+    expect(screen.getByText("往期沿襲")).toBeVisible();
     expect(screen.getByText(/本期額度/)).toHaveTextContent("TWD 10,000");
     expect(screen.getByText(/總額度/)).toHaveTextContent("TWD 12,000");
     expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-income");
@@ -69,8 +69,8 @@ describe("BudgetCard", () => {
         }}
       />,
     );
-    expect(screen.getByText("前期超支抵扣")).toBeVisible();
-    expect(screen.getByText("TWD 2,000")).toHaveClass("text-destructive");
+    expect(screen.getByText("往期沿襲")).toBeVisible();
+    expect(screen.getByText("TWD 0")).toHaveClass("text-finance-rollover");
   });
 
   it("uses rollover after the current period allowance is spent", () => {
@@ -83,11 +83,8 @@ describe("BudgetCard", () => {
         }}
       />,
     );
-    expect(screen.getByText("本期尚未使用").parentElement).toHaveTextContent(
-      "TWD 0",
-    );
-    expect(screen.getByText("前期沿襲").parentElement).toHaveTextContent(
-      "TWD 1,000",
+    expect(screen.getByText("TWD 0").parentElement).toHaveTextContent(
+      "TWD 0+TWD 1,000",
     );
   });
 
