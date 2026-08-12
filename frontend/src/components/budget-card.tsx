@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatMoney, formatShortDate, toInclusiveDate } from "@/lib/format";
+import { budgetRemainingBreakdown } from "@/lib/budget-remaining";
 import type { BudgetPeriodUnit, BudgetStatus } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
@@ -43,11 +44,12 @@ export function BudgetCard({
 }) {
   const upcoming = budget.status === "upcoming";
   const overspent = budget.remaining_minor < 0;
-  const currentUnused = Math.max(
-    0,
-    budget.amount_minor - Math.max(budget.spent_minor, 0),
-  );
-  const rolloverRemaining = Math.max(0, budget.remaining_minor - currentUnused);
+  const remainingBreakdown = budgetRemainingBreakdown(budget);
+  const currentUnused = remainingBreakdown.currentMinor;
+  const rolloverRemaining =
+    remainingBreakdown.adjustment?.kind === "rollover"
+      ? remainingBreakdown.adjustment.amountMinor
+      : 0;
   const capacity = Math.max(
     Math.max(budget.spent_minor, 0) + currentUnused + rolloverRemaining,
     1,
@@ -64,6 +66,9 @@ export function BudgetCard({
     100 - spentPercent - currentUnusedPercent,
     (rolloverRemaining / capacity) * 100,
   );
+  const remainingAriaText = remainingBreakdown.adjustment
+    ? `當期剩餘 ${formatMoney(currentUnused)}，${remainingBreakdown.adjustment.kind === "rollover" ? "加上往期沿襲" : "扣除往期超支"} ${formatMoney(remainingBreakdown.adjustment.amountMinor)}`
+    : `當期剩餘 ${formatMoney(currentUnused)}`;
 
   const content = (
     <>
@@ -109,17 +114,29 @@ export function BudgetCard({
                   <p className="font-heading text-xl font-semibold tabular-nums text-destructive">
                     {formatMoney(Math.abs(budget.remaining_minor))}
                   </p>
-                ) : (
+                ) : remainingBreakdown.adjustment ? (
                   <p className="flex flex-wrap items-baseline justify-end gap-x-1.5 font-heading text-xl font-semibold tabular-nums">
                     <span className="text-finance-income">
                       {formatMoney(currentUnused)}
                     </span>
                     <span className="text-muted-foreground" aria-hidden="true">
-                      +
+                      {remainingBreakdown.adjustment.kind === "rollover"
+                        ? "+"
+                        : "−"}
                     </span>
-                    <span className="text-finance-rollover">
-                      {formatMoney(rolloverRemaining)}
+                    <span
+                      className={cn(
+                        remainingBreakdown.adjustment.kind === "rollover"
+                          ? "text-finance-rollover"
+                          : "text-destructive",
+                      )}
+                    >
+                      {formatMoney(remainingBreakdown.adjustment.amountMinor)}
                     </span>
+                  </p>
+                ) : (
+                  <p className="font-heading text-xl font-semibold tabular-nums text-finance-income">
+                    {formatMoney(currentUnused)}
                   </p>
                 )}
               </div>
@@ -134,7 +151,7 @@ export function BudgetCard({
                 aria-valuetext={
                   overspent
                     ? `已使用 ${formatMoney(budget.spent_minor)}，超支 ${formatMoney(-budget.remaining_minor)}`
-                    : `已使用 ${formatMoney(budget.spent_minor)}，本期尚未使用 ${formatMoney(currentUnused)}，前期沿襲可用 ${formatMoney(rolloverRemaining)}`
+                    : `已使用 ${formatMoney(budget.spent_minor)}，${remainingAriaText}`
                 }
                 className="flex h-2 overflow-hidden rounded-full bg-muted"
               >
@@ -156,10 +173,26 @@ export function BudgetCard({
               </div>
               <p className="flex flex-wrap items-baseline justify-end gap-x-1.5 text-xs">
                 <span className="text-finance-income">當期剩餘</span>
-                <span className="text-muted-foreground" aria-hidden="true">
-                  +
-                </span>
-                <span className="text-finance-rollover">往期沿襲</span>
+                {remainingBreakdown.adjustment ? (
+                  <>
+                    <span className="text-muted-foreground" aria-hidden="true">
+                      {remainingBreakdown.adjustment.kind === "rollover"
+                        ? "+"
+                        : "−"}
+                    </span>
+                    <span
+                      className={cn(
+                        remainingBreakdown.adjustment.kind === "rollover"
+                          ? "text-finance-rollover"
+                          : "text-destructive",
+                      )}
+                    >
+                      {remainingBreakdown.adjustment.kind === "rollover"
+                        ? "往期沿襲"
+                        : "往期超支抵扣"}
+                    </span>
+                  </>
+                ) : null}
               </p>
               <p className="flex justify-between gap-3 text-xs text-muted-foreground tabular-nums">
                 <span>本期額度 {formatMoney(budget.amount_minor)}</span>

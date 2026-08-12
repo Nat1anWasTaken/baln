@@ -77,6 +77,7 @@ import {
   formatTimestamp,
   toInclusiveDate,
 } from "@/lib/format";
+import { budgetRemainingBreakdown } from "@/lib/budget-remaining";
 import { invalidateAfterBudgetWrite } from "@/lib/query-invalidation";
 import { queryKeys } from "@/lib/query-keys";
 import type { BudgetDay, BudgetDetail } from "@/lib/schemas";
@@ -470,14 +471,7 @@ export function BudgetDetailPage() {
   const value = detail.data;
   const budget = value.budget;
   const overspent = budget.remaining_minor < 0;
-  const currentRemaining = Math.max(
-    0,
-    budget.amount_minor - Math.max(budget.spent_minor, 0),
-  );
-  const rolloverRemaining = Math.max(
-    0,
-    budget.remaining_minor - currentRemaining,
-  );
+  const remainingBreakdown = budgetRemainingBreakdown(budget);
   const statusLabel = periodKindLabel(value);
   const canEdit = !isReadOnly && !accounts.isPending && !accounts.isError;
   const spendable = value.pace.spendable_per_day_minor;
@@ -605,8 +599,12 @@ export function BudgetDetailPage() {
               {formatMoney(budget.available_minor)}
             </p>
             <p className="text-xs text-muted-foreground">
-              本期 {formatMoney(budget.amount_minor)} · 沿襲{" "}
-              {formatMoney(budget.carry_in_minor)}
+              本期 {formatMoney(budget.amount_minor)}
+              {budget.rollover_mode !== "reset" && budget.carry_in_minor !== 0
+                ? budget.carry_in_minor > 0
+                  ? ` · 沿襲 ${formatMoney(budget.carry_in_minor)}`
+                  : ` · 前期超支抵扣 ${formatMoney(Math.abs(budget.carry_in_minor))}`
+                : ""}
             </p>
           </CardContent>
         </Card>
@@ -640,30 +638,60 @@ export function BudgetDetailPage() {
                   已超過本期可用額度
                 </p>
               </>
-            ) : (
+            ) : remainingBreakdown.adjustment ? (
               <>
                 <p className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tabular-nums">
                   <span className="text-finance-income">
-                    {formatMoney(currentRemaining)}
+                    {formatMoney(remainingBreakdown.currentMinor)}
                   </span>
                   <span className="text-muted-foreground" aria-hidden="true">
-                    +
+                    {remainingBreakdown.adjustment.kind === "rollover"
+                      ? "+"
+                      : "−"}
                   </span>
-                  <span className="text-finance-rollover">
-                    {formatMoney(rolloverRemaining)}
+                  <span
+                    className={cn(
+                      remainingBreakdown.adjustment.kind === "rollover"
+                        ? "text-finance-rollover"
+                        : "text-destructive",
+                    )}
+                  >
+                    {formatMoney(remainingBreakdown.adjustment.amountMinor)}
                   </span>
                 </p>
                 <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
                   <span className="text-finance-income">當期剩餘</span>
                   <span className="text-muted-foreground" aria-hidden="true">
-                    +
+                    {remainingBreakdown.adjustment.kind === "rollover"
+                      ? "+"
+                      : "−"}
                   </span>
-                  <span className="text-finance-rollover">往期沿襲</span>
+                  <span
+                    className={cn(
+                      remainingBreakdown.adjustment.kind === "rollover"
+                        ? "text-finance-rollover"
+                        : "text-destructive",
+                    )}
+                  >
+                    {remainingBreakdown.adjustment.kind === "rollover"
+                      ? "往期沿襲"
+                      : "往期超支抵扣"}
+                  </span>
                 </p>
                 <span className="sr-only">
-                  當期剩餘 {formatMoney(currentRemaining)} 加上往期沿襲
-                  {formatMoney(rolloverRemaining)}
+                  當期剩餘 {formatMoney(remainingBreakdown.currentMinor)}
+                  {remainingBreakdown.adjustment.kind === "rollover"
+                    ? "加上往期沿襲"
+                    : "扣除往期超支"}
+                  {formatMoney(remainingBreakdown.adjustment.amountMinor)}
                 </span>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-semibold tabular-nums text-finance-income">
+                  {formatMoney(remainingBreakdown.currentMinor)}
+                </p>
+                <p className="text-xs text-finance-income">當期剩餘</p>
               </>
             )}
           </CardContent>

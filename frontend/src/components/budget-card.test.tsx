@@ -54,7 +54,7 @@ describe("BudgetCard", () => {
     );
     expect(
       screen.getByRole("progressbar").getAttribute("aria-valuetext"),
-    ).toContain("前期沿襲可用");
+    ).toContain("加上往期沿襲");
   });
 
   it("labels negative rollover as a previous-period deduction", () => {
@@ -69,9 +69,34 @@ describe("BudgetCard", () => {
         }}
       />,
     );
-    expect(screen.getByText("往期沿襲")).toBeVisible();
-    expect(screen.getByText("TWD 0")).toHaveClass("text-finance-rollover");
+    expect(screen.getByText("往期超支抵扣")).toHaveClass("text-destructive");
+    expect(screen.getByText("TWD 2,000")).toHaveClass("text-destructive");
+    expect(screen.getByText("TWD 3,000").parentElement).toHaveTextContent(
+      "TWD 3,000−TWD 2,000",
+    );
   });
+
+  it.each(["reset", "surplus_only"] as const)(
+    "omits rollover details for %s without carried value",
+    (rolloverMode) => {
+      render(
+        <BudgetCard
+          budget={{
+            ...budget,
+            rollover_mode: rolloverMode,
+            carry_in_minor: 0,
+            available_minor: 10_000,
+            remaining_minor: 3_000,
+          }}
+        />,
+      );
+
+      expect(screen.getByText("當期剩餘")).toBeVisible();
+      expect(screen.queryByText("往期沿襲")).not.toBeInTheDocument();
+      expect(screen.queryByText("往期超支抵扣")).not.toBeInTheDocument();
+      expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-income");
+    },
+  );
 
   it("uses rollover after the current period allowance is spent", () => {
     render(
