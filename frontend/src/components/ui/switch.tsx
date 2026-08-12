@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Switch as SwitchPrimitive } from "radix-ui";
 
+import { FieldLabel } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 function Switch({
@@ -15,7 +16,7 @@ function Switch({
       data-slot="switch"
       data-size={size}
       className={cn(
-        "touch-press peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent outline-none transition-[background-color,box-shadow,filter,transform] after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className,
       )}
       {...props}
@@ -28,4 +29,28 @@ function Switch({
   );
 }
 
-export { Switch };
+function SwitchField({
+  id,
+  label,
+  containerClassName,
+  ...props
+}: Omit<React.ComponentProps<typeof Switch>, "id"> & {
+  id: string;
+  label: React.ReactNode;
+  containerClassName?: string;
+}) {
+  return (
+    <FieldLabel
+      htmlFor={id}
+      className={cn(
+        "min-h-11 cursor-pointer items-center gap-3 has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50",
+        containerClassName,
+      )}
+    >
+      <Switch id={id} {...props} />
+      <span>{label}</span>
+    </FieldLabel>
+  );
+}
+
+export { Switch, SwitchField };

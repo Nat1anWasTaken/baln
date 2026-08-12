@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { SwitchField } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -312,14 +312,13 @@ export function AccountsPage() {
             />
           </div>
         </Field>
-        <div className="flex items-center gap-2 sm:pb-1">
-          <Switch
-            id="include-archived"
-            checked={includeArchived}
-            onCheckedChange={setIncludeArchived}
-          />
-          <FieldLabel htmlFor="include-archived">顯示已封存</FieldLabel>
-        </div>
+        <SwitchField
+          id="include-archived"
+          label="顯示已封存"
+          checked={includeArchived}
+          onCheckedChange={setIncludeArchived}
+          containerClassName="sm:pb-1"
+        />
         <Button
           type="button"
           onClick={() => setCreateOpen(true)}

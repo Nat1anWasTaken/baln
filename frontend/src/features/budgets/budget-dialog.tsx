@@ -32,7 +32,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { SwitchField } from "@/components/ui/switch";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { budgetsApi } from "@/lib/api-client";
 import { todayTaipei } from "@/lib/format";
@@ -443,19 +443,17 @@ export function BudgetDialog({
                   <FieldError>請至少選擇一個帳戶。</FieldError>
                 ) : null}
               </Field>
-              <div className="flex min-h-11 items-center gap-3">
-                <Switch
-                  id="budget-overview"
-                  checked={values.show_on_overview}
-                  onCheckedChange={(checked) =>
-                    setValues((current) => ({
-                      ...current,
-                      show_on_overview: checked,
-                    }))
-                  }
-                />
-                <FieldLabel htmlFor="budget-overview">顯示在總覽</FieldLabel>
-              </div>
+              <SwitchField
+                id="budget-overview"
+                label="顯示在總覽"
+                checked={values.show_on_overview}
+                onCheckedChange={(checked) =>
+                  setValues((current) => ({
+                    ...current,
+                    show_on_overview: checked,
+                  }))
+                }
+              />
             </DialogBody>
             <DialogFooter>
               <Button

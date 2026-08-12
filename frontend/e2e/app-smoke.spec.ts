@@ -1985,15 +1985,19 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await page.goto("/accounts");
     await expectTouchTarget(page.getByRole("button", { name: "編輯 現金" }));
 
-    const switchHitArea = await page
-      .getByRole("switch", { name: "顯示已封存" })
-      .evaluate((element) => {
-        const style = getComputedStyle(element, "::after");
-        return {
-          width: Number.parseFloat(style.width),
-          height: Number.parseFloat(style.height),
-        };
-      });
+    const archivedSwitch = page.getByRole("switch", { name: "顯示已封存" });
+    const switchBounds = await archivedSwitch.boundingBox();
+    expect(switchBounds).not.toBeNull();
+    expect(Math.round(switchBounds!.width)).toBe(40);
+    expect(Math.round(switchBounds!.height)).toBe(24);
+
+    const switchHitArea = await archivedSwitch.evaluate((element) => {
+      const style = getComputedStyle(element, "::after");
+      return {
+        width: Number.parseFloat(style.width),
+        height: Number.parseFloat(style.height),
+      };
+    });
     expect(switchHitArea.width).toBeGreaterThanOrEqual(44);
     expect(switchHitArea.height).toBeGreaterThanOrEqual(44);
   } finally {

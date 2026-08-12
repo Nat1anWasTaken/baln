@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Switch, SwitchField } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -146,15 +146,17 @@ export function BudgetsPage() {
               to={`/budgets/${budget.id}`}
               footer={
                 <>
-                  <Switch
+                  <SwitchField
+                    id={`budget-overview-${budget.id}`}
+                    label="總覽"
                     aria-label={`${budget.name} 顯示在總覽`}
                     checked={budget.show_on_overview}
                     disabled={isReadOnly || visibility.isPending}
                     onCheckedChange={(show) =>
                       visibility.mutate({ budget, show })
                     }
+                    containerClassName="mr-auto"
                   />
-                  <span className="mr-auto text-sm">總覽</span>
                   {budget.show_on_overview ? (
                     <>
                       <Button
