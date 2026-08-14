@@ -24,6 +24,14 @@ const DialogContext = React.createContext<DialogContextValue>({
   requestClose: () => undefined,
 });
 
+const DialogPortalContainerContext = React.createContext<HTMLElement | null>(
+  null,
+);
+
+function useDialogPortalContainer() {
+  return React.useContext(DialogPortalContainerContext);
+}
+
 type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root> & {
   mobileProps?: MobileDialogProps;
 };
@@ -485,6 +493,7 @@ function useSheetDrag(
 
   return {
     contentRef: setContentRef,
+    contentElement,
     dragHandlers: {
       onPointerCancel: finishPointer,
       onPointerDown,
@@ -524,7 +533,7 @@ function DialogContent({
     requestClose,
   } = React.useContext(DialogContext);
   const displayHandle = dismissible && (showHandle ?? true);
-  const { contentRef, dragHandlers } = useSheetDrag(
+  const { contentElement, contentRef, dragHandlers } = useSheetDrag(
     isMobile && dismissible,
     dismissible,
     requestClose,
@@ -580,7 +589,9 @@ function DialogContent({
             className="mx-auto mt-4 h-1 w-12 shrink-0 rounded-full bg-muted-foreground/30"
           />
         ) : null}
-        {children}
+        <DialogPortalContainerContext.Provider value={contentElement}>
+          {children}
+        </DialogPortalContainerContext.Provider>
         {dismissible && showCloseButton ? (
           <DialogClose asChild>
             <Button
@@ -699,4 +710,5 @@ export {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  useDialogPortalContainer,
 };

@@ -1000,6 +1000,38 @@ test("dismisses the account edit sheet with a touch drag", async ({
   }
 });
 
+test("scrolls a combobox menu inside a mobile sheet", async ({ browser }) => {
+  const context = await browser.newContext({ ...devices["Pixel 7"] });
+  const page = await context.newPage();
+  await mockApi(page);
+
+  try {
+    await page.goto("/accounts");
+    await page.getByRole("button", { name: "新增帳戶" }).click();
+
+    const sheet = page.getByRole("dialog", { name: "新增帳戶" });
+    await sheet.getByRole("combobox", { name: "帳戶類型" }).click();
+
+    const list = page.locator('[data-slot="command-list"]');
+    await expect(list).toBeVisible();
+    await list.evaluate((element) => {
+      element.style.maxHeight = "64px";
+    });
+    expect(
+      await list.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    ).toBe(true);
+
+    await dragTouch(page, list, -100);
+    await expect
+      .poll(() => list.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+  } finally {
+    await context.close();
+  }
+});
+
 test("groups the responsive transaction account pills by account type", async ({
   page,
 }) => {
