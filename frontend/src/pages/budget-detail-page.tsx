@@ -570,55 +570,6 @@ export function BudgetDetailPage() {
               </Badge>
             ) : null}
           </div>
-          {detailView === "period" ? (
-            <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2">
-              {value.has_previous ? (
-                <Button asChild variant="outline" size="sm">
-                  <AppLink
-                    to={{
-                      pathname: `/budgets/${budgetId}`,
-                      search: periodSearch(periodOffset - 1),
-                    }}
-                    state={returnDestination.state}
-                    aria-label="查看上一期預算"
-                  >
-                    <ChevronLeft aria-hidden="true" />
-                    上一期
-                  </AppLink>
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" size="sm" disabled>
-                  <ChevronLeft aria-hidden="true" />
-                  上一期
-                </Button>
-              )}
-              <span className="min-w-0 text-center text-sm font-medium">
-                {periodOffset === 0
-                  ? "目前週期"
-                  : `第 ${Math.abs(periodOffset)} 個前期`}
-              </span>
-              {value.has_next ? (
-                <Button asChild variant="outline" size="sm">
-                  <AppLink
-                    to={{
-                      pathname: `/budgets/${budgetId}`,
-                      search: periodSearch(periodOffset + 1),
-                    }}
-                    state={returnDestination.state}
-                    aria-label="查看下一期預算"
-                  >
-                    下一期
-                    <ChevronRight aria-hidden="true" />
-                  </AppLink>
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" size="sm" disabled>
-                  下一期
-                  <ChevronRight aria-hidden="true" />
-                </Button>
-              )}
-            </div>
-          ) : null}
         </CardContent>
       </Card>
 
@@ -644,6 +595,55 @@ export function BudgetDetailPage() {
           <TabsTrigger value="period">單期</TabsTrigger>
           <TabsTrigger value="statistics">跨期</TabsTrigger>
         </TabsList>
+        {detailView === "period" ? (
+          <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2">
+            {value.has_previous ? (
+              <Button asChild variant="outline" size="sm">
+                <AppLink
+                  to={{
+                    pathname: `/budgets/${budgetId}`,
+                    search: periodSearch(periodOffset - 1),
+                  }}
+                  state={returnDestination.state}
+                  aria-label="查看上一期預算"
+                >
+                  <ChevronLeft aria-hidden="true" />
+                  上一期
+                </AppLink>
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" disabled>
+                <ChevronLeft aria-hidden="true" />
+                上一期
+              </Button>
+            )}
+            <span className="min-w-0 text-center text-sm font-medium">
+              {periodOffset === 0
+                ? "目前週期"
+                : `第 ${Math.abs(periodOffset)} 個前期`}
+            </span>
+            {value.has_next ? (
+              <Button asChild variant="outline" size="sm">
+                <AppLink
+                  to={{
+                    pathname: `/budgets/${budgetId}`,
+                    search: periodSearch(periodOffset + 1),
+                  }}
+                  state={returnDestination.state}
+                  aria-label="查看下一期預算"
+                >
+                  下一期
+                  <ChevronRight aria-hidden="true" />
+                </AppLink>
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" disabled>
+                下一期
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+        ) : null}
       </Tabs>
 
       {detailView === "statistics" ? (

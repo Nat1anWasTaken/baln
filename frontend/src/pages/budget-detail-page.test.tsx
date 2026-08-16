@@ -318,6 +318,11 @@ describe("BudgetDetailPage", () => {
     });
     await screen.findByText("每月餐飲");
 
+    const periodTabs = screen
+      .getByRole("tab", { name: "單期" })
+      .closest('[data-slot="tabs"]');
+    expect(periodTabs).toContainElement(screen.getByText("第 1 個前期"));
+
     expect(
       screen.getByRole("link", { name: "查看上一期預算" }),
     ).toHaveAttribute("href", `/budgets/${budgetId}?period=-2`);
