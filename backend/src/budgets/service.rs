@@ -7,10 +7,11 @@ use uuid::Uuid;
 use crate::{
     ApiError, ApiResult,
     budgets::{
-        BudgetDay, BudgetDaysPage, BudgetDetails, BudgetPace, BudgetPeriodKind, BudgetPeriodUnit,
-        BudgetRolloverMode, BudgetStatus, BudgetStatusKind, BudgetTrend, BudgetTrendBucket,
-        CreateBudgetRequest, ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest,
-        model::BudgetRow, repository,
+        BudgetDay, BudgetDaysPage, BudgetDetails, BudgetPace, BudgetPeriodKind, BudgetPeriodOption,
+        BudgetPeriodUnit, BudgetPeriodsPage, BudgetRolloverMode, BudgetStatistics,
+        BudgetStatisticsPeriod, BudgetStatisticsPoint, BudgetStatisticsSummary, BudgetStatus,
+        BudgetStatusKind, BudgetTrend, BudgetTrendBucket, CreateBudgetRequest,
+        ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest, model::BudgetRow, repository,
     },
 };
 
@@ -477,6 +478,324 @@ pub async fn days(
     Ok(BudgetDaysPage { items, next_cursor })
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct BudgetPeriodCursor {
+    offset: i32,
+}
+
+fn encode_period_cursor(offset: i32) -> String {
+    URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&BudgetPeriodCursor { offset }).expect("period cursor serializes"),
+    )
+}
+
+fn decode_period_cursor(cursor: &str) -> ApiResult<BudgetPeriodCursor> {
+    let bytes = URL_SAFE_NO_PAD
+        .decode(cursor)
+        .map_err(|_| ApiError::bad_request("invalid_cursor", "cursor is not valid base64url"))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|_| ApiError::bad_request("invalid_cursor", "cursor payload is invalid"))
+}
+
+pub async fn periods(
+    pool: &PgPool,
+    user_id: Uuid,
+    id: Uuid,
+    cursor: Option<&str>,
+    limit: Option<i64>,
+    date: Option<NaiveDate>,
+    as_of: NaiveDate,
+) -> ApiResult<BudgetPeriodsPage> {
+    let row = repository::get(pool, user_id, id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("budget"))?;
+    let current_index = period_index(&row, as_of)?;
+    let offsets = if let Some(date) = date {
+        let index = period_index(&row, date)?;
+        if date < row.start_date || index > current_index {
+            return Ok(BudgetPeriodsPage {
+                items: Vec::new(),
+                next_cursor: None,
+            });
+        }
+        vec![i32::try_from(index - current_index).map_err(|_| {
+            ApiError::bad_request("invalid_period_offset", "period offset is out of range")
+        })?]
+    } else {
+        let start = cursor
+            .map(decode_period_cursor)
+            .transpose()?
+            .map_or(0, |value| value.offset);
+        if start > 0 {
+            return Err(ApiError::bad_request(
+                "invalid_cursor",
+                "period cursor is out of range",
+            ));
+        }
+        let requested_limit = limit.unwrap_or(50).clamp(1, 100);
+        let earliest = i32::try_from(-current_index).map_err(|_| {
+            ApiError::bad_request("invalid_period_offset", "period offset is out of range")
+        })?;
+        (0..requested_limit)
+            .map(|step| start.saturating_sub(step as i32))
+            .take_while(|offset| *offset >= earliest)
+            .collect()
+    };
+
+    let mut items = Vec::with_capacity(offsets.len());
+    for offset in &offsets {
+        let index = current_index + i64::from(*offset);
+        let period_from = boundary(&row, index)?;
+        items.push(BudgetPeriodOption {
+            period_offset: *offset,
+            period_from,
+            period_to: boundary(&row, index + 1)?,
+            period_kind: period_kind(period_from, current_index, index, as_of),
+        });
+    }
+    let next_cursor = if date.is_none() {
+        offsets.last().and_then(|last| {
+            let next = last.saturating_sub(1);
+            (current_index + i64::from(next) >= 0).then(|| encode_period_cursor(next))
+        })
+    } else {
+        None
+    };
+    Ok(BudgetPeriodsPage { items, next_cursor })
+}
+
+#[derive(Clone)]
+struct StatisticsPeriodSpec {
+    offset: i32,
+    index: i64,
+    period_from: NaiveDate,
+    period_to: NaiveDate,
+    cutoff: NaiveDate,
+    upcoming: bool,
+    ranges: Vec<(NaiveDate, NaiveDate)>,
+}
+
+fn statistics_ranges(
+    period_from: NaiveDate,
+    period_to: NaiveDate,
+    cutoff: NaiveDate,
+) -> ApiResult<Vec<(NaiveDate, NaiveDate)>> {
+    let (_, ranges) = trend_ranges(period_from, period_to)?;
+    let mut split = Vec::with_capacity(ranges.len() + 1);
+    for (from, to) in ranges {
+        if from < cutoff && cutoff < to {
+            split.push((from, cutoff));
+            split.push((cutoff, to));
+        } else {
+            split.push((from, to));
+        }
+    }
+    Ok(split)
+}
+
+fn statistics_offsets(
+    current_index: i64,
+    from_offset: Option<i32>,
+    to_offset: Option<i32>,
+) -> ApiResult<(i32, i32, i64)> {
+    let earliest_offset = i32::try_from(-current_index).map_err(|_| {
+        ApiError::bad_request("invalid_period_offset", "period offset is out of range")
+    })?;
+    let to_offset = to_offset.unwrap_or(0);
+    let from_offset = from_offset.map_or_else(|| (-5).max(earliest_offset), |value| value);
+    let selected_count = i64::from(to_offset) - i64::from(from_offset) + 1;
+    if from_offset > to_offset
+        || to_offset > 0
+        || from_offset < earliest_offset
+        || selected_count <= 0
+    {
+        return Err(ApiError::bad_request(
+            "invalid_statistics_range",
+            "statistics offsets must select existing consecutive periods",
+        ));
+    }
+    if selected_count > 24 {
+        return Err(ApiError::bad_request(
+            "statistics_range_too_large",
+            "statistics range cannot exceed 24 periods",
+        ));
+    }
+    Ok((from_offset, to_offset, selected_count))
+}
+
+pub async fn statistics(
+    pool: &PgPool,
+    user_id: Uuid,
+    id: Uuid,
+    from_offset: Option<i32>,
+    to_offset: Option<i32>,
+    as_of: NaiveDate,
+) -> ApiResult<BudgetStatistics> {
+    let row = repository::get(pool, user_id, id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("budget"))?;
+    let current_index = period_index(&row, as_of)?;
+    let (from_offset, to_offset, selected_count) =
+        statistics_offsets(current_index, from_offset, to_offset)?;
+
+    let as_of_exclusive = as_of.checked_add_days(Days::new(1)).unwrap_or(as_of);
+    let mut specs = Vec::with_capacity(selected_count as usize);
+    let mut all_ranges = Vec::new();
+    for offset in from_offset..=to_offset {
+        let index = current_index + i64::from(offset);
+        let period_from = boundary(&row, index)?;
+        let period_to = boundary(&row, index + 1)?;
+        let upcoming = period_from > as_of;
+        let cutoff = if upcoming {
+            period_from
+        } else {
+            as_of_exclusive.min(period_to)
+        };
+        let ranges = statistics_ranges(period_from, period_to, cutoff)?;
+        all_ranges.extend(ranges.iter().copied());
+        specs.push(StatisticsPeriodSpec {
+            offset,
+            index,
+            period_from,
+            period_to,
+            cutoff,
+            upcoming,
+            ranges,
+        });
+    }
+    let rows = repository::trend(pool, user_id, id, &all_ranges, false).await?;
+    let mut rows = rows.into_iter();
+    let mut carry = carry_in(pool, &row, specs[0].period_from).await?;
+    let mut result = Vec::with_capacity(specs.len());
+
+    for spec in specs {
+        let total_days = (spec.period_to - spec.period_from).num_days();
+        let elapsed_days = (spec.cutoff - spec.period_from)
+            .num_days()
+            .clamp(0, total_days);
+        let available = row
+            .amount_minor
+            .checked_add(carry)
+            .ok_or_else(|| ApiError::internal("budget available overflow"))?;
+        let mut actual = 0_i64;
+        let mut scheduled = 0_i64;
+        let mut points = vec![BudgetStatisticsPoint {
+            progress_bps: 0,
+            date: spec.period_from,
+            actual_spent_minor: 0,
+            scheduled_spent_minor: 0,
+        }];
+        for (from, to) in &spec.ranges {
+            let value = rows
+                .next()
+                .ok_or_else(|| ApiError::internal("budget statistics rows are incomplete"))?;
+            if value.date_from != *from || value.date_to != *to {
+                return Err(ApiError::internal(
+                    "budget statistics rows are out of order",
+                ));
+            }
+            let spent = if spec.upcoming { 0 } else { value.spent_minor };
+            if *to <= spec.cutoff {
+                actual = actual
+                    .checked_add(spent)
+                    .ok_or_else(|| ApiError::internal("budget statistics spend overflow"))?;
+            } else {
+                scheduled = scheduled
+                    .checked_add(spent)
+                    .ok_or_else(|| ApiError::internal("budget statistics spend overflow"))?;
+            }
+            let progress_bps =
+                ((*to - spec.period_from).num_days() * 10_000 / total_days).clamp(0, 10_000);
+            points.push(BudgetStatisticsPoint {
+                progress_bps,
+                date: to.checked_sub_days(Days::new(1)).unwrap_or(*to),
+                actual_spent_minor: actual,
+                scheduled_spent_minor: scheduled,
+            });
+        }
+        let committed = actual
+            .checked_add(scheduled)
+            .ok_or_else(|| ApiError::internal("budget statistics spend overflow"))?;
+        let remaining = available
+            .checked_sub(committed)
+            .ok_or_else(|| ApiError::internal("budget remaining overflow"))?;
+        let utilization_bps = if available > 0 {
+            Some(
+                committed
+                    .checked_mul(10_000)
+                    .ok_or_else(|| ApiError::internal("budget utilization overflow"))?
+                    / available,
+            )
+        } else {
+            None
+        };
+        result.push(BudgetStatisticsPeriod {
+            period_offset: spec.offset,
+            period_from: spec.period_from,
+            period_to: spec.period_to,
+            period_kind: period_kind(spec.period_from, current_index, spec.index, as_of),
+            total_days,
+            elapsed_days,
+            carry_in_minor: carry,
+            available_minor: available,
+            actual_spent_minor: actual,
+            scheduled_spent_minor: scheduled,
+            remaining_minor: remaining,
+            utilization_bps,
+            points,
+        });
+        carry = rollover_after_period(row.rollover_mode, carry, row.amount_minor, committed)?;
+    }
+
+    let total_actual = result.iter().try_fold(0_i64, |sum, period| {
+        sum.checked_add(period.actual_spent_minor)
+            .ok_or_else(|| ApiError::internal("budget statistics total overflow"))
+    })?;
+    let total_scheduled = result.iter().try_fold(0_i64, |sum, period| {
+        sum.checked_add(period.scheduled_spent_minor)
+            .ok_or_else(|| ApiError::internal("budget statistics total overflow"))
+    })?;
+    let observed_days = result.iter().map(|period| period.elapsed_days).sum::<i64>();
+    let utilizations = result
+        .iter()
+        .filter_map(|period| period.utilization_bps)
+        .collect::<Vec<_>>();
+    let utilization_total = utilizations.iter().try_fold(0_i64, |sum, value| {
+        sum.checked_add(*value)
+            .ok_or_else(|| ApiError::internal("budget utilization summary overflow"))
+    })?;
+    let average_utilization_bps =
+        (!utilizations.is_empty()).then(|| utilization_total / utilizations.len() as i64);
+    let utilization_spread_bps = utilizations
+        .iter()
+        .min()
+        .zip(utilizations.iter().max())
+        .map(|(min, max)| {
+            max.checked_sub(*min)
+                .ok_or_else(|| ApiError::internal("budget utilization spread overflow"))
+        })
+        .transpose()?;
+    let overspent_periods = result
+        .iter()
+        .filter(|period| period.remaining_minor < 0)
+        .count() as i64;
+    Ok(BudgetStatistics {
+        from_offset,
+        to_offset,
+        period_count: selected_count,
+        includes_current: to_offset == 0,
+        summary: BudgetStatisticsSummary {
+            total_actual_spent_minor: total_actual,
+            total_scheduled_spent_minor: total_scheduled,
+            average_daily_spend_minor: (observed_days > 0).then(|| total_actual / observed_days),
+            average_utilization_bps,
+            utilization_spread_bps,
+            overspent_periods,
+        },
+        periods: result,
+    })
+}
+
 pub async fn list(
     pool: &PgPool,
     user_id: Uuid,
@@ -768,6 +1087,49 @@ mod tests {
     }
 
     #[test]
+    fn statistics_buckets_split_at_the_current_day_boundary() {
+        let from = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let to = NaiveDate::from_ymd_opt(2027, 1, 1).unwrap();
+        let cutoff = NaiveDate::from_ymd_opt(2026, 8, 17).unwrap();
+        let ranges = statistics_ranges(from, to, cutoff).unwrap();
+        assert!(ranges.len() <= 121);
+        assert!(ranges.iter().any(|range| range.1 == cutoff));
+        assert!(ranges.iter().any(|range| range.0 == cutoff));
+        assert!(ranges.windows(2).all(|pair| pair[0].1 == pair[1].0));
+    }
+
+    #[test]
+    fn statistics_range_defaults_clamp_and_custom_ranges_are_limited() {
+        assert_eq!(statistics_offsets(2, None, None).unwrap(), (-2, 0, 3));
+        assert_eq!(
+            statistics_offsets(30, Some(-23), Some(0)).unwrap(),
+            (-23, 0, 24)
+        );
+        assert!(matches!(
+            statistics_offsets(30, Some(-24), Some(0)),
+            Err(ApiError::Problem {
+                code: "statistics_range_too_large",
+                ..
+            })
+        ));
+        assert!(matches!(
+            statistics_offsets(2, Some(-3), Some(0)),
+            Err(ApiError::Problem {
+                code: "invalid_statistics_range",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn period_cursor_is_opaque_and_rejects_invalid_payloads() {
+        let cursor = encode_period_cursor(-50);
+        assert_ne!(cursor, "-50");
+        assert_eq!(decode_period_cursor(&cursor).unwrap().offset, -50);
+        assert!(decode_period_cursor("not-a-cursor").is_err());
+    }
+
+    #[test]
     fn day_cursor_is_opaque_and_rejects_invalid_payloads() {
         let date = NaiveDate::from_ymd_opt(2026, 7, 24).unwrap();
         let cursor = encode_day_cursor(date);
@@ -981,5 +1343,48 @@ mod tests {
         assert_eq!(refund_period.period_kind, BudgetPeriodKind::Past);
         assert_eq!(refund_period.budget.spent_minor, 500);
         assert_eq!(refund_period.budget.remaining_minor, 500);
+
+        let statistics = statistics(
+            &pool,
+            user_id,
+            budget_id,
+            Some(-1),
+            Some(0),
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(statistics.period_count, 2);
+        assert_eq!(statistics.periods[0].actual_spent_minor, 500);
+        assert_eq!(statistics.periods[0].utilization_bps, Some(5_000));
+        assert_eq!(statistics.periods[1].actual_spent_minor, 200);
+        assert_eq!(statistics.periods[1].scheduled_spent_minor, 300);
+        assert_eq!(statistics.periods[1].available_minor, 1_500);
+        assert_eq!(statistics.periods[1].utilization_bps, Some(3_333));
+        assert_eq!(statistics.summary.total_actual_spent_minor, 700);
+        assert_eq!(statistics.summary.total_scheduled_spent_minor, 300);
+        assert_eq!(statistics.summary.average_daily_spend_minor, Some(17));
+        assert_eq!(statistics.summary.average_utilization_bps, Some(4_166));
+        assert_eq!(statistics.summary.utilization_spread_bps, Some(1_667));
+        assert!(
+            statistics.periods[1]
+                .points
+                .iter()
+                .any(|point| point.scheduled_spent_minor == 300)
+        );
+
+        let searched_periods = periods(
+            &pool,
+            user_id,
+            budget_id,
+            None,
+            Some(1),
+            Some(NaiveDate::from_ymd_opt(2026, 1, 15).unwrap()),
+            NaiveDate::from_ymd_opt(2026, 2, 10).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(searched_periods.items.len(), 1);
+        assert_eq!(searched_periods.items[0].period_offset, -1);
     }
 }

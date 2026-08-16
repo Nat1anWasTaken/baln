@@ -103,6 +103,22 @@ pub struct BudgetDaysQuery {
     pub limit: Option<i64>,
 }
 
+#[derive(Clone, Debug, Deserialize, IntoParams)]
+pub struct BudgetPeriodsQuery {
+    pub cursor: Option<String>,
+    pub limit: Option<i64>,
+    /// Returns the budget period containing this date.
+    pub date: Option<NaiveDate>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, IntoParams)]
+pub struct BudgetStatisticsQuery {
+    /// Inclusive first period offset. Defaults to the fifth previous period.
+    pub from_offset: Option<i32>,
+    /// Inclusive last period offset. Defaults to the current period.
+    pub to_offset: Option<i32>,
+}
+
 #[derive(Clone, Debug, FromRow)]
 pub(crate) struct BudgetRow {
     pub id: Uuid,
@@ -203,4 +219,64 @@ pub struct BudgetDay {
 pub struct BudgetDaysPage {
     pub items: Vec<BudgetDay>,
     pub next_cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct BudgetPeriodOption {
+    pub period_offset: i32,
+    pub period_from: NaiveDate,
+    pub period_to: NaiveDate,
+    pub period_kind: BudgetPeriodKind,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct BudgetPeriodsPage {
+    pub items: Vec<BudgetPeriodOption>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct BudgetStatisticsPoint {
+    /// Progress through the period in basis points (0 to 10,000).
+    pub progress_bps: i64,
+    pub date: NaiveDate,
+    pub actual_spent_minor: i64,
+    pub scheduled_spent_minor: i64,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct BudgetStatisticsPeriod {
+    pub period_offset: i32,
+    pub period_from: NaiveDate,
+    pub period_to: NaiveDate,
+    pub period_kind: BudgetPeriodKind,
+    pub total_days: i64,
+    pub elapsed_days: i64,
+    pub carry_in_minor: i64,
+    pub available_minor: i64,
+    pub actual_spent_minor: i64,
+    pub scheduled_spent_minor: i64,
+    pub remaining_minor: i64,
+    pub utilization_bps: Option<i64>,
+    pub points: Vec<BudgetStatisticsPoint>,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct BudgetStatisticsSummary {
+    pub total_actual_spent_minor: i64,
+    pub total_scheduled_spent_minor: i64,
+    pub average_daily_spend_minor: Option<i64>,
+    pub average_utilization_bps: Option<i64>,
+    pub utilization_spread_bps: Option<i64>,
+    pub overspent_periods: i64,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct BudgetStatistics {
+    pub from_offset: i32,
+    pub to_offset: i32,
+    pub period_count: i64,
+    pub includes_current: bool,
+    pub summary: BudgetStatisticsSummary,
+    pub periods: Vec<BudgetStatisticsPeriod>,
 }

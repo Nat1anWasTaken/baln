@@ -43,6 +43,8 @@ use utoipa::{
         crate::budgets::routes::get_one,
         crate::budgets::routes::details,
         crate::budgets::routes::days,
+        crate::budgets::routes::periods,
+        crate::budgets::routes::statistics,
         crate::budgets::routes::update,
         crate::budgets::routes::delete,
         crate::budgets::routes::reorder,
@@ -85,6 +87,12 @@ use utoipa::{
         crate::budgets::BudgetDetails,
         crate::budgets::BudgetDay,
         crate::budgets::BudgetDaysPage,
+        crate::budgets::BudgetPeriodOption,
+        crate::budgets::BudgetPeriodsPage,
+        crate::budgets::BudgetStatisticsPoint,
+        crate::budgets::BudgetStatisticsPeriod,
+        crate::budgets::BudgetStatisticsSummary,
+        crate::budgets::BudgetStatistics,
         crate::budgets::CreateBudgetRequest,
         crate::budgets::UpdateBudgetRequest,
         crate::budgets::ReorderBudgetsRequest,
@@ -118,11 +126,14 @@ mod tests {
     use utoipa::OpenApi;
 
     #[test]
-    fn budget_detail_and_day_routes_are_documented() {
+    fn budget_insight_routes_are_documented() {
         let document = serde_json::to_value(ApiDoc::openapi()).expect("OpenAPI serializes");
         assert!(document["paths"]["/api/v1/budgets/{id}/details"].is_object());
         assert!(document["paths"]["/api/v1/budgets/{id}/days"].is_object());
+        assert!(document["paths"]["/api/v1/budgets/{id}/periods"].is_object());
+        assert!(document["paths"]["/api/v1/budgets/{id}/statistics"].is_object());
         assert!(document["components"]["schemas"]["BudgetDetails"].is_object());
         assert!(document["components"]["schemas"]["BudgetDaysPage"].is_object());
+        assert!(document["components"]["schemas"]["BudgetStatistics"].is_object());
     }
 }

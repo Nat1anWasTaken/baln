@@ -12,7 +12,8 @@ use crate::{
     app::AppState,
     auth::AuthenticatedUser,
     budgets::{
-        BudgetDaysPage, BudgetDaysQuery, BudgetDetails, BudgetDetailsQuery, BudgetStatus,
+        BudgetDaysPage, BudgetDaysQuery, BudgetDetails, BudgetDetailsQuery, BudgetPeriodsPage,
+        BudgetPeriodsQuery, BudgetStatistics, BudgetStatisticsQuery, BudgetStatus,
         CreateBudgetRequest, ListBudgetsQuery, ReorderBudgetsRequest, UpdateBudgetRequest, service,
     },
 };
@@ -29,6 +30,8 @@ pub fn router() -> Router<AppState> {
         .route("/overview-order", put(reorder))
         .route("/{id}/details", get(details))
         .route("/{id}/days", get(days))
+        .route("/{id}/periods", get(periods))
+        .route("/{id}/statistics", get(statistics))
         .route("/{id}", get(get_one).patch(update).delete(delete))
 }
 
@@ -106,6 +109,61 @@ pub(crate) async fn days(
             query.period_offset,
             query.cursor.as_deref(),
             query.limit,
+            today(&state),
+        )
+        .await?,
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/budgets/{id}/periods",
+    tag = "budgets",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path), BudgetPeriodsQuery),
+    responses((status = 200, body = BudgetPeriodsPage), (status = 400), (status = 404))
+)]
+pub(crate) async fn periods(
+    State(state): State<AppState>,
+    AuthenticatedUser(user): AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Query(query): Query<BudgetPeriodsQuery>,
+) -> ApiResult<Json<BudgetPeriodsPage>> {
+    Ok(Json(
+        service::periods(
+            &state.pool,
+            user.id,
+            id,
+            query.cursor.as_deref(),
+            query.limit,
+            query.date,
+            today(&state),
+        )
+        .await?,
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/budgets/{id}/statistics",
+    tag = "budgets",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path), BudgetStatisticsQuery),
+    responses((status = 200, body = BudgetStatistics), (status = 400), (status = 404))
+)]
+pub(crate) async fn statistics(
+    State(state): State<AppState>,
+    AuthenticatedUser(user): AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Query(query): Query<BudgetStatisticsQuery>,
+) -> ApiResult<Json<BudgetStatistics>> {
+    Ok(Json(
+        service::statistics(
+            &state.pool,
+            user.id,
+            id,
+            query.from_offset,
+            query.to_offset,
             today(&state),
         )
         .await?,

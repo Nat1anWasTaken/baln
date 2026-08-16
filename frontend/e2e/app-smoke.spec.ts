@@ -236,6 +236,118 @@ async function mockApi(page: Page) {
         },
       });
     }
+    if (
+      path.startsWith("/api/v1/budgets/") &&
+      path.endsWith("/periods") &&
+      method === "GET"
+    ) {
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              period_offset: 0,
+              period_from: "2026-07-01",
+              period_to: "2026-08-01",
+              period_kind: "current",
+            },
+            {
+              period_offset: -1,
+              period_from: "2026-06-01",
+              period_to: "2026-07-01",
+              period_kind: "past",
+            },
+          ],
+          next_cursor: null,
+        },
+      });
+    }
+    if (
+      path.startsWith("/api/v1/budgets/") &&
+      path.endsWith("/statistics") &&
+      method === "GET"
+    ) {
+      const periods = [
+        {
+          period_offset: -1,
+          period_from: "2026-06-01",
+          period_to: "2026-07-01",
+          period_kind: "past",
+          total_days: 30,
+          elapsed_days: 30,
+          carry_in_minor: 0,
+          available_minor: 10_000,
+          actual_spent_minor: 6_000,
+          scheduled_spent_minor: 0,
+          remaining_minor: 4_000,
+          utilization_bps: 6_000,
+          points: [
+            {
+              progress_bps: 0,
+              date: "2026-06-01",
+              actual_spent_minor: 0,
+              scheduled_spent_minor: 0,
+            },
+            {
+              progress_bps: 10_000,
+              date: "2026-06-30",
+              actual_spent_minor: 6_000,
+              scheduled_spent_minor: 0,
+            },
+          ],
+        },
+        {
+          period_offset: 0,
+          period_from: "2026-07-01",
+          period_to: "2026-08-01",
+          period_kind: "current",
+          total_days: 31,
+          elapsed_days: 24,
+          carry_in_minor: 2_000,
+          available_minor: 12_000,
+          actual_spent_minor: 7_000,
+          scheduled_spent_minor: 500,
+          remaining_minor: 4_500,
+          utilization_bps: 6_250,
+          points: [
+            {
+              progress_bps: 0,
+              date: "2026-07-01",
+              actual_spent_minor: 0,
+              scheduled_spent_minor: 0,
+            },
+            {
+              progress_bps: 7_742,
+              date: "2026-07-24",
+              actual_spent_minor: 7_000,
+              scheduled_spent_minor: 0,
+            },
+            {
+              progress_bps: 10_000,
+              date: "2026-07-31",
+              actual_spent_minor: 7_000,
+              scheduled_spent_minor: 500,
+            },
+          ],
+        },
+      ];
+      return route.fulfill({
+        json: {
+          from_offset: -1,
+          to_offset: 0,
+          period_count: 2,
+          includes_current: true,
+          summary: {
+            total_actual_spent_minor: 13_000,
+            total_scheduled_spent_minor: 500,
+            average_daily_spend_minor: 240,
+            average_utilization_bps: 6_125,
+            utilization_spread_bps: 250,
+            overspent_periods: 0,
+          },
+          periods,
+        },
+      });
+    }
     if (path === "/api/v1/budgets" && method === "POST") {
       const body = route.request().postDataJSON() as {
         name: string;
@@ -1662,7 +1774,8 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
   try {
     await page.goto("/");
     await expect(page.getByRole("region", { name: "總覽預算" })).toBeVisible();
-    await expect(page.getByText("本期尚未使用").first()).toBeVisible();
+    await expect(page.getByText("已使用").first()).toBeVisible();
+    await expect(page.getByText("TWD 7,000").first()).toBeVisible();
     const track = page.locator(".budget-carousel-track");
     const slide = track.getByRole("article");
     const [trackBounds, slideBounds] = await Promise.all([
@@ -1798,6 +1911,30 @@ test("opens budget detail, navigates periods, and drills into a filtered day res
       }),
     )
     .toBe(true);
+
+  await page.getByRole("tab", { name: "跨期" }).click();
+  await expect(page).toHaveURL(
+    `/budgets/${budget.id}?view=statistics&from=-1&to=0`,
+  );
+  await expect(page.getByText("跨期總支出", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("各期支出與使用率", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("每期剩餘與超支", { exact: true })).toBeVisible();
+  await expect(page.getByText("期內累積走勢", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("正規化期內累積使用率趨勢圖")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const rootWidth = document.documentElement.scrollWidth;
+        const bodyWidth = document.body?.scrollWidth ?? 0;
+        return Math.max(rootWidth, bodyWidth) <= window.innerWidth + 1;
+      }),
+    )
+    .toBe(true);
+
+  await page.getByRole("tab", { name: "單期" }).click();
+  await expect(page).toHaveURL(`/budgets/${budget.id}`);
 
   const previousPeriod = page.getByRole("link", {
     name: "查看上一期預算",

@@ -14,6 +14,12 @@ export const queryKeys = {
       ["budgets", "detail", budgetId, offset] as const,
     days: (budgetId: string, offset = 0) =>
       ["budgets", "days", budgetId, offset] as const,
+    periods: (budgetId: string) => ["budgets", "periods", budgetId] as const,
+    statistics: (
+      budgetId: string,
+      fromOffset: number | undefined,
+      toOffset: number | undefined,
+    ) => ["budgets", "statistics", budgetId, fromOffset, toOffset] as const,
   },
   entries: {
     all: ["entries"] as const,

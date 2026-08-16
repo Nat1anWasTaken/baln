@@ -5,7 +5,9 @@ pub(crate) mod service;
 
 pub use model::{
     BudgetAccount, BudgetDay, BudgetDaysPage, BudgetDaysQuery, BudgetDetails, BudgetDetailsQuery,
-    BudgetPace, BudgetPeriodKind, BudgetPeriodUnit, BudgetRolloverMode, BudgetStatus,
+    BudgetPace, BudgetPeriodKind, BudgetPeriodOption, BudgetPeriodUnit, BudgetPeriodsPage,
+    BudgetPeriodsQuery, BudgetRolloverMode, BudgetStatistics, BudgetStatisticsPeriod,
+    BudgetStatisticsPoint, BudgetStatisticsQuery, BudgetStatisticsSummary, BudgetStatus,
     BudgetStatusKind, BudgetTrend, BudgetTrendBucket, CreateBudgetRequest, ListBudgetsQuery,
     ReorderBudgetsRequest, RolloverEditMode, UpdateBudgetRequest,
 };

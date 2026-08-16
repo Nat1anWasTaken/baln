@@ -199,6 +199,61 @@ export const budgetDayPageSchema = z.object({
 
 export type BudgetDayPage = z.infer<typeof budgetDayPageSchema>;
 
+export const budgetPeriodOptionSchema = z.object({
+  period_offset: z.number().int().nonpositive(),
+  period_from: z.string(),
+  period_to: z.string(),
+  period_kind: z.enum(["upcoming", "current", "past"]),
+});
+
+export type BudgetPeriodOption = z.infer<typeof budgetPeriodOptionSchema>;
+
+export const budgetPeriodsPageSchema = z.object({
+  items: z.array(budgetPeriodOptionSchema),
+  next_cursor: z.string().nullable(),
+});
+
+export const budgetStatisticsPointSchema = z.object({
+  progress_bps: z.number().int().min(0).max(10_000),
+  date: z.string(),
+  actual_spent_minor: z.number().int(),
+  scheduled_spent_minor: z.number().int(),
+});
+
+export const budgetStatisticsPeriodSchema = budgetPeriodOptionSchema.extend({
+  total_days: z.number().int().positive(),
+  elapsed_days: z.number().int().nonnegative(),
+  carry_in_minor: z.number().int(),
+  available_minor: z.number().int(),
+  actual_spent_minor: z.number().int(),
+  scheduled_spent_minor: z.number().int(),
+  remaining_minor: z.number().int(),
+  utilization_bps: z.number().int().nullable(),
+  points: z.array(budgetStatisticsPointSchema),
+});
+
+export type BudgetStatisticsPeriod = z.infer<
+  typeof budgetStatisticsPeriodSchema
+>;
+
+export const budgetStatisticsSchema = z.object({
+  from_offset: z.number().int().nonpositive(),
+  to_offset: z.number().int().nonpositive(),
+  period_count: z.number().int().positive().max(24),
+  includes_current: z.boolean(),
+  summary: z.object({
+    total_actual_spent_minor: z.number().int(),
+    total_scheduled_spent_minor: z.number().int(),
+    average_daily_spend_minor: z.number().int().nullable(),
+    average_utilization_bps: z.number().int().nullable(),
+    utilization_spread_bps: z.number().int().nullable(),
+    overspent_periods: z.number().int().nonnegative(),
+  }),
+  periods: z.array(budgetStatisticsPeriodSchema),
+});
+
+export type BudgetStatistics = z.infer<typeof budgetStatisticsSchema>;
+
 export type CreateBudgetRequest = {
   name: string;
   amount_minor: number;

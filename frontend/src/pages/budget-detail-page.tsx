@@ -67,7 +67,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BudgetDialog } from "@/features/budgets/budget-dialog";
+import { BudgetStatisticsView } from "@/features/budgets/budget-statistics";
 import { accountTypeLabels } from "@/lib/account";
 import { accountsApi, budgetsApi } from "@/lib/api-client";
 import {
@@ -92,6 +94,29 @@ function parsePeriodOffset(search: string) {
 
 function periodSearch(offset: number) {
   return offset === 0 ? "" : `?period=${offset}`;
+}
+
+function parseStatisticsRange(search: string) {
+  const params = new URLSearchParams(search);
+  const parseOffset = (name: string) => {
+    const raw = params.get(name);
+    if (raw === null) return undefined;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value <= 0 ? value : undefined;
+  };
+  return {
+    from: parseOffset("from"),
+    to: parseOffset("to"),
+  };
+}
+
+function statisticsSearch(from: number, to: number) {
+  const params = new URLSearchParams({
+    view: "statistics",
+    from: String(from),
+    to: String(to),
+  });
+  return `?${params.toString()}`;
 }
 
 function dayEntryUrl(budgetId: string, date: string) {
@@ -391,6 +416,11 @@ export function BudgetDetailPage() {
   const navigate = useAppNavigate();
   const queryClient = useQueryClient();
   const periodOffset = parsePeriodOffset(location.search);
+  const statisticsRange = parseStatisticsRange(location.search);
+  const detailView =
+    new URLSearchParams(location.search).get("view") === "statistics"
+      ? "statistics"
+      : "period";
   const returnDestination = budgetReturnDestination(location.state);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -436,6 +466,7 @@ export function BudgetDetailPage() {
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled:
       Boolean(budgetId) &&
+      detailView === "period" &&
       detail.isSuccess &&
       detail.data.period_kind !== "upcoming",
   });
@@ -539,312 +570,377 @@ export function BudgetDetailPage() {
               </Badge>
             ) : null}
           </div>
-          <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2">
-            {value.has_previous ? (
-              <Button asChild variant="outline" size="sm">
-                <AppLink
-                  to={{
-                    pathname: `/budgets/${budgetId}`,
-                    search: periodSearch(periodOffset - 1),
-                  }}
-                  state={returnDestination.state}
-                  aria-label="查看上一期預算"
-                >
+          {detailView === "period" ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2">
+              {value.has_previous ? (
+                <Button asChild variant="outline" size="sm">
+                  <AppLink
+                    to={{
+                      pathname: `/budgets/${budgetId}`,
+                      search: periodSearch(periodOffset - 1),
+                    }}
+                    state={returnDestination.state}
+                    aria-label="查看上一期預算"
+                  >
+                    <ChevronLeft aria-hidden="true" />
+                    上一期
+                  </AppLink>
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" size="sm" disabled>
                   <ChevronLeft aria-hidden="true" />
                   上一期
-                </AppLink>
-              </Button>
-            ) : (
-              <Button type="button" variant="outline" size="sm" disabled>
-                <ChevronLeft aria-hidden="true" />
-                上一期
-              </Button>
-            )}
-            <span className="min-w-0 text-center text-sm font-medium">
-              {periodOffset === 0
-                ? "目前週期"
-                : `第 ${Math.abs(periodOffset)} 個前期`}
-            </span>
-            {value.has_next ? (
-              <Button asChild variant="outline" size="sm">
-                <AppLink
-                  to={{
-                    pathname: `/budgets/${budgetId}`,
-                    search: periodSearch(periodOffset + 1),
-                  }}
-                  state={returnDestination.state}
-                  aria-label="查看下一期預算"
-                >
+                </Button>
+              )}
+              <span className="min-w-0 text-center text-sm font-medium">
+                {periodOffset === 0
+                  ? "目前週期"
+                  : `第 ${Math.abs(periodOffset)} 個前期`}
+              </span>
+              {value.has_next ? (
+                <Button asChild variant="outline" size="sm">
+                  <AppLink
+                    to={{
+                      pathname: `/budgets/${budgetId}`,
+                      search: periodSearch(periodOffset + 1),
+                    }}
+                    state={returnDestination.state}
+                    aria-label="查看下一期預算"
+                  >
+                    下一期
+                    <ChevronRight aria-hidden="true" />
+                  </AppLink>
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" size="sm" disabled>
                   下一期
                   <ChevronRight aria-hidden="true" />
-                </AppLink>
-              </Button>
-            ) : (
-              <Button type="button" variant="outline" size="sm" disabled>
-                下一期
-                <ChevronRight aria-hidden="true" />
-              </Button>
-            )}
-          </div>
+                </Button>
+              )}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>可用額度</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums">
-              {formatMoney(budget.available_minor)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              本期 {formatMoney(budget.amount_minor)}
-              {budget.rollover_mode !== "reset" && budget.carry_in_minor !== 0
-                ? budget.carry_in_minor > 0
-                  ? ` · 沿襲 ${formatMoney(budget.carry_in_minor)}`
-                  : ` · 前期超支抵扣 ${formatMoney(Math.abs(budget.carry_in_minor))}`
-                : ""}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>已使用與排程</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums text-finance-expense">
-              {formatMoney(budget.spent_minor)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              截至今日 {formatMoney(value.pace.spent_through_as_of_minor)}
-              {value.pace.future_spent_minor !== 0
-                ? ` · 未來 ${amountDisplay(value.pace.future_spent_minor)}`
-                : ""}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription>{overspent ? "超支" : "剩餘"}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {overspent ? (
-              <>
-                <p className="text-2xl font-semibold tabular-nums text-destructive">
-                  {formatMoney(Math.abs(budget.remaining_minor))}
+      <Tabs
+        value={detailView}
+        onValueChange={(nextView) => {
+          navigate(
+            {
+              pathname: location.pathname,
+              search:
+                nextView === "statistics"
+                  ? "?view=statistics"
+                  : periodSearch(periodOffset),
+            },
+            {
+              state: returnDestination.state,
+              transitionIntent: "none",
+            },
+          );
+        }}
+      >
+        <TabsList className="grid w-full grid-cols-2 sm:w-64">
+          <TabsTrigger value="period">單期</TabsTrigger>
+          <TabsTrigger value="statistics">跨期</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {detailView === "statistics" ? (
+        <BudgetStatisticsView
+          budgetId={budgetId}
+          fromOffset={statisticsRange.from}
+          toOffset={statisticsRange.to}
+          isReadOnly={isReadOnly}
+          onApply={(from, to) => {
+            navigate(
+              {
+                pathname: location.pathname,
+                search: statisticsSearch(from, to),
+              },
+              {
+                state: returnDestination.state,
+                transitionIntent: "none",
+              },
+            );
+          }}
+        />
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-1">
+                <CardDescription>可用額度</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatMoney(budget.available_minor)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  已超過本期可用額度
+                  本期 {formatMoney(budget.amount_minor)}
+                  {budget.rollover_mode !== "reset" &&
+                  budget.carry_in_minor !== 0
+                    ? budget.carry_in_minor > 0
+                      ? ` · 沿襲 ${formatMoney(budget.carry_in_minor)}`
+                      : ` · 前期超支抵扣 ${formatMoney(Math.abs(budget.carry_in_minor))}`
+                    : ""}
                 </p>
-              </>
-            ) : remainingBreakdown.adjustment ? (
-              <>
-                <p className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tabular-nums">
-                  <span className="text-finance-income">
-                    {formatMoney(remainingBreakdown.currentMinor)}
-                  </span>
-                  <span className="text-muted-foreground" aria-hidden="true">
-                    {remainingBreakdown.adjustment.kind === "rollover"
-                      ? "+"
-                      : "−"}
-                  </span>
-                  <span
-                    className={cn(
-                      remainingBreakdown.adjustment.kind === "rollover"
-                        ? "text-finance-rollover"
-                        : "text-destructive",
-                    )}
-                  >
-                    {formatMoney(remainingBreakdown.adjustment.amountMinor)}
-                  </span>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardDescription>已使用與排程</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-semibold tabular-nums text-finance-expense">
+                  {formatMoney(budget.spent_minor)}
                 </p>
-                <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                  <span className="text-finance-income">當期剩餘</span>
-                  <span className="text-muted-foreground" aria-hidden="true">
-                    {remainingBreakdown.adjustment.kind === "rollover"
-                      ? "+"
-                      : "−"}
-                  </span>
-                  <span
-                    className={cn(
-                      remainingBreakdown.adjustment.kind === "rollover"
-                        ? "text-finance-rollover"
-                        : "text-destructive",
-                    )}
-                  >
-                    {remainingBreakdown.adjustment.kind === "rollover"
-                      ? "往期沿襲"
-                      : "往期超支抵扣"}
-                  </span>
+                <p className="text-xs text-muted-foreground">
+                  截至今日 {formatMoney(value.pace.spent_through_as_of_minor)}
+                  {value.pace.future_spent_minor !== 0
+                    ? ` · 未來 ${amountDisplay(value.pace.future_spent_minor)}`
+                    : ""}
                 </p>
-                <span className="sr-only">
-                  當期剩餘 {formatMoney(remainingBreakdown.currentMinor)}
-                  {remainingBreakdown.adjustment.kind === "rollover"
-                    ? "加上往期沿襲"
-                    : "扣除往期超支"}
-                  {formatMoney(remainingBreakdown.adjustment.amountMinor)}
-                </span>
-              </>
-            ) : (
-              <>
-                <p className="text-2xl font-semibold tabular-nums text-finance-income">
-                  {formatMoney(remainingBreakdown.currentMinor)}
-                </p>
-                <p className="text-xs text-finance-income">當期剩餘</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>支出步調</CardTitle>
-            <CardDescription>依本期進度計算</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-5">
-            {value.period_kind === "upcoming" ? (
-              <div className="flex flex-1 items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm">
-                <CalendarRange className="size-4 shrink-0" aria-hidden="true" />
-                預算開始後，這裡會顯示每日步調。
-              </div>
-            ) : (
-              <>
-                <dl className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-xs text-muted-foreground">
-                      目前日均支出
-                    </dt>
-                    <dd
-                      className={cn(
-                        "mt-1 text-2xl font-semibold tabular-nums",
-                        value.pace.average_daily_spend_minor !== null &&
-                          value.pace.average_daily_spend_minor < 0
-                          ? "text-finance-income"
-                          : "text-finance-expense",
-                      )}
-                    >
-                      {value.pace.average_daily_spend_minor === null
-                        ? "—"
-                        : formatMoney(value.pace.average_daily_spend_minor)}
-                    </dd>
-                  </div>
-                  <div className="sm:text-right">
-                    <dt className="text-xs text-muted-foreground">每日可用</dt>
-                    <dd
-                      className={cn(
-                        "mt-1 text-2xl font-semibold tabular-nums",
-                        spendable === null
-                          ? "text-muted-foreground"
-                          : spendable < 0
-                            ? "text-destructive"
-                            : "text-finance-income",
-                      )}
-                    >
-                      {spendable === null
-                        ? "—"
-                        : spendable < 0
-                          ? "已超支"
-                          : formatMoney(spendable)}
-                    </dd>
-                  </div>
-                </dl>
-                <div className="flex flex-1 flex-col justify-end gap-4">
-                  <div className="grid gap-3 rounded-lg bg-muted/50 p-3">
-                    <div className="grid gap-1.5">
-                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
-                        <span>期間進度</span>
-                        <span>
-                          {formatInteger(value.pace.elapsed_days)} /{" "}
-                          {formatInteger(value.pace.total_days)} 天
-                        </span>
-                      </div>
-                      <Progress
-                        aria-label="預算期間進度"
-                        value={elapsedPercent}
-                        indicatorClassName="bg-finance-net"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
-                        <span>已使用額度</span>
-                        <span>
-                          {formatMoney(value.pace.spent_through_as_of_minor)}
-                        </span>
-                      </div>
-                      <Progress
-                        aria-label="預算已使用額度"
-                        value={spentPercent}
-                        indicatorClassName={cn(
-                          value.pace.spent_through_as_of_minor < 0
-                            ? "bg-finance-income"
-                            : overspent
-                              ? "bg-destructive"
-                              : "bg-finance-expense",
-                        )}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    已過 {formatInteger(value.pace.elapsed_days)} 天 · 剩餘{" "}
-                    {formatInteger(value.pace.remaining_days)} 天
-                  </p>
-                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-1">
+                <CardDescription>{overspent ? "超支" : "剩餘"}</CardDescription>
+              </CardHeader>
+              <CardContent>
                 {overspent ? (
-                  <p className="flex items-start gap-1.5 text-xs text-destructive">
-                    <CircleAlert
-                      className="mt-0.5 size-3.5 shrink-0"
+                  <>
+                    <p className="text-2xl font-semibold tabular-nums text-destructive">
+                      {formatMoney(Math.abs(budget.remaining_minor))}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      已超過本期可用額度
+                    </p>
+                  </>
+                ) : remainingBreakdown.adjustment ? (
+                  <>
+                    <p className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tabular-nums">
+                      <span className="text-finance-income">
+                        {formatMoney(remainingBreakdown.currentMinor)}
+                      </span>
+                      <span
+                        className="text-muted-foreground"
+                        aria-hidden="true"
+                      >
+                        {remainingBreakdown.adjustment.kind === "rollover"
+                          ? "+"
+                          : "−"}
+                      </span>
+                      <span
+                        className={cn(
+                          remainingBreakdown.adjustment.kind === "rollover"
+                            ? "text-finance-rollover"
+                            : "text-destructive",
+                        )}
+                      >
+                        {formatMoney(remainingBreakdown.adjustment.amountMinor)}
+                      </span>
+                    </p>
+                    <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
+                      <span className="text-finance-income">當期剩餘</span>
+                      <span
+                        className="text-muted-foreground"
+                        aria-hidden="true"
+                      >
+                        {remainingBreakdown.adjustment.kind === "rollover"
+                          ? "+"
+                          : "−"}
+                      </span>
+                      <span
+                        className={cn(
+                          remainingBreakdown.adjustment.kind === "rollover"
+                            ? "text-finance-rollover"
+                            : "text-destructive",
+                        )}
+                      >
+                        {remainingBreakdown.adjustment.kind === "rollover"
+                          ? "往期沿襲"
+                          : "往期超支抵扣"}
+                      </span>
+                    </p>
+                    <span className="sr-only">
+                      當期剩餘 {formatMoney(remainingBreakdown.currentMinor)}
+                      {remainingBreakdown.adjustment.kind === "rollover"
+                        ? "加上往期沿襲"
+                        : "扣除往期超支"}
+                      {formatMoney(remainingBreakdown.adjustment.amountMinor)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-semibold tabular-nums text-finance-income">
+                      {formatMoney(remainingBreakdown.currentMinor)}
+                    </p>
+                    <p className="text-xs text-finance-income">當期剩餘</p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle>支出步調</CardTitle>
+                <CardDescription>依本期進度計算</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-5">
+                {value.period_kind === "upcoming" ? (
+                  <div className="flex flex-1 items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm">
+                    <CalendarRange
+                      className="size-4 shrink-0"
                       aria-hidden="true"
                     />
-                    本期已超支，新增支出會繼續增加超支金額。
-                  </p>
-                ) : null}
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <BudgetTrendCard detail={value} />
-      </div>
+                    預算開始後，這裡會顯示每日步調。
+                  </div>
+                ) : (
+                  <>
+                    <dl className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">
+                          目前日均支出
+                        </dt>
+                        <dd
+                          className={cn(
+                            "mt-1 text-2xl font-semibold tabular-nums",
+                            value.pace.average_daily_spend_minor !== null &&
+                              value.pace.average_daily_spend_minor < 0
+                              ? "text-finance-income"
+                              : "text-finance-expense",
+                          )}
+                        >
+                          {value.pace.average_daily_spend_minor === null
+                            ? "—"
+                            : formatMoney(value.pace.average_daily_spend_minor)}
+                        </dd>
+                      </div>
+                      <div className="sm:text-right">
+                        <dt className="text-xs text-muted-foreground">
+                          每日可用
+                        </dt>
+                        <dd
+                          className={cn(
+                            "mt-1 text-2xl font-semibold tabular-nums",
+                            spendable === null
+                              ? "text-muted-foreground"
+                              : spendable < 0
+                                ? "text-destructive"
+                                : "text-finance-income",
+                          )}
+                        >
+                          {spendable === null
+                            ? "—"
+                            : spendable < 0
+                              ? "已超支"
+                              : formatMoney(spendable)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="flex flex-1 flex-col justify-end gap-4">
+                      <div className="grid gap-3 rounded-lg bg-muted/50 p-3">
+                        <div className="grid gap-1.5">
+                          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
+                            <span>期間進度</span>
+                            <span>
+                              {formatInteger(value.pace.elapsed_days)} /{" "}
+                              {formatInteger(value.pace.total_days)} 天
+                            </span>
+                          </div>
+                          <Progress
+                            aria-label="預算期間進度"
+                            value={elapsedPercent}
+                            indicatorClassName="bg-finance-net"
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
+                            <span>已使用額度</span>
+                            <span>
+                              {formatMoney(
+                                value.pace.spent_through_as_of_minor,
+                              )}
+                            </span>
+                          </div>
+                          <Progress
+                            aria-label="預算已使用額度"
+                            value={spentPercent}
+                            indicatorClassName={cn(
+                              value.pace.spent_through_as_of_minor < 0
+                                ? "bg-finance-income"
+                                : overspent
+                                  ? "bg-destructive"
+                                  : "bg-finance-expense",
+                            )}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        已過 {formatInteger(value.pace.elapsed_days)} 天 · 剩餘{" "}
+                        {formatInteger(value.pace.remaining_days)} 天
+                      </p>
+                    </div>
+                    {overspent ? (
+                      <p className="flex items-start gap-1.5 text-xs text-destructive">
+                        <CircleAlert
+                          className="mt-0.5 size-3.5 shrink-0"
+                          aria-hidden="true"
+                        />
+                        本期已超支，新增支出會繼續增加超支金額。
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+            <BudgetTrendCard detail={value} />
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>每日明細</CardTitle>
-          <CardDescription>每日支出、當日結束剩餘與符合的交易</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {value.period_kind === "upcoming" ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              預算尚未開始，暫時沒有每日明細。
-            </p>
-          ) : days.isPending && isReadOnly ? (
-            <OfflineUnavailableState title="尚未儲存每日預算明細" />
-          ) : days.isPending ? (
-            <PageLoading rows={4} />
-          ) : days.isError ? (
-            <ErrorState
-              message={days.error.message}
-              onRetry={() => void days.refetch()}
-            />
-          ) : (
-            <>
-              <DailyRows days={dayItems} budgetId={budgetId} />
-              {days.hasNextPage ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-3 w-full"
-                  loading={days.isFetchingNextPage}
-                  onClick={() => void days.fetchNextPage()}
-                >
-                  顯示更多日期
-                </Button>
-              ) : null}
-            </>
-          )}
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>每日明細</CardTitle>
+              <CardDescription>
+                每日支出、當日結束剩餘與符合的交易
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {value.period_kind === "upcoming" ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  預算尚未開始，暫時沒有每日明細。
+                </p>
+              ) : days.isPending && isReadOnly ? (
+                <OfflineUnavailableState title="尚未儲存每日預算明細" />
+              ) : days.isPending ? (
+                <PageLoading rows={4} />
+              ) : days.isError ? (
+                <ErrorState
+                  message={days.error.message}
+                  onRetry={() => void days.refetch()}
+                />
+              ) : (
+                <>
+                  <DailyRows days={dayItems} budgetId={budgetId} />
+                  {days.hasNextPage ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 w-full"
+                      loading={days.isFetchingNextPage}
+                      onClick={() => void days.fetchNextPage()}
+                    >
+                      顯示更多日期
+                    </Button>
+                  ) : null}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Card>
         <CardHeader>

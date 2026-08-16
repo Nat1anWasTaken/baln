@@ -96,6 +96,85 @@ const days = {
   next_cursor: null,
 };
 
+const statistics = {
+  from_offset: -1,
+  to_offset: 0,
+  period_count: 2,
+  includes_current: true,
+  summary: {
+    total_actual_spent_minor: 8_000,
+    total_scheduled_spent_minor: 500,
+    average_daily_spend_minor: 190,
+    average_utilization_bps: 4_000,
+    utilization_spread_bps: 1_500,
+    overspent_periods: 0,
+  },
+  periods: [
+    {
+      period_offset: -1,
+      period_from: "2026-07-01",
+      period_to: "2026-08-01",
+      period_kind: "past",
+      total_days: 31,
+      elapsed_days: 31,
+      carry_in_minor: 0,
+      available_minor: 10_000,
+      actual_spent_minor: 5_000,
+      scheduled_spent_minor: 0,
+      remaining_minor: 5_000,
+      utilization_bps: 5_000,
+      points: [
+        {
+          progress_bps: 0,
+          date: "2026-07-01",
+          actual_spent_minor: 0,
+          scheduled_spent_minor: 0,
+        },
+        {
+          progress_bps: 10_000,
+          date: "2026-07-31",
+          actual_spent_minor: 5_000,
+          scheduled_spent_minor: 0,
+        },
+      ],
+    },
+    {
+      period_offset: 0,
+      period_from: "2026-08-01",
+      period_to: "2026-09-01",
+      period_kind: "current",
+      total_days: 31,
+      elapsed_days: 11,
+      carry_in_minor: 1_000,
+      available_minor: 11_000,
+      actual_spent_minor: 3_000,
+      scheduled_spent_minor: 500,
+      remaining_minor: 7_500,
+      utilization_bps: 3_181,
+      points: [
+        {
+          progress_bps: 0,
+          date: "2026-08-01",
+          actual_spent_minor: 0,
+          scheduled_spent_minor: 0,
+        },
+        {
+          progress_bps: 3_548,
+          date: "2026-08-11",
+          actual_spent_minor: 3_000,
+          scheduled_spent_minor: 0,
+        },
+        {
+          progress_bps: 10_000,
+          date: "2026-08-31",
+          actual_spent_minor: 3_000,
+          scheduled_spent_minor: 500,
+        },
+      ],
+    },
+  ],
+};
+
 function renderPage(
   initialEntry:
     | string
@@ -251,5 +330,58 @@ describe("BudgetDetailPage", () => {
     expect(
       await screen.findByRole("link", { name: "返回總覽" }),
     ).toHaveAttribute("href", "/");
+  });
+
+  it("renders normalized cross-period statistics without loading daily rows", async () => {
+    let requestedDays = false;
+    server.use(
+      http.get(`${API_BASE_URL}/accounts`, () => HttpResponse.json([])),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/details`, () =>
+        HttpResponse.json(detail),
+      ),
+      http.get(
+        `${API_BASE_URL}/budgets/${budgetId}/statistics`,
+        ({ request }) => {
+          const params = new URL(request.url).searchParams;
+          expect(params.get("from_offset")).toBe("-1");
+          expect(params.get("to_offset")).toBe("0");
+          return HttpResponse.json(statistics);
+        },
+      ),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/periods`, () =>
+        HttpResponse.json({
+          items: statistics.periods.map((period) => ({
+            period_offset: period.period_offset,
+            period_from: period.period_from,
+            period_to: period.period_to,
+            period_kind: period.period_kind,
+          })),
+          next_cursor: null,
+        }),
+      ),
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/days`, () => {
+        requestedDays = true;
+        return HttpResponse.json(days);
+      }),
+    );
+
+    renderPage({
+      pathname: `/budgets/${budgetId}`,
+      search: "?view=statistics&from=-1&to=0",
+      state: { budgetReturnTo: "/" },
+    });
+
+    expect(await screen.findByText("跨期總支出")).toBeVisible();
+    expect(screen.getByText("各期支出與使用率")).toBeVisible();
+    expect(screen.getByText("每期剩餘與超支")).toBeVisible();
+    expect(screen.getByText("期內累積走勢")).toBeVisible();
+    expect(
+      screen.getByLabelText("正規化期內累積使用率趨勢圖"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("每日明細")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "查看上一期預算" }),
+    ).not.toBeInTheDocument();
+    expect(requestedDays).toBe(false);
   });
 });

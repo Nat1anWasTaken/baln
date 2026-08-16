@@ -129,6 +129,56 @@ describe("API client", () => {
     });
   });
 
+  it("loads searchable budget periods and a bounded statistics range", async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/budgets/${budgetId}/periods`, ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        expect(params.get("date")).toBe("2026-07-15");
+        return HttpResponse.json({
+          items: [
+            {
+              period_offset: -1,
+              period_from: "2026-07-01",
+              period_to: "2026-08-01",
+              period_kind: "past",
+            },
+          ],
+          next_cursor: null,
+        });
+      }),
+      http.get(
+        `${API_BASE_URL}/budgets/${budgetId}/statistics`,
+        ({ request }) => {
+          const params = new URL(request.url).searchParams;
+          expect(params.get("from_offset")).toBe("-1");
+          expect(params.get("to_offset")).toBe("0");
+          return HttpResponse.json({
+            from_offset: -1,
+            to_offset: 0,
+            period_count: 2,
+            includes_current: true,
+            summary: {
+              total_actual_spent_minor: 7_000,
+              total_scheduled_spent_minor: 500,
+              average_daily_spend_minor: 170,
+              average_utilization_bps: 4_200,
+              utilization_spread_bps: 1_000,
+              overspent_periods: 0,
+            },
+            periods: [],
+          });
+        },
+      ),
+    );
+
+    const periods = await budgetsApi.periods(budgetId, {
+      date: "2026-07-15",
+    });
+    expect(periods.items[0]?.period_offset).toBe(-1);
+    const statistics = await budgetsApi.statistics(budgetId, -1, 0);
+    expect(statistics.summary.total_scheduled_spent_minor).toBe(500);
+  });
+
   it("parses report responses and includes cookie credentials", async () => {
     server.use(
       http.get(`${API_BASE_URL}/reports/monthly`, ({ request }) => {

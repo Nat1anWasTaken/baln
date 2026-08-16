@@ -5,6 +5,8 @@ import {
   accountSchema,
   budgetDayPageSchema,
   budgetDetailSchema,
+  budgetPeriodsPageSchema,
+  budgetStatisticsSchema,
   budgetStatusSchema,
   apiTokenSchema,
   createdApiTokenSchema,
@@ -61,6 +63,8 @@ const localizedProblems: Record<string, string> = {
   rollover_edit_mode_required: "請選擇如何處理既有累計餘額。",
   invalid_budget_order: "預算排序已變更，請重新載入後再試。",
   invalid_period_offset: "無法顯示指定的預算週期。",
+  invalid_statistics_range: "請選擇有效且連續的預算期別。",
+  statistics_range_too_large: "跨期統計一次最多比較 24 期。",
   empty_update: "請至少修改一個欄位。",
   invalid_description: "交易說明不可為空白。",
   insufficient_postings: "一筆交易至少需要兩個分錄。",
@@ -355,6 +359,28 @@ export const budgetsApi = {
       })}`,
       {},
       { schema: budgetDayPageSchema },
+    ),
+  periods: (
+    id: string,
+    {
+      cursor,
+      limit,
+      date,
+    }: { cursor?: string; limit?: number; date?: string } = {},
+  ) =>
+    request(
+      `/budgets/${id}/periods${queryString({ cursor, limit, date })}`,
+      {},
+      { schema: budgetPeriodsPageSchema },
+    ),
+  statistics: (id: string, fromOffset?: number, toOffset?: number) =>
+    request(
+      `/budgets/${id}/statistics${queryString({
+        from_offset: fromOffset,
+        to_offset: toOffset,
+      })}`,
+      {},
+      { schema: budgetStatisticsSchema },
     ),
   create: (body: CreateBudgetRequest) =>
     request(
