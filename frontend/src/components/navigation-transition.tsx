@@ -112,6 +112,7 @@ export function NavigationTransitionProvider({
     sequence: 0,
   });
   const pendingNavigation = useRef<PendingNavigation | null>(null);
+  const transitionSequence = useRef(0);
   const previousLocation = useRef(location);
   const history = useRef({ keys: [location.key], index: 0 });
   const mounted = useRef(false);
@@ -130,9 +131,19 @@ export function NavigationTransitionProvider({
     [motionAllowed],
   );
 
-  const beginNavigation = useCallback((direction: NavigationDirection) => {
-    pendingNavigation.current = { direction };
-  }, []);
+  const beginNavigation = useCallback(
+    (direction: NavigationDirection) => {
+      transitionSequence.current += 1;
+      const sequence = transitionSequence.current;
+      pendingNavigation.current = { direction };
+      setTransition({
+        direction: direction !== "none" && motionAllowed ? direction : "none",
+        mode: direction !== "none" && motionAllowed ? "entry" : "idle",
+        sequence,
+      });
+    },
+    [motionAllowed],
+  );
 
   useLayoutEffect(() => {
     if (!mounted.current) {
@@ -178,26 +189,33 @@ export function NavigationTransitionProvider({
     }
     previousLocation.current = location;
 
+    // Intent-driven navigation publishes its direction before the URL changes,
+    // so titles, tabs, and route content all animate from the same render.
+    if (pending) return;
+
     if (direction === "none") {
-      setTransition((current) => ({
+      transitionSequence.current += 1;
+      setTransition({
         direction: "none",
         mode: "idle",
-        sequence: current.sequence + 1,
-      }));
+        sequence: transitionSequence.current,
+      });
       return;
     }
     if (motionAllowed) {
-      setTransition((current) => ({
+      transitionSequence.current += 1;
+      setTransition({
         direction,
         mode: "entry",
-        sequence: current.sequence + 1,
-      }));
+        sequence: transitionSequence.current,
+      });
     } else {
-      setTransition((current) => ({
+      transitionSequence.current += 1;
+      setTransition({
         direction: "none",
         mode: "idle",
-        sequence: current.sequence + 1,
-      }));
+        sequence: transitionSequence.current,
+      });
     }
   }, [location, motionAllowed, navigationType]);
 
@@ -207,7 +225,7 @@ export function NavigationTransitionProvider({
       setTransition((current) =>
         current.sequence === transition.sequence
           ? {
-              direction: "none",
+              direction: current.direction,
               mode: "idle",
               sequence: current.sequence,
             }
@@ -635,11 +653,9 @@ export function AppRouteTransition({ children }: { children: ReactNode }) {
     }
     const previous = activeRef.current;
     const direction =
-      navigationType === "POP"
-        ? "back"
-        : transition.mode === "entry"
-          ? transition.direction
-          : getNavigationDirection(previous.pathname, location.pathname);
+      transition.mode === "entry"
+        ? transition.direction
+        : getNavigationDirection(previous.pathname, location.pathname);
 
     activeRef.current = {
       key: location.key,

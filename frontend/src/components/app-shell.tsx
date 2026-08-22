@@ -1,5 +1,5 @@
 import { Suspense, useState } from "react";
-import { AnimatePresence, m } from "motion/react";
+import { AnimatePresence, m, type Variants } from "motion/react";
 import {
   ChevronUp,
   CircleUserRound,
@@ -43,6 +43,7 @@ import {
 } from "@/lib/app-navigation";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
 import { motionSpring } from "@/lib/motion";
+import type { NavigationDirection } from "@/lib/navigation-transition";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,6 +90,18 @@ const mobileNavigation: MobileNavigationItem[] = [
     more: true,
   },
 ];
+
+const pageTitleVariants = {
+  initial: (direction: NavigationDirection) => ({
+    opacity: 0,
+    x: direction === "back" ? -12 : 12,
+  }),
+  animate: { opacity: 1, x: 0 },
+  exit: (direction: NavigationDirection) => ({
+    opacity: 0,
+    x: direction === "back" ? 8 : -8,
+  }),
+} satisfies Variants;
 
 function UserMenu({ compact = false }: { compact?: boolean }) {
   const auth = useAuth();
@@ -270,15 +283,19 @@ export function AppShell() {
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 bg-background/90 px-4 shadow-sm backdrop-blur md:px-6">
           <SidebarTrigger className="hidden md:inline-flex" />
           <div className="min-w-0 flex-1 overflow-hidden">
-            <AnimatePresence initial={false} mode="wait">
+            <AnimatePresence
+              initial={false}
+              mode="popLayout"
+              custom={visualTransition.direction}
+            >
               <m.h1
                 key={pageName}
-                initial={{
-                  opacity: 0,
-                  x: visualTransition.direction === "back" ? -12 : 12,
-                }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
+                data-navigation-direction={visualTransition.direction}
+                custom={visualTransition.direction}
+                variants={pageTitleVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
                 transition={motionSpring.navigation}
                 className="app-page-title truncate font-heading text-lg font-semibold"
               >

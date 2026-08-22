@@ -2375,6 +2375,10 @@ test("animates route content with Motion without layering over the mobile editor
   const shellBeforeAnimation = await shellGeometry();
   await accountsNavigation.click();
   await expect(page).toHaveURL(/\/accounts$/);
+  await expect(page.getByRole("heading", { name: "帳戶" })).toHaveAttribute(
+    "data-navigation-direction",
+    "forward",
+  );
   await expect(currentRoute).toContainText("帳戶");
   expect(
     await currentRoute.evaluate(
@@ -2395,6 +2399,10 @@ test("animates route content with Motion without layering over the mobile editor
 
   await page.getByRole("link", { name: "交易", exact: true }).click();
   await expect(page).toHaveURL(/\/entries$/);
+  await expect(page.getByRole("heading", { name: "交易" })).toHaveAttribute(
+    "data-navigation-direction",
+    "back",
+  );
   await expect(currentRoute).toContainText("交易");
 
   await page
