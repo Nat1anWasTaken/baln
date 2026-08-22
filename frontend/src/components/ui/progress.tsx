@@ -1,7 +1,11 @@
 import * as React from "react";
+import { m } from "motion/react";
 import { Progress as ProgressPrimitive } from "radix-ui";
 
+import { motionSpring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+
+const MotionProgressIndicator = m.create(ProgressPrimitive.Indicator);
 
 function Progress({
   className,
@@ -22,13 +26,15 @@ function Progress({
       value={normalized}
       {...props}
     >
-      <ProgressPrimitive.Indicator
+      <MotionProgressIndicator
         data-slot="progress-indicator"
         className={cn(
-          "size-full flex-1 bg-primary transition-all",
+          "size-full flex-1 origin-left bg-primary",
           indicatorClassName,
         )}
-        style={{ transform: `translateX(-${100 - normalized}%)` }}
+        animate={{ scaleX: normalized / 100 }}
+        initial={false}
+        transition={motionSpring.layout}
       />
     </ProgressPrimitive.Root>
   );

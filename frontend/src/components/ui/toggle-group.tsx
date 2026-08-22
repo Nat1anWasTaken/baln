@@ -2,10 +2,14 @@
 
 import * as React from "react";
 import { type VariantProps } from "class-variance-authority";
+import { m } from "motion/react";
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui";
 
 import { cn } from "@/lib/utils";
 import { toggleVariants } from "@/components/ui/toggle";
+import { type MotionSafeProps, pressMotionProps } from "@/lib/motion";
+
+const MotionToggleGroupItem = m.create(ToggleGroupPrimitive.Item);
 
 const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants> & {
@@ -58,15 +62,16 @@ function ToggleGroup({
 function ToggleGroupItem({
   className,
   children,
+  disabled,
   variant = "default",
   size = "default",
   ...props
-}: React.ComponentProps<typeof ToggleGroupPrimitive.Item> &
+}: MotionSafeProps<React.ComponentProps<typeof ToggleGroupPrimitive.Item>> &
   VariantProps<typeof toggleVariants>) {
   const context = React.useContext(ToggleGroupContext);
 
   return (
-    <ToggleGroupPrimitive.Item
+    <MotionToggleGroupItem
       data-slot="toggle-group-item"
       data-variant={context.variant || variant}
       data-size={context.size || size}
@@ -79,10 +84,12 @@ function ToggleGroupItem({
         }),
         className,
       )}
+      disabled={disabled}
+      {...pressMotionProps("control", disabled)}
       {...props}
     >
       {children}
-    </ToggleGroupPrimitive.Item>
+    </MotionToggleGroupItem>
   );
 }
 

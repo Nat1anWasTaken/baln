@@ -1,4 +1,5 @@
 import { Suspense, useState } from "react";
+import { AnimatePresence, m } from "motion/react";
 import {
   ChevronUp,
   CircleUserRound,
@@ -12,7 +13,7 @@ import {
   RefreshCw,
   WalletCards,
 } from "lucide-react";
-import { Outlet, useLocation } from "react-router-dom";
+import { useLocation, useOutlet } from "react-router-dom";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/auth-context";
@@ -28,6 +29,7 @@ import {
   AppNavLink,
   AppRouteTransition,
   useAppNavigate,
+  useNavigationVisualTransition,
 } from "@/components/navigation-transition";
 import { PageLoading } from "@/components/page-state";
 import { OfflineBanner } from "@/components/offline-state";
@@ -40,6 +42,7 @@ import {
   type PrimaryNavigationItem,
 } from "@/lib/app-navigation";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
+import { motionSpring } from "@/lib/motion";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -196,6 +199,8 @@ export function AppShell() {
   const auth = useAuth();
   const navigate = useAppNavigate();
   const location = useLocation();
+  const outlet = useOutlet();
+  const visualTransition = useNavigationVisualTransition();
   const pageName = pageNameForPath(location.pathname);
   const isMobileNavigationActive = (to: string) => {
     if (to === "/") return location.pathname === "/";
@@ -240,7 +245,10 @@ export function AppShell() {
                         {({ isActive }) => (
                           <>
                             {isActive ? (
-                              <ActiveNavigationIndicator className="bg-sidebar-accent" />
+                              <ActiveNavigationIndicator
+                                className="bg-sidebar-accent"
+                                layoutId="sidebar-navigation"
+                              />
                             ) : null}
                             <item.icon aria-hidden="true" />
                             <span>{item.label}</span>
@@ -261,9 +269,23 @@ export function AppShell() {
       <SidebarInset className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 bg-background/90 px-4 shadow-sm backdrop-blur md:px-6">
           <SidebarTrigger className="hidden md:inline-flex" />
-          <h1 className="app-page-title min-w-0 flex-1 truncate font-heading text-lg font-semibold">
-            {pageName}
-          </h1>
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <AnimatePresence initial={false} mode="wait">
+              <m.h1
+                key={pageName}
+                initial={{
+                  opacity: 0,
+                  x: visualTransition.direction === "back" ? -12 : 12,
+                }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+                transition={motionSpring.navigation}
+                className="app-page-title truncate font-heading text-lg font-semibold"
+              >
+                {pageName}
+              </m.h1>
+            </AnimatePresence>
+          </div>
           <div className="md:hidden">
             <UserMenu compact />
           </div>
@@ -294,9 +316,7 @@ export function AppShell() {
         <OfflineBanner />
         <div className="mx-auto w-full max-w-7xl flex-1 overflow-x-clip p-4 md:p-8">
           <Suspense fallback={<PageLoading rows={4} />}>
-            <AppRouteTransition>
-              <Outlet />
-            </AppRouteTransition>
+            <AppRouteTransition>{outlet}</AppRouteTransition>
           </Suspense>
         </div>
       </SidebarInset>
@@ -321,14 +341,18 @@ export function AppShell() {
                     variant="ghost"
                     aria-label="更多導覽"
                     aria-current={isActive ? "page" : undefined}
-                    className={`touch-press-frameless relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs ${
+                    pressFeedback="navigation"
+                    className={`relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs ${
                       isActive
                         ? "font-semibold text-foreground"
                         : "text-muted-foreground"
                     }`}
                   >
                     {isActive ? (
-                      <ActiveNavigationIndicator className="bg-muted/70" />
+                      <ActiveNavigationIndicator
+                        className="bg-muted/70"
+                        layoutId="mobile-navigation"
+                      />
                     ) : null}
                     <Ellipsis className="size-5" aria-hidden="true" />
                     <span>更多</span>
@@ -383,6 +407,7 @@ export function AppShell() {
             <AppLink
               key={item.to}
               to={item.to}
+              pressFeedback={item.primary ? "prominent" : "navigation"}
               state={
                 item.to === "/entries/new"
                   ? entryEditorRouteState(location)
@@ -390,14 +415,17 @@ export function AppShell() {
               }
               aria-label={item.primary ? "新增交易" : undefined}
               aria-current={isActive ? "page" : undefined}
-              className={`touch-press touch-press-frameless relative isolate flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`relative isolate flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 isActive
                   ? "font-semibold text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               }`}
             >
               {isActive && !item.primary ? (
-                <ActiveNavigationIndicator className="bg-muted/70" />
+                <ActiveNavigationIndicator
+                  className="bg-muted/70"
+                  layoutId="mobile-navigation"
+                />
               ) : null}
               {item.primary ? (
                 <span className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +18,7 @@ import {
 } from "@/components/navigation-transition";
 
 const originalMatchMedia = window.matchMedia;
+const originalInnerWidth = window.innerWidth;
 
 function LocationLabel() {
   const location = useLocation();
@@ -46,6 +47,10 @@ function mockMatchMedia({
   mobile?: boolean;
   reducedMotion?: boolean;
 }) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: mobile ? 390 : 1024,
+  });
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn((query: string) => ({
@@ -63,6 +68,14 @@ function mockMatchMedia({
   });
 }
 
+function currentRoute() {
+  const route = document.querySelector<HTMLElement>(
+    '[data-slot="app-route-content"]:not([aria-hidden="true"])',
+  );
+  expect(route).not.toBeNull();
+  return route as HTMLElement;
+}
+
 afterEach(() => {
   preloadAppRoute.mockReset();
   preloadAppRoute.mockResolvedValue();
@@ -71,6 +84,10 @@ afterEach(() => {
     configurable: true,
     value: originalMatchMedia,
   });
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: originalInnerWidth,
+  });
   Object.defineProperty(document, "startViewTransition", {
     configurable: true,
     value: undefined,
@@ -78,7 +95,7 @@ afterEach(() => {
 });
 
 describe("shared navigation transitions", () => {
-  it("preloads then animates the real route content", async () => {
+  it("preloads then hands the real route content to Motion", async () => {
     mockMatchMedia({});
     let finishPreload = () => {};
     preloadAppRoute.mockReturnValue(
@@ -94,32 +111,33 @@ describe("shared navigation transitions", () => {
     const user = userEvent.setup();
     render(<Fixture />);
 
+    expect(screen.getByRole("link", { name: "前往目的地" })).toHaveAttribute(
+      "data-navigation-transition",
+      "motion",
+    );
+
     await user.click(screen.getByRole("link", { name: "前往目的地" }));
 
     expect(preloadAppRoute).toHaveBeenCalledWith("/entries");
     expect(startViewTransition).not.toHaveBeenCalled();
-    expect(screen.getByText("/")).toBeInTheDocument();
+    expect(within(currentRoute()).getByText("/")).toBeInTheDocument();
     finishPreload();
     await waitFor(() => {
-      expect(screen.getByText("/entries")).toBeInTheDocument();
+      expect(within(currentRoute()).getByText("/entries")).toBeInTheDocument();
     });
     expect(startViewTransition).not.toHaveBeenCalled();
-    expect(
-      document.querySelector('[data-slot="app-route-content"]'),
-    ).toHaveAttribute("data-entry-direction", "forward");
+    expect(currentRoute()).not.toHaveAttribute("data-entry-direction");
   });
 
-  it("adds a directional entry animation without browser-specific APIs", async () => {
+  it("navigates without browser-specific transition APIs", async () => {
     mockMatchMedia({});
     const user = userEvent.setup();
     render(<Fixture />);
 
     await user.click(screen.getByRole("link", { name: "前往目的地" }));
 
-    expect(screen.getByText("/entries")).toBeInTheDocument();
-    expect(
-      document.querySelector('[data-slot="app-route-content"]'),
-    ).toHaveAttribute("data-entry-direction", "forward");
+    expect(within(currentRoute()).getByText("/entries")).toBeInTheDocument();
+    expect(currentRoute()).not.toHaveAttribute("data-entry-direction");
   });
 
   it("does not animate route entry when reduced motion is requested", async () => {
@@ -127,12 +145,15 @@ describe("shared navigation transitions", () => {
     const user = userEvent.setup();
     render(<Fixture />);
 
+    expect(screen.getByRole("link", { name: "前往目的地" })).toHaveAttribute(
+      "data-navigation-transition",
+      "none",
+    );
+
     await user.click(screen.getByRole("link", { name: "前往目的地" }));
 
-    expect(screen.getByText("/entries")).toBeInTheDocument();
-    expect(
-      document.querySelector('[data-slot="app-route-content"]'),
-    ).not.toHaveAttribute("data-entry-direction");
+    expect(within(currentRoute()).getByText("/entries")).toBeInTheDocument();
+    expect(currentRoute()).not.toHaveAttribute("data-entry-direction");
   });
 
   it("automatically treats mobile transaction editors as overlays", async () => {
@@ -142,9 +163,27 @@ describe("shared navigation transitions", () => {
 
     await user.click(screen.getByRole("link", { name: "前往目的地" }));
 
-    expect(screen.getByText("/entries/new")).toBeInTheDocument();
     expect(
-      document.querySelector('[data-slot="app-route-content"]'),
-    ).not.toHaveAttribute("data-entry-direction");
+      within(currentRoute()).getByText("/entries/new"),
+    ).toBeInTheDocument();
+    expect(currentRoute()).not.toHaveAttribute("data-entry-direction");
+    expect(
+      document.querySelector('[data-slot="edge-back-trigger"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers edge-back on hierarchical detail routes in an installed app", async () => {
+    mockMatchMedia({ mobile: true });
+    const user = userEvent.setup();
+    render(<Fixture destination="/entries/entry-1" />);
+
+    await user.click(screen.getByRole("link", { name: "前往目的地" }));
+
+    expect(
+      within(currentRoute()).getByText("/entries/entry-1"),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-slot="edge-back-trigger"]'),
+    ).toBeInTheDocument();
   });
 });

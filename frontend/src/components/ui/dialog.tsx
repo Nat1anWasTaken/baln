@@ -1,10 +1,23 @@
 import * as React from "react";
+import { AnimatePresence, animate, m, useMotionValue } from "motion/react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  modalMotion,
+  motionSpring,
+  type MotionSafeProps,
+  pressMotionProps,
+  type PressFeedback,
+  useInstantMotion,
+} from "@/lib/motion";
 import { cn } from "@/lib/utils";
+
+const MotionDialogOverlay = m.create(DialogPrimitive.Overlay);
+const MotionDialogContent = m.create(DialogPrimitive.Content);
+const MotionDialogTrigger = m.create(DialogPrimitive.Trigger);
 
 type MobileDialogProps = {
   dismissible?: boolean;
@@ -14,6 +27,7 @@ type MobileDialogProps = {
 type DialogContextValue = {
   dismissible: boolean;
   isMobile: boolean;
+  open: boolean;
   onAnimationEnd?: (open: boolean) => void;
   requestClose: () => void;
 };
@@ -21,6 +35,7 @@ type DialogContextValue = {
 const DialogContext = React.createContext<DialogContextValue>({
   dismissible: true,
   isMobile: false,
+  open: false,
   requestClose: () => undefined,
 });
 
@@ -45,28 +60,36 @@ function Dialog({
   open,
 }: DialogProps) {
   const isMobile = useIsMobile();
+  const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false);
+  const resolvedOpen = open ?? internalOpen;
   const dismissible = !isMobile || (mobileProps?.dismissible ?? true);
+  const changeOpen = React.useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen && !dismissible) return;
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [dismissible, onOpenChange],
+  );
   const requestClose = React.useCallback(() => {
-    if (dismissible) onOpenChange?.(false);
-  }, [dismissible, onOpenChange]);
+    if (dismissible) changeOpen(false);
+  }, [changeOpen, dismissible]);
 
   return (
     <DialogContext.Provider
       value={{
         dismissible,
         isMobile,
+        open: resolvedOpen,
         onAnimationEnd: isMobile ? mobileProps?.onAnimationEnd : undefined,
         requestClose,
       }}
     >
       <DialogPrimitive.Root
         data-slot="dialog"
-        defaultOpen={defaultOpen}
         modal={modal}
-        onOpenChange={(nextOpen) => {
-          if (nextOpen || dismissible) onOpenChange?.(nextOpen);
-        }}
-        open={open}
+        onOpenChange={changeOpen}
+        open={resolvedOpen}
       >
         {children}
       </DialogPrimitive.Root>
@@ -75,9 +98,18 @@ function Dialog({
 }
 
 function DialogTrigger({
+  pressFeedback = "control",
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
+}: MotionSafeProps<React.ComponentProps<typeof DialogPrimitive.Trigger>> & {
+  pressFeedback?: PressFeedback;
+}) {
+  return (
+    <MotionDialogTrigger
+      data-slot="dialog-trigger"
+      {...pressMotionProps(pressFeedback, Boolean(props.disabled))}
+      {...props}
+    />
+  );
 }
 
 function DialogPortal({
@@ -95,18 +127,23 @@ function DialogClose({
 function DialogOverlay({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: MotionSafeProps<React.ComponentProps<typeof DialogPrimitive.Overlay>>) {
   const { isMobile } = React.useContext(DialogContext);
+  const instant = useInstantMotion();
 
   return (
-    <DialogPrimitive.Overlay
+    <MotionDialogOverlay
+      forceMount
       data-slot="dialog-overlay"
       data-presentation={isMobile ? "sheet" : "dialog"}
+      initial={instant ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={
+        instant ? undefined : { opacity: 0, transition: { duration: 0.16 } }
+      }
+      transition={{ duration: instant ? 0 : 0.2 }}
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-        isMobile
-          ? "duration-(--motion-duration-drawer) ease-(--motion-easing-standard)"
-          : "isolate duration-(--motion-duration-modal) ease-(--motion-easing-standard)",
+        "fixed inset-0 isolate z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -156,6 +193,7 @@ function useSheetDrag(
     React.useState<HTMLDivElement | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
   const inertiaFrameRef = React.useRef<number | null>(null);
+  const y = useMotionValue(0);
 
   const setContentRef = React.useCallback((element: HTMLDivElement | null) => {
     contentRef.current = element;
@@ -171,14 +209,12 @@ function useSheetDrag(
 
   React.useEffect(() => stopInertia, [stopInertia]);
 
-  const setTranslation = React.useCallback((translation: number) => {
-    const content = contentRef.current;
-    if (!content) return;
-    content.style.setProperty(
-      "--sheet-drag-y",
-      `${Math.max(translation, 0)}px`,
-    );
-  }, []);
+  const setTranslation = React.useCallback(
+    (translation: number) => {
+      y.set(Math.max(translation, 0));
+    },
+    [y],
+  );
 
   const settle = React.useCallback(
     (dismiss: boolean) => {
@@ -188,16 +224,12 @@ function useSheetDrag(
 
       content.dataset.dragging = "false";
       if (dismiss) {
-        setTranslation(content.getBoundingClientRect().height);
         requestClose();
       }
-
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setTranslation(0));
-      });
+      void animate(y, 0, motionSpring.sheet);
       dragRef.current = null;
     },
-    [requestClose, setTranslation],
+    [requestClose, y],
   );
 
   const startScrollInertia = React.useCallback(
@@ -332,7 +364,8 @@ function useSheetDrag(
 
     const dismiss =
       dismissible &&
-      (drag.translation > content.getBoundingClientRect().height * 0.25 ||
+      (drag.translation >
+        Math.min(content.getBoundingClientRect().height * 0.25, 96) ||
         (drag.translation > 40 && drag.velocity > 0.55));
     if (!dismiss && drag.translation === 0 && drag.scrollElement) {
       startScrollInertia(drag.scrollElement, drag.velocity);
@@ -500,11 +533,12 @@ function useSheetDrag(
       onPointerMove,
       onPointerUp: finishPointer,
     },
+    y,
   };
 }
 
-type DialogContentProps = React.ComponentProps<
-  typeof DialogPrimitive.Content
+type DialogContentProps = MotionSafeProps<
+  React.ComponentProps<typeof DialogPrimitive.Content>
 > & {
   closeLabel?: string;
   mobileSize?: "content" | "near-full";
@@ -529,82 +563,120 @@ function DialogContent({
   const {
     dismissible,
     isMobile,
+    open,
     onAnimationEnd: onMobileAnimationEnd,
     requestClose,
   } = React.useContext(DialogContext);
   const displayHandle = dismissible && (showHandle ?? true);
-  const { contentElement, contentRef, dragHandlers } = useSheetDrag(
+  const instant = useInstantMotion();
+  const { contentElement, contentRef, dragHandlers, y } = useSheetDrag(
     isMobile && dismissible,
     dismissible,
     requestClose,
   );
 
   return (
-    <DialogPortal>
-      <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={isMobile ? contentRef : undefined}
-        data-slot="dialog-content"
-        data-presentation={isMobile ? "sheet" : "dialog"}
-        data-size={isMobile ? mobileSize : undefined}
-        className={cn(
-          isMobile
-            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-4xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none [transform:translate3d(0,var(--sheet-drag-y,0px),0)] transition-transform duration-(--motion-duration-drawer) ease-(--motion-easing-standard) will-change-transform data-[dragging=true]:duration-0 dark:ring-foreground/10 data-open:animate-in data-open:slide-in-from-bottom-full data-closed:animate-out data-closed:slide-out-to-bottom-full [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
-            : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-(--motion-duration-modal) ease-(--motion-easing-standard) outline-none sm:max-w-md dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          isMobile &&
-            mobileSize === "near-full" &&
-            "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] rounded-t-4xl",
-          className,
-        )}
-        onAnimationEnd={(event) => {
-          onAnimationEnd?.(event);
-          if (isMobile && event.currentTarget === event.target) {
-            onMobileAnimationEnd?.(
-              event.currentTarget.dataset.state === "open",
-            );
-          }
+    <DialogPortal forceMount>
+      <AnimatePresence
+        onExitComplete={() => {
+          if (isMobile) onMobileAnimationEnd?.(false);
         }}
-        onPointerCancel={(event) => {
-          onPointerCancel?.(event);
-          dragHandlers.onPointerCancel(event);
-        }}
-        onPointerDown={(event) => {
-          onPointerDown?.(event);
-          if (!event.defaultPrevented) dragHandlers.onPointerDown(event);
-        }}
-        onPointerMove={(event) => {
-          onPointerMove?.(event);
-          if (!event.defaultPrevented) dragHandlers.onPointerMove(event);
-        }}
-        onPointerUp={(event) => {
-          onPointerUp?.(event);
-          dragHandlers.onPointerUp(event);
-        }}
-        {...props}
       >
-        {isMobile && displayHandle ? (
-          <div
-            data-slot="dialog-handle"
-            aria-hidden="true"
-            className="mx-auto mt-4 h-1 w-12 shrink-0 rounded-full bg-muted-foreground/30"
-          />
-        ) : null}
-        <DialogPortalContainerContext.Provider value={contentElement}>
-          {children}
-        </DialogPortalContainerContext.Provider>
-        {dismissible && showCloseButton ? (
-          <DialogClose asChild>
-            <Button
-              variant="ghost"
-              className="absolute top-4 right-4 bg-secondary"
-              size="icon-sm"
+        {open ? (
+          <React.Fragment key="dialog-presence">
+            <DialogOverlay key="dialog-overlay" />
+            <MotionDialogContent
+              forceMount
+              key="dialog-content"
+              ref={isMobile ? contentRef : undefined}
+              data-slot="dialog-content"
+              data-presentation={isMobile ? "sheet" : "dialog"}
+              data-size={isMobile ? mobileSize : undefined}
+              initial={
+                instant ? false : isMobile ? { y: "100%" } : modalMotion.initial
+              }
+              animate={isMobile ? { y: 0 } : modalMotion.animate}
+              exit={
+                instant
+                  ? undefined
+                  : isMobile
+                    ? {
+                        y: "100%",
+                        transition: {
+                          duration: 0.24,
+                          ease: [0.32, 0.72, 0, 1],
+                        },
+                      }
+                    : {
+                        ...modalMotion.exit,
+                        transition: modalMotion.exitTransition,
+                      }
+              }
+              transition={
+                instant
+                  ? { duration: 0 }
+                  : isMobile
+                    ? motionSpring.sheet
+                    : modalMotion.transition
+              }
+              style={isMobile ? { y } : undefined}
+              className={cn(
+                isMobile
+                  ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-4xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none will-change-transform dark:ring-foreground/10 [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
+                  : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none sm:max-w-md dark:ring-foreground/10",
+                isMobile &&
+                  mobileSize === "near-full" &&
+                  "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] rounded-t-4xl",
+                className,
+              )}
+              onAnimationEnd={onAnimationEnd}
+              onAnimationComplete={() => {
+                if (isMobile) onMobileAnimationEnd?.(true);
+              }}
+              onPointerCancel={(event) => {
+                onPointerCancel?.(event);
+                dragHandlers.onPointerCancel(event);
+              }}
+              onPointerDown={(event) => {
+                onPointerDown?.(event);
+                if (!event.defaultPrevented) dragHandlers.onPointerDown(event);
+              }}
+              onPointerMove={(event) => {
+                onPointerMove?.(event);
+                if (!event.defaultPrevented) dragHandlers.onPointerMove(event);
+              }}
+              onPointerUp={(event) => {
+                onPointerUp?.(event);
+                dragHandlers.onPointerUp(event);
+              }}
+              {...props}
             >
-              <XIcon />
-              <span className="sr-only">{closeLabel}</span>
-            </Button>
-          </DialogClose>
+              {isMobile && displayHandle ? (
+                <div
+                  data-slot="dialog-handle"
+                  aria-hidden="true"
+                  className="mx-auto mt-4 h-1 w-12 shrink-0 rounded-full bg-muted-foreground/30"
+                />
+              ) : null}
+              <DialogPortalContainerContext.Provider value={contentElement}>
+                {children}
+              </DialogPortalContainerContext.Provider>
+              {dismissible && showCloseButton ? (
+                <DialogClose asChild>
+                  <Button
+                    variant="ghost"
+                    className="absolute top-4 right-4 bg-secondary"
+                    size="icon-sm"
+                  >
+                    <XIcon />
+                    <span className="sr-only">{closeLabel}</span>
+                  </Button>
+                </DialogClose>
+              ) : null}
+            </MotionDialogContent>
+          </React.Fragment>
         ) : null}
-      </DialogPrimitive.Content>
+      </AnimatePresence>
     </DialogPortal>
   );
 }

@@ -293,7 +293,8 @@ export function CategoryRanking({
           <AppLink
             key={account.account_id}
             to={entryFilterUrl(account.account_key, dateFrom, dateTo)}
-            className="touch-press grid gap-2 rounded-2xl p-4 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            pressFeedback="surface"
+            className="grid gap-2 rounded-2xl p-4 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">

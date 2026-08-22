@@ -1,4 +1,5 @@
 import { ChevronDown, Search } from "lucide-react";
+import { m } from "motion/react";
 import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
+import { motionSpring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { Account, AccountType } from "@/lib/schemas";
 
@@ -308,10 +310,17 @@ export function AccountFilterSelector({
                 >
                   已封存帳戶
                   <Badge variant="outline">{filteredArchived.length}</Badge>
-                  <ChevronDown
-                    className="transition-transform group-data-[state=open]:rotate-180"
+                  <m.span
+                    animate={{
+                      rotate: archivedForcedOpen || archivedOpen ? 180 : 0,
+                    }}
                     aria-hidden="true"
-                  />
+                    className="inline-flex"
+                    initial={false}
+                    transition={motionSpring.layout}
+                  >
+                    <ChevronDown />
+                  </m.span>
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="grid gap-4 pt-3 md:grid-cols-2 xl:grid-cols-3">

@@ -75,10 +75,11 @@ export function EntryCard({
   return (
     <AppLink
       to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
+      pressFeedback="surface"
       aria-label={`查看 ${entry.description}`}
-      className="touch-surface block rounded-4xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="block rounded-4xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <Card className="touch-rebound group-active:bg-muted/40">
+      <Card className="group-active:bg-muted/40">
         <EntrySummary
           entry={entry}
           action={
@@ -108,7 +109,7 @@ export function EntryTableRow({
         <AppLink
           to={{ pathname: `/entries/${entry.id}`, search: listSearch }}
           data-slot="entry-link"
-          className="touch-press inline-flex items-center rounded-xl font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="inline-flex items-center rounded-xl font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {entry.description}
         </AppLink>

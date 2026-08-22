@@ -1,19 +1,60 @@
 import * as React from "react";
+import { AnimatePresence, m } from "motion/react";
 import { Popover as PopoverPrimitive } from "radix-ui";
 
 import { useDialogPortalContainer } from "@/components/ui/dialog";
+import {
+  floatingMotion,
+  type MotionSafeProps,
+  pressMotionProps,
+  type PressFeedback,
+  useInstantMotion,
+} from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
+const PopoverMotionContext = React.createContext(false);
+const MotionPopoverTrigger = m.create(PopoverPrimitive.Trigger);
+const MotionPopoverContent = m.create(PopoverPrimitive.Content);
+
 function Popover({
+  children,
+  defaultOpen,
+  onOpenChange,
+  open,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />;
+  const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false);
+  const resolvedOpen = open ?? internalOpen;
+  return (
+    <PopoverMotionContext.Provider value={resolvedOpen}>
+      <PopoverPrimitive.Root
+        data-slot="popover"
+        open={resolvedOpen}
+        onOpenChange={(nextOpen) => {
+          setInternalOpen(nextOpen);
+          onOpenChange?.(nextOpen);
+        }}
+        {...props}
+      >
+        {children}
+      </PopoverPrimitive.Root>
+    </PopoverMotionContext.Provider>
+  );
 }
 
 function PopoverTrigger({
+  pressFeedback = "control",
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
+}: MotionSafeProps<React.ComponentProps<typeof PopoverPrimitive.Trigger>> & {
+  pressFeedback?: PressFeedback;
+}) {
+  return (
+    <MotionPopoverTrigger
+      data-slot="popover-trigger"
+      {...pressMotionProps(pressFeedback, Boolean(props.disabled))}
+      {...props}
+    />
+  );
 }
 
 function PopoverContent({
@@ -21,21 +62,42 @@ function PopoverContent({
   align = "center",
   sideOffset = 4,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+}: MotionSafeProps<React.ComponentProps<typeof PopoverPrimitive.Content>>) {
   const dialogPortalContainer = useDialogPortalContainer();
+  const open = React.useContext(PopoverMotionContext);
+  const instant = useInstantMotion();
 
   return (
-    <PopoverPrimitive.Portal container={dialogPortalContainer ?? undefined}>
-      <PopoverPrimitive.Content
-        data-slot="popover-content"
-        align={align}
-        sideOffset={sideOffset}
-        className={cn(
-          "z-50 flex w-72 origin-(--radix-popover-content-transform-origin) flex-col gap-4 rounded-3xl bg-popover p-4 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden duration-(--motion-duration-floating) ease-(--motion-easing-standard) data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className,
-        )}
-        {...props}
-      />
+    <PopoverPrimitive.Portal
+      forceMount
+      container={dialogPortalContainer ?? undefined}
+    >
+      <AnimatePresence>
+        {open ? (
+          <MotionPopoverContent
+            forceMount
+            data-slot="popover-content"
+            align={align}
+            sideOffset={sideOffset}
+            initial={instant ? false : floatingMotion.initial}
+            animate={floatingMotion.animate}
+            exit={
+              instant
+                ? undefined
+                : {
+                    ...floatingMotion.exit,
+                    transition: floatingMotion.exitTransition,
+                  }
+            }
+            transition={instant ? { duration: 0 } : floatingMotion.transition}
+            className={cn(
+              "z-50 flex w-72 origin-(--radix-popover-content-transform-origin) flex-col gap-4 rounded-3xl bg-popover p-4 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 outline-hidden dark:ring-foreground/10",
+              className,
+            )}
+            {...props}
+          />
+        ) : null}
+      </AnimatePresence>
     </PopoverPrimitive.Portal>
   );
 }

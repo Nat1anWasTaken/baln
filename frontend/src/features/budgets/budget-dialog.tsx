@@ -409,7 +409,7 @@ export function BudgetDialog({
                             return (
                               <label
                                 key={account.id}
-                                className="touch-surface flex min-h-11 min-w-0 items-center gap-3 rounded-2xl px-3 text-sm"
+                                className="flex min-h-11 min-w-0 items-center gap-3 rounded-2xl px-3 text-sm"
                               >
                                 <Checkbox
                                   checked={checked}

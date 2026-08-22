@@ -238,8 +238,9 @@ function MobileDayRow({ day, budgetId }: { day: BudgetDay; budgetId: string }) {
   return (
     <AppLink
       to={dayEntryUrl(budgetId, day.date)}
+      pressFeedback="surface"
       aria-label={`查看 ${formatShortDate(day.date)} 的 ${day.entry_count} 筆交易`}
-      className="touch-surface block rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="block rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       data-budget-day-row="mobile"
     >
       {content}

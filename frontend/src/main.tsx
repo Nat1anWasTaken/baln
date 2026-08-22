@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "@/App";
 import { AuthProvider } from "@/auth/auth-context";
 import { NavigationTransitionProvider } from "@/components/navigation-transition";
+import { AppMotionProvider } from "@/components/motion-provider";
 import { PwaUpdateProvider } from "@/components/pwa-update-prompt";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -81,9 +82,11 @@ createRoot(document.getElementById("root")!).render(
       onError={() => completeStartupTask("cache", "正在準備新的離線空間")}
     >
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <TooltipProvider>
-          <RouterProvider router={router} />
-        </TooltipProvider>
+        <AppMotionProvider>
+          <TooltipProvider>
+            <RouterProvider router={router} />
+          </TooltipProvider>
+        </AppMotionProvider>
       </ThemeProvider>
     </PersistQueryClientProvider>
   </StrictMode>,

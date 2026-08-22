@@ -1,4 +1,5 @@
 import { CalendarRange, CircleAlert } from "lucide-react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 import type { LinkProps, To } from "react-router-dom";
 
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { formatMoney, formatShortDate, toInclusiveDate } from "@/lib/format";
 import { budgetRemainingBreakdown } from "@/lib/budget-remaining";
+import { motionSpring } from "@/lib/motion";
 import type { BudgetPeriodUnit, BudgetStatus } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
@@ -164,20 +166,26 @@ export function BudgetCard({
                 }
                 className="flex h-2 overflow-hidden rounded-full bg-muted"
               >
-                <span
+                <m.span
+                  animate={{ width: `${spentPercent}%` }}
                   className={cn(
-                    "h-full bg-finance-expense transition-[width] duration-(--motion-duration-control) ease-(--motion-easing-standard)",
+                    "h-full bg-finance-expense",
                     overspent && "bg-destructive",
                   )}
-                  style={{ width: `${spentPercent}%` }}
+                  initial={false}
+                  transition={motionSpring.layout}
                 />
-                <span
-                  className="h-full bg-finance-income transition-[width] duration-(--motion-duration-control) ease-(--motion-easing-standard)"
-                  style={{ width: `${currentUnusedPercent}%` }}
+                <m.span
+                  animate={{ width: `${currentUnusedPercent}%` }}
+                  className="h-full bg-finance-income"
+                  initial={false}
+                  transition={motionSpring.layout}
                 />
-                <span
-                  className="h-full bg-finance-rollover transition-[width] duration-(--motion-duration-control) ease-(--motion-easing-standard)"
-                  style={{ width: `${rolloverPercent}%` }}
+                <m.span
+                  animate={{ width: `${rolloverPercent}%` }}
+                  className="h-full bg-finance-rollover"
+                  initial={false}
+                  transition={motionSpring.layout}
                 />
               </div>
               <p className="flex items-baseline justify-end gap-x-1.5 text-xs whitespace-nowrap">
@@ -235,8 +243,9 @@ export function BudgetCard({
         <AppLink
           to={to}
           state={state}
+          pressFeedback="surface"
           aria-label={`查看預算：${budget.name}`}
-          className="touch-press grid gap-(--card-spacing) rounded-t-4xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="grid gap-(--card-spacing) rounded-t-4xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           {content}
         </AppLink>
@@ -255,8 +264,9 @@ export function BudgetCard({
     <AppLink
       to={to}
       state={state}
+      pressFeedback="surface"
       aria-label={`查看預算：${budget.name}`}
-      className="touch-press block h-full rounded-4xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="block h-full rounded-4xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
     >
       {card}
     </AppLink>

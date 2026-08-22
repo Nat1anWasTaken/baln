@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
+import { m } from "motion/react";
 import { Slot } from "radix-ui";
 
 import { cn } from "@/lib/utils";
@@ -15,6 +16,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PanelLeftIcon } from "lucide-react";
+import {
+  motionSpring,
+  type MotionSafeProps,
+  pressMotionProps,
+} from "@/lib/motion";
+
+const MotionSlot = m.create(Slot.Root);
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -48,7 +56,7 @@ function SidebarProvider({
   style,
   children,
   ...props
-}: React.ComponentProps<"div"> & {
+}: MotionSafeProps<React.ComponentProps<"div">> & {
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -137,12 +145,34 @@ function Sidebar({
   className,
   children,
   ...props
-}: React.ComponentProps<"div"> & {
+}: MotionSafeProps<React.ComponentProps<"div">> & {
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
 }) {
   const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+  const iconGapWidth =
+    variant === "floating" || variant === "inset"
+      ? `calc(${SIDEBAR_WIDTH_ICON} + 1rem)`
+      : SIDEBAR_WIDTH_ICON;
+  const iconContainerWidth =
+    variant === "floating" || variant === "inset"
+      ? `calc(${SIDEBAR_WIDTH_ICON} + 1rem + 2px)`
+      : SIDEBAR_WIDTH_ICON;
+  const gapWidth = collapsed
+    ? collapsible === "offcanvas"
+      ? 0
+      : iconGapWidth
+    : SIDEBAR_WIDTH;
+  const containerWidth =
+    collapsed && collapsible === "icon" ? iconContainerWidth : SIDEBAR_WIDTH;
+  const containerX =
+    collapsed && collapsible === "offcanvas"
+      ? side === "left"
+        ? "-100%"
+        : "100%"
+      : "0%";
 
   if (collapsible === "none") {
     return (
@@ -169,26 +199,28 @@ function Sidebar({
       data-slot="sidebar"
     >
       {/* This is what handles the sidebar gap on desktop */}
-      <div
+      <m.div
         data-slot="sidebar-gap"
+        initial={false}
+        animate={{ width: gapWidth }}
+        transition={motionSpring.layout}
         className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-(--motion-duration-control) ease-(--motion-easing-standard)",
-          "group-data-[collapsible=offcanvas]:w-0",
+          "relative bg-transparent",
           "group-data-[side=right]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
         )}
       />
-      <div
+      <m.div
         data-slot="sidebar-container"
         data-side={side}
+        initial={false}
+        animate={{ width: containerWidth, x: containerX }}
+        transition={motionSpring.layout}
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-(--motion-duration-control) ease-(--motion-easing-standard) data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh data-[side=left]:left-0 data-[side=right]:right-0 md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
-            ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            ? "p-2"
+            : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
           className,
         )}
         {...props}
@@ -200,7 +232,7 @@ function Sidebar({
         >
           {children}
         </div>
-      </div>
+      </m.div>
     </div>
   );
 }
@@ -231,19 +263,23 @@ function SidebarTrigger({
   );
 }
 
-function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
+function SidebarRail({
+  className,
+  ...props
+}: MotionSafeProps<React.ComponentProps<"button">>) {
   const { toggleSidebar } = useSidebar();
 
   return (
-    <button
+    <m.button
       data-sidebar="rail"
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
       tabIndex={-1}
       onClick={toggleSidebar}
       title="Toggle Sidebar"
+      {...pressMotionProps("icon")}
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all duration-(--motion-duration-control) ease-(--motion-easing-standard) group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+        "focus-ring absolute inset-y-0 z-20 hidden w-4 group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
@@ -359,7 +395,7 @@ function SidebarGroupLabel({
       data-slot="sidebar-group-label"
       data-sidebar="group-label"
       className={cn(
-        "flex h-8 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-(--motion-duration-control) ease-(--motion-easing-standard) group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "flex h-8 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-sidebar-foreground/70 ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         className,
       )}
       {...props}
@@ -371,17 +407,18 @@ function SidebarGroupAction({
   className,
   asChild = false,
   ...props
-}: React.ComponentProps<"button"> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "button";
+}: MotionSafeProps<React.ComponentProps<"button">> & { asChild?: boolean }) {
+  const Comp = asChild ? MotionSlot : m.button;
 
   return (
     <Comp
       data-slot="sidebar-group-action"
       data-sidebar="group-action"
       className={cn(
-        "absolute top-3.5 right-3 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+        "focus-ring absolute top-3.5 right-3 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
         className,
       )}
+      {...pressMotionProps("icon", Boolean(props.disabled))}
       {...props}
     />
   );
@@ -424,7 +461,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full touch-manipulation items-center gap-2 overflow-hidden rounded-xl px-3 py-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "focus-ring peer/menu-button group/menu-button flex w-full touch-manipulation items-center gap-2 overflow-hidden rounded-xl px-3 py-2 text-left text-sm ring-sidebar-ring outline-hidden group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
@@ -453,12 +490,12 @@ function SidebarMenuButton({
   tooltip,
   className,
   ...props
-}: React.ComponentProps<"button"> & {
+}: MotionSafeProps<React.ComponentProps<"button">> & {
   asChild?: boolean;
   isActive?: boolean;
   tooltip?: string | React.ComponentProps<typeof TooltipContent>;
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
-  const Comp = asChild ? Slot.Root : "button";
+  const Comp = asChild ? MotionSlot : m.button;
   const { state } = useSidebar();
 
   const button = (
@@ -468,6 +505,7 @@ function SidebarMenuButton({
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+      {...pressMotionProps("navigation", Boolean(props.disabled))}
       {...props}
     />
   );
@@ -500,22 +538,23 @@ function SidebarMenuAction({
   asChild = false,
   showOnHover = false,
   ...props
-}: React.ComponentProps<"button"> & {
+}: MotionSafeProps<React.ComponentProps<"button">> & {
   asChild?: boolean;
   showOnHover?: boolean;
 }) {
-  const Comp = asChild ? Slot.Root : "button";
+  const Comp = asChild ? MotionSlot : m.button;
 
   return (
     <Comp
       data-slot="sidebar-menu-action"
       data-sidebar="menu-action"
       className={cn(
-        "absolute top-1.5 right-1 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-2 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+        "focus-ring absolute top-1.5 right-1 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-2 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
         showOnHover &&
           "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-sidebar-accent-foreground aria-expanded:opacity-100 md:opacity-0",
         className,
       )}
+      {...pressMotionProps("icon", Boolean(props.disabled))}
       {...props}
     />
   );

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, PiggyBank } from "lucide-react";
+import { m } from "motion/react";
 import { useRef, useState } from "react";
 
 import { useOfflineReadOnly } from "@/auth/auth-context";
@@ -9,6 +10,7 @@ import { OfflineUnavailableState } from "@/components/offline-state";
 import { CardLoading, EmptyState, ErrorState } from "@/components/page-state";
 import { Button } from "@/components/ui/button";
 import { budgetsApi } from "@/lib/api-client";
+import { motionSpring } from "@/lib/motion";
 import { queryKeys } from "@/lib/query-keys";
 
 export function BudgetCarousel() {
@@ -157,8 +159,11 @@ export function BudgetCarousel() {
               className="rounded-full"
               onClick={() => goTo(index)}
             >
-              <span
-                className={`block h-1.5 rounded-full transition-[width,background-color] ${active === index ? "w-6 bg-foreground" : "w-1.5 bg-muted-foreground/40"}`}
+              <m.span
+                animate={{ width: active === index ? 24 : 6 }}
+                className={`block h-1.5 rounded-full ${active === index ? "bg-foreground" : "bg-muted-foreground/40"}`}
+                initial={false}
+                transition={motionSpring.layout}
               />
             </Button>
           ))}

@@ -1,11 +1,19 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
+import { m } from "motion/react";
 import { Slot } from "radix-ui";
 
+import {
+  type MotionSafeProps,
+  type PressFeedback,
+  pressStateMotionProps,
+} from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
+const MotionSlot = m.create(Slot.Root);
+
 const buttonVariants = cva(
-  "group/button touch-press inline-flex shrink-0 touch-manipulation items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none before:hidden before:size-4 before:shrink-0 before:animate-spin before:rounded-full before:border-2 before:border-current before:border-r-transparent data-[loading=true]:before:block focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button focus-ring inline-flex shrink-0 touch-manipulation items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap outline-none select-none before:hidden before:size-4 before:shrink-0 before:animate-spin before:rounded-full before:border-2 before:border-current before:border-r-transparent data-[loading=true]:before:block focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -46,23 +54,56 @@ function Button({
   asChild = false,
   loading = false,
   disabled,
+  pressFeedback,
+  onPointerCancel,
+  onPointerDown,
+  onPointerLeave,
+  onPointerUp,
   ...props
-}: React.ComponentProps<"button"> &
+}: MotionSafeProps<React.ComponentProps<"button">> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
     loading?: boolean;
+    pressFeedback?: PressFeedback;
   }) {
-  const Comp = asChild ? Slot.Root : "button";
+  const [pressed, setPressed] = React.useState(false);
+  const Comp = asChild ? MotionSlot : m.button;
+  const resolvedFeedback =
+    pressFeedback ??
+    (size?.startsWith("icon")
+      ? "icon"
+      : variant === "default"
+        ? "prominent"
+        : "control");
 
   return (
     <Comp
+      data-button=""
       data-slot="button"
       data-variant={variant}
       data-size={size}
       data-loading={loading}
+      data-pressed={pressed || undefined}
       aria-busy={loading || undefined}
       disabled={disabled || loading}
       className={cn(buttonVariants({ variant, size, className }))}
+      {...pressStateMotionProps(resolvedFeedback, pressed, disabled || loading)}
+      onPointerCancel={(event) => {
+        setPressed(false);
+        onPointerCancel?.(event as React.PointerEvent<HTMLButtonElement>);
+      }}
+      onPointerDown={(event) => {
+        setPressed(true);
+        onPointerDown?.(event as React.PointerEvent<HTMLButtonElement>);
+      }}
+      onPointerLeave={(event) => {
+        setPressed(false);
+        onPointerLeave?.(event as React.PointerEvent<HTMLButtonElement>);
+      }}
+      onPointerUp={(event) => {
+        setPressed(false);
+        onPointerUp?.(event as React.PointerEvent<HTMLButtonElement>);
+      }}
       {...props}
     />
   );

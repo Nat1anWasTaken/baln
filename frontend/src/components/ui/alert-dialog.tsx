@@ -1,4 +1,5 @@
 import * as React from "react";
+import { AnimatePresence, m } from "motion/react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  modalMotion,
+  type MotionSafeProps,
+  pressMotionProps,
+  useInstantMotion,
+} from "@/lib/motion";
 import { cn } from "@/lib/utils";
+
+const MotionAlertDialogOverlay = m.create(AlertDialogPrimitive.Overlay);
+const MotionAlertDialogContent = m.create(AlertDialogPrimitive.Content);
+const MotionAlertDialogTrigger = m.create(AlertDialogPrimitive.Trigger);
 
 const AlertDialogContext = React.createContext<{
   isMobile: boolean;
+  open: boolean;
   onOpenChange?: (open: boolean) => void;
-}>({ isMobile: false });
+}>({ isMobile: false, open: false });
 
 function AlertDialog({
   children,
@@ -27,15 +39,19 @@ function AlertDialog({
   open,
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
   const isMobile = useIsMobile();
+  const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false);
+  const resolvedOpen = open ?? internalOpen;
+  const changeOpen = (nextOpen: boolean) => {
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
 
   if (isMobile) {
     return (
-      <AlertDialogContext.Provider value={{ isMobile: true, onOpenChange }}>
-        <Dialog
-          defaultOpen={defaultOpen}
-          onOpenChange={onOpenChange}
-          open={open}
-        >
+      <AlertDialogContext.Provider
+        value={{ isMobile: true, onOpenChange: changeOpen, open: resolvedOpen }}
+      >
+        <Dialog onOpenChange={changeOpen} open={resolvedOpen}>
           {children}
         </Dialog>
       </AlertDialogContext.Provider>
@@ -43,12 +59,10 @@ function AlertDialog({
   }
 
   return (
-    <AlertDialogContext.Provider value={{ isMobile: false, onOpenChange }}>
-      <AlertDialogPrimitive.Root
-        defaultOpen={defaultOpen}
-        onOpenChange={onOpenChange}
-        open={open}
-      >
+    <AlertDialogContext.Provider
+      value={{ isMobile: false, onOpenChange: changeOpen, open: resolvedOpen }}
+    >
+      <AlertDialogPrimitive.Root onOpenChange={changeOpen} open={resolvedOpen}>
         {children}
       </AlertDialogPrimitive.Root>
     </AlertDialogContext.Provider>
@@ -57,13 +71,17 @@ function AlertDialog({
 
 function AlertDialogTrigger({
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
+}: MotionSafeProps<React.ComponentProps<typeof AlertDialogPrimitive.Trigger>>) {
   const { isMobile } = React.useContext(AlertDialogContext);
   if (isMobile) {
     return <DialogTrigger data-slot="alert-dialog-trigger" {...props} />;
   }
   return (
-    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
+    <MotionAlertDialogTrigger
+      data-slot="alert-dialog-trigger"
+      {...pressMotionProps("control", Boolean(props.disabled))}
+      {...props}
+    />
   );
 }
 
@@ -71,10 +89,13 @@ function AlertDialogContent({
   className,
   size = "default",
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
+}: MotionSafeProps<
+  React.ComponentProps<typeof AlertDialogPrimitive.Content>
+> & {
   size?: "default" | "sm";
 }) {
-  const { isMobile } = React.useContext(AlertDialogContext);
+  const { isMobile, open } = React.useContext(AlertDialogContext);
+  const instant = useInstantMotion();
 
   if (isMobile) {
     return (
@@ -93,20 +114,49 @@ function AlertDialogContent({
   }
 
   return (
-    <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal">
-      <AlertDialogPrimitive.Overlay
-        data-slot="alert-dialog-overlay"
-        className="fixed inset-0 z-50 bg-black/30 duration-(--motion-duration-modal) ease-(--motion-easing-standard) supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-      />
-      <AlertDialogPrimitive.Content
-        data-slot="alert-dialog-content"
-        data-size={size}
-        className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-(--motion-duration-modal) ease-(--motion-easing-standard) outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className,
-        )}
-        {...props}
-      />
+    <AlertDialogPrimitive.Portal forceMount data-slot="alert-dialog-portal">
+      <AnimatePresence>
+        {open ? (
+          <React.Fragment key="alert-dialog-presence">
+            <MotionAlertDialogOverlay
+              forceMount
+              key="alert-dialog-overlay"
+              data-slot="alert-dialog-overlay"
+              initial={instant ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={
+                instant
+                  ? undefined
+                  : { opacity: 0, transition: { duration: 0.16 } }
+              }
+              transition={{ duration: instant ? 0 : 0.2 }}
+              className="fixed inset-0 z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-sm"
+            />
+            <MotionAlertDialogContent
+              forceMount
+              key="alert-dialog-content"
+              data-slot="alert-dialog-content"
+              data-size={size}
+              initial={instant ? false : modalMotion.initial}
+              animate={modalMotion.animate}
+              exit={
+                instant
+                  ? undefined
+                  : {
+                      ...modalMotion.exit,
+                      transition: modalMotion.exitTransition,
+                    }
+              }
+              transition={instant ? { duration: 0 } : modalMotion.transition}
+              className={cn(
+                "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md dark:ring-foreground/10",
+                className,
+              )}
+              {...props}
+            />
+          </React.Fragment>
+        ) : null}
+      </AnimatePresence>
     </AlertDialogPrimitive.Portal>
   );
 }

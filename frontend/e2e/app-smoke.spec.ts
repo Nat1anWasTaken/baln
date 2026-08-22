@@ -2116,6 +2116,24 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     });
 
     await expectTouchTarget(search);
+    await search.tap();
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-input-modality",
+      "pointer",
+    );
+    await expect(search).toHaveCSS("box-shadow", "none");
+    await page.keyboard.press("Tab");
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-input-modality",
+      "keyboard",
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(":focus")
+          .evaluate((element) => getComputedStyle(element).boxShadow),
+      )
+      .not.toBe("none");
     await expectTouchTarget(accountSearch);
     await expectTouchTarget(allAccounts);
     await expectContainedTab(page.getByRole("tab", { name: "資產" }));
@@ -2193,40 +2211,58 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
   }
 });
 
-test("uses the shared calm motion curve across interaction families", async ({
+test("uses Motion for finite interaction feedback across interaction families", async ({
   page,
 }) => {
-  const motionStyle = (selector: string) =>
+  const cssAnimationStyle = (selector: string) =>
     page.locator(selector).evaluate((element) => {
       const style = getComputedStyle(element);
       return {
-        animationDuration: style.animationDuration,
-        animationTimingFunction: style.animationTimingFunction,
+        animationName: style.animationName,
         transitionDuration: style.transitionDuration,
-        transitionTimingFunction: style.transitionTimingFunction,
       };
     });
-  const calmCurve = "cubic-bezier(0.32, 0.72, 0, 1)";
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
+  const pressTarget = page.getByRole("button", { name: "Toggle Sidebar" });
+  await pressTarget.dispatchEvent("pointerdown", {
+    button: 0,
+    isPrimary: true,
+    pointerType: "touch",
+  });
+  await expect(pressTarget).toHaveAttribute("data-pressed", "true");
+  await expect
+    .poll(() =>
+      pressTarget.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const transformScale =
+          style.transform === "none" ? 1 : new DOMMatrix(style.transform).a;
+        const independentScale = Number.parseFloat(style.scale);
+        return Number.isNaN(independentScale)
+          ? transformScale
+          : Math.min(transformScale, independentScale);
+      }),
+    )
+    .toBeLessThan(0.99);
+  await pressTarget.dispatchEvent("pointerup", {
+    button: 0,
+    isPrimary: true,
+    pointerType: "touch",
+  });
   await page.getByRole("button", { name: /測試使用者/ }).click();
 
   const dropdown = page.locator('[data-slot="dropdown-menu-content"]');
   await expect(dropdown).toBeVisible();
-  await expect
-    .poll(() => motionStyle('[data-slot="dropdown-menu-content"]'))
-    .toMatchObject({
-      animationDuration: "0.26s",
-      animationTimingFunction: calmCurve,
-    });
+  expect(
+    await cssAnimationStyle('[data-slot="dropdown-menu-content"]'),
+  ).toEqual({ animationName: "none", transitionDuration: "0s" });
 
   await page.keyboard.press("Escape");
   await expect(dropdown).not.toBeVisible();
-  const sidebarGapMotion = await motionStyle('[data-slot="sidebar-gap"]');
-  expect(sidebarGapMotion).toMatchObject({
-    transitionDuration: "0.2s",
-    transitionTimingFunction: calmCurve,
+  expect(await cssAnimationStyle('[data-slot="sidebar-gap"]')).toEqual({
+    animationName: "none",
+    transitionDuration: "0s",
   });
 
   await page.goto("/accounts");
@@ -2238,12 +2274,10 @@ test("uses the shared calm motion curve across interaction families", async ({
 
   const dialog = page.locator('[data-slot="dialog-content"]');
   await expect(dialog).toBeVisible();
-  await expect
-    .poll(() => motionStyle('[data-slot="dialog-content"]'))
-    .toMatchObject({
-      animationDuration: "0.34s",
-      animationTimingFunction: calmCurve,
-    });
+  expect(await cssAnimationStyle('[data-slot="dialog-content"]')).toEqual({
+    animationName: "none",
+    transitionDuration: "0s",
+  });
   await page.getByRole("button", { name: "取消" }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -2254,46 +2288,32 @@ test("uses the shared calm motion curve across interaction families", async ({
     '[data-slot="dialog-content"][data-presentation="sheet"]',
   );
   await expect(drawer).toBeVisible();
-  await expect
-    .poll(() =>
-      motionStyle('[data-slot="dialog-content"][data-presentation="sheet"]'),
-    )
-    .toMatchObject({
-      animationDuration: "0.5s",
-      animationTimingFunction: calmCurve,
-    });
+  expect(
+    await cssAnimationStyle(
+      '[data-slot="dialog-content"][data-presentation="sheet"]',
+    ),
+  ).toEqual({ animationName: "none", transitionDuration: "0s" });
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   await page.getByRole("button", { name: /測試使用者/ }).click();
-  await expect
-    .poll(() => motionStyle('[data-slot="dropdown-menu-content"]'))
-    .toMatchObject({
-      animationDuration: "0.001s",
-    });
+  await expect(
+    page.locator('[data-slot="dropdown-menu-content"]'),
+  ).toBeVisible();
+  expect(
+    await cssAnimationStyle('[data-slot="dropdown-menu-content"]'),
+  ).toEqual({ animationName: "none", transitionDuration: "0s" });
 });
 
-test("animates real route content without layering over the mobile editor", async ({
+test("animates route content with Motion without layering over the mobile editor", async ({
   page,
 }) => {
   await page.addInitScript(() => {
     const trackedWindow = window as Window & {
-      __balnNavigationAnimations: string[];
       __balnViewTransitionCount: number;
     };
-    trackedWindow.__balnNavigationAnimations = [];
     trackedWindow.__balnViewTransitionCount = 0;
-
-    document.addEventListener("animationstart", (event) => {
-      if (
-        event instanceof AnimationEvent &&
-        event.target instanceof Element &&
-        event.target.matches('[data-slot="app-route-content"]')
-      ) {
-        trackedWindow.__balnNavigationAnimations.push(event.animationName);
-      }
-    });
 
     if (typeof document.startViewTransition !== "function") return;
     const startViewTransition = document.startViewTransition.bind(document);
@@ -2318,23 +2338,9 @@ test("animates real route content without layering over the mobile editor", asyn
           }
         ).__balnViewTransitionCount,
     );
-  const navigationAnimations = () =>
-    page.evaluate(
-      () =>
-        (
-          window as Window & {
-            __balnNavigationAnimations: string[];
-          }
-        ).__balnNavigationAnimations,
-    );
-  const resetNavigationAnimations = () =>
-    page.evaluate(() => {
-      (
-        window as Window & {
-          __balnNavigationAnimations: string[];
-        }
-      ).__balnNavigationAnimations = [];
-    });
+  const currentRoute = page.locator(
+    '[data-slot="app-route-content"]:not([aria-hidden="true"])',
+  );
 
   const accountsNavigation = page.getByRole("link", {
     name: "帳戶",
@@ -2342,7 +2348,7 @@ test("animates real route content without layering over the mobile editor", asyn
   });
   await expect(accountsNavigation).toHaveAttribute(
     "data-navigation-transition",
-    "css",
+    "motion",
   );
   const shellGeometry = () =>
     page.evaluate(() => {
@@ -2367,18 +2373,14 @@ test("animates real route content without layering over the mobile editor", asyn
       };
     });
   const shellBeforeAnimation = await shellGeometry();
-  await page.locator("html").evaluate((element) => {
-    element.style.setProperty("--navigation-motion-duration", "1000ms");
-  });
   await accountsNavigation.click();
   await expect(page).toHaveURL(/\/accounts$/);
-  await expect(page.locator('[data-slot="app-route-content"]')).toHaveAttribute(
-    "data-entry-direction",
-    "forward",
-  );
-  await expect
-    .poll(navigationAnimations)
-    .toContain("app-navigation-in-forward");
+  await expect(currentRoute).toContainText("帳戶");
+  expect(
+    await currentRoute.evaluate(
+      (element) => getComputedStyle(element).animationName,
+    ),
+  ).toBe("none");
   const shellDuringAnimation = await shellGeometry();
   expect(shellDuringAnimation.scrollWidth).toBe(
     shellDuringAnimation.clientWidth,
@@ -2388,18 +2390,13 @@ test("animates real route content without layering over the mobile editor", asyn
   );
   expect(shellDuringAnimation.header).toEqual(shellBeforeAnimation.header);
   expect(shellDuringAnimation.sidebar).toEqual(shellBeforeAnimation.sidebar);
-  await page.locator("html").evaluate((element) => {
-    element.style.removeProperty("--navigation-motion-duration");
-  });
   await expect.poll(transitionCount).toBe(0);
   await expect(page.locator('nav[aria-label="主要導覽"]')).toBeAttached();
 
-  await resetNavigationAnimations();
   await page.getByRole("link", { name: "交易", exact: true }).click();
   await expect(page).toHaveURL(/\/entries$/);
-  await expect.poll(navigationAnimations).toContain("app-navigation-in-back");
+  await expect(currentRoute).toContainText("交易");
 
-  await resetNavigationAnimations();
   await page
     .getByRole("link", {
       name: `查看 ${entry.description}`,
@@ -2407,18 +2404,11 @@ test("animates real route content without layering over the mobile editor", asyn
     .first()
     .click();
   await expect(page).toHaveURL(new RegExp(`/entries/${entry.id}$`));
-  await expect
-    .poll(navigationAnimations)
-    .toContain("app-navigation-in-forward");
+  await expect(currentRoute).toContainText(entry.description);
 
-  await resetNavigationAnimations();
   await page.evaluate(() => history.back());
   await expect(page).toHaveURL(/\/entries$/);
-  await expect(page.locator('[data-slot="app-route-content"]')).toHaveAttribute(
-    "data-entry-direction",
-    "back",
-  );
-  await expect.poll(navigationAnimations).toContain("app-navigation-in-back");
+  await expect(currentRoute).toContainText("交易");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/entries");
@@ -2426,16 +2416,10 @@ test("animates real route content without layering over the mobile editor", asyn
     page.getByRole("navigation", { name: "主要導覽" }),
   ).toBeVisible();
   const mobileShellBeforeAnimation = await shellGeometry();
-  await page.locator("html").evaluate((element) => {
-    element.style.setProperty("--navigation-motion-duration", "1000ms");
-  });
-  await resetNavigationAnimations();
   await page.getByRole("button", { name: "更多導覽" }).click();
   await page.getByRole("menuitem", { name: "帳戶" }).click();
   await expect(page).toHaveURL(/\/accounts$/);
-  await expect
-    .poll(navigationAnimations)
-    .toContain("app-navigation-in-forward");
+  await expect(currentRoute).toContainText("帳戶");
   const mobileShellDuringAnimation = await shellGeometry();
   expect(mobileShellDuringAnimation.scrollWidth).toBe(
     mobileShellDuringAnimation.clientWidth,
@@ -2446,22 +2430,16 @@ test("animates real route content without layering over the mobile editor", asyn
   expect(mobileShellDuringAnimation.mobileNavigation).toEqual(
     mobileShellBeforeAnimation.mobileNavigation,
   );
-  await page.locator("html").evaluate((element) => {
-    element.style.removeProperty("--navigation-motion-duration");
-  });
-
   await page.goto("/entries");
-  await resetNavigationAnimations();
   await page.getByLabel("新增交易").click();
   await expect(page.getByRole("dialog", { name: "新增交易" })).toBeVisible();
-  await expect.poll(navigationAnimations).toEqual([]);
+  await expect(currentRoute).not.toHaveAttribute("data-entry-direction");
   await expect.poll(transitionCount).toBe(0);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await resetNavigationAnimations();
   await page.getByRole("button", { name: "更多導覽" }).click();
   await page.getByRole("menuitem", { name: "帳戶" }).click();
   await expect(page).toHaveURL(/\/accounts$/);
-  await expect.poll(navigationAnimations).toEqual([]);
+  await expect(currentRoute).toContainText("帳戶");
 });

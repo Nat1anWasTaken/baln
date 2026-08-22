@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { Button } from "@/components/ui/button";
@@ -27,5 +27,16 @@ describe("Button", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("aria-busy", "true");
     expect(button).toHaveAttribute("data-loading", "true");
+  });
+
+  it("tracks pointer press state for Motion feedback", () => {
+    render(<Button>儲存</Button>);
+    const button = screen.getByRole("button", { name: "儲存" });
+
+    fireEvent.pointerDown(button, { pointerType: "touch" });
+    expect(button).toHaveAttribute("data-pressed", "true");
+
+    fireEvent.pointerUp(button, { pointerType: "touch" });
+    expect(button).not.toHaveAttribute("data-pressed");
   });
 });

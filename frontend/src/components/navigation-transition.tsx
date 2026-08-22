@@ -24,6 +24,14 @@ import {
   useNavigationType,
   useResolvedPath,
 } from "react-router-dom";
+import {
+  animate,
+  m,
+  useDragControls,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -33,6 +41,17 @@ import {
   type NavigationIntent,
 } from "@/lib/navigation-transition";
 import { preloadAppRoute } from "@/lib/route-modules";
+import {
+  motionSpring,
+  type MotionSafeProps,
+  pressMotionProps,
+  type PressFeedback,
+  useInstantMotion,
+} from "@/lib/motion";
+import { cn } from "@/lib/utils";
+
+const MotionLink = m.create(Link);
+const MotionNavLink = m.create(NavLink);
 
 type TransitionMode = "idle" | "entry";
 
@@ -76,15 +95,6 @@ function motionIsAllowed() {
     typeof window.matchMedia !== "function" ||
     !window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
-}
-
-function setDocumentDirection(direction: NavigationDirection) {
-  if (typeof document === "undefined") return;
-  if (direction === "none") {
-    delete document.documentElement.dataset.navigationDirection;
-    return;
-  }
-  document.documentElement.dataset.navigationDirection = direction;
 }
 
 export function NavigationTransitionProvider({
@@ -169,7 +179,6 @@ export function NavigationTransitionProvider({
     previousLocation.current = location;
 
     if (direction === "none") {
-      setDocumentDirection("none");
       setTransition((current) => ({
         direction: "none",
         mode: "idle",
@@ -178,14 +187,12 @@ export function NavigationTransitionProvider({
       return;
     }
     if (motionAllowed) {
-      setDocumentDirection(direction);
       setTransition((current) => ({
         direction,
         mode: "entry",
         sequence: current.sequence + 1,
       }));
     } else {
-      setDocumentDirection("none");
       setTransition((current) => ({
         direction: "none",
         mode: "idle",
@@ -197,7 +204,6 @@ export function NavigationTransitionProvider({
   useEffect(() => {
     if (transition.mode === "idle") return;
     const timeout = window.setTimeout(() => {
-      setDocumentDirection("none");
       setTransition((current) =>
         current.sequence === transition.sequence
           ? {
@@ -235,7 +241,7 @@ function useNavigationTransition() {
   );
 }
 
-function useNavigationVisualTransition() {
+export function useNavigationVisualTransition() {
   return (
     useContext(NavigationVisualTransitionContext) ??
     navigationVisualTransitionFallback
@@ -286,13 +292,17 @@ function usePreparedNavigation(
   };
 }
 
-export type AppLinkProps = Omit<LinkProps, "viewTransition"> & {
+export type AppLinkProps = MotionSafeProps<
+  Omit<LinkProps, "viewTransition">
+> & {
+  pressFeedback?: PressFeedback;
   transitionIntent?: NavigationIntent;
 };
 
 export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
   function AppLink(
     {
+      className,
       defaultShouldRevalidate,
       mask,
       onFocus,
@@ -300,6 +310,7 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
       onPointerDown,
       onPointerEnter,
       preventScrollReset,
+      pressFeedback = "control",
       relative,
       reloadDocument,
       replace,
@@ -319,8 +330,9 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
     );
 
     return (
-      <Link
+      <MotionLink
         {...props}
+        className={cn("focus-ring", className)}
         ref={ref}
         to={to}
         target={target}
@@ -336,9 +348,10 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
           navigation.direction === "none"
             ? "none"
             : navigation.animate
-              ? "css"
+              ? "motion"
               : "none"
         }
+        {...pressMotionProps(pressFeedback, Boolean(props["aria-disabled"]))}
         onFocus={(event) => {
           onFocus?.(event);
           if (!event.defaultPrevented) void navigation.preload();
@@ -381,13 +394,17 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
   },
 );
 
-export type AppNavLinkProps = Omit<NavLinkProps, "viewTransition"> & {
+export type AppNavLinkProps = MotionSafeProps<
+  Omit<NavLinkProps, "style" | "viewTransition">
+> & {
+  pressFeedback?: PressFeedback;
   transitionIntent?: NavigationIntent;
 };
 
 export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
   function AppNavLink(
     {
+      className,
       defaultShouldRevalidate,
       mask,
       onFocus,
@@ -395,6 +412,7 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
       onPointerDown,
       onPointerEnter,
       preventScrollReset,
+      pressFeedback = "navigation",
       relative,
       reloadDocument,
       replace,
@@ -414,8 +432,14 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
     );
 
     return (
-      <NavLink
+      <MotionNavLink
         {...props}
+        className={(state) =>
+          cn(
+            "focus-ring",
+            typeof className === "function" ? className(state) : className,
+          )
+        }
         ref={ref}
         to={to}
         target={target}
@@ -431,9 +455,10 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
           navigation.direction === "none"
             ? "none"
             : navigation.animate
-              ? "css"
+              ? "motion"
               : "none"
         }
+        {...pressMotionProps(pressFeedback, Boolean(props["aria-disabled"]))}
         onFocus={(event) => {
           onFocus?.(event);
           if (!event.defaultPrevented) void navigation.preload();
@@ -547,32 +572,246 @@ export function useSuppressNextNavigationTransition() {
 
 export function AppRouteTransition({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const navigationType = useNavigationType();
+  const navigation = useNavigationTransition();
   const transition = useNavigationVisualTransition();
-  const entryDirection =
-    transition.mode === "entry" ? transition.direction : undefined;
+  const shouldReduceMotion = useReducedMotion();
+  const instantMotion = useInstantMotion();
+  const dragControls = useDragControls();
+  const edgeX = useMotionValue(0);
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === "undefined" ? 390 : window.innerWidth,
+  );
+  const previousX = useTransform(
+    edgeX,
+    [0, Math.max(viewportWidth, 1)],
+    [-viewportWidth * 0.25, 0],
+  );
+  const previousOpacity = useTransform(
+    edgeX,
+    [0, Math.max(viewportWidth, 1)],
+    [0.88, 1],
+  );
+  const [standalone, setStandalone] = useState(false);
+  const [edgeActive, setEdgeActive] = useState(false);
+  const frameRefs = useRef(new Map<string, HTMLDivElement>());
+  const initialLayer = {
+    key: location.key,
+    node: children,
+    pathname: location.pathname,
+  };
+  const activeRef = useRef(initialLayer);
+  const [layers, setLayers] = useState(() => [initialLayer]);
+
+  useEffect(() => {
+    const displayMode = window.matchMedia("(display-mode: standalone)");
+    const standaloneNavigator = navigator as Navigator & {
+      standalone?: boolean;
+    };
+    const update = () =>
+      setStandalone(
+        displayMode.matches || standaloneNavigator.standalone === true,
+      );
+    const resize = () => setViewportWidth(window.innerWidth);
+    update();
+    resize();
+    displayMode.addEventListener("change", update);
+    window.addEventListener("resize", resize);
+    return () => {
+      displayMode.removeEventListener("change", update);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (activeRef.current.key === location.key) {
+      activeRef.current = {
+        key: location.key,
+        node: children,
+        pathname: location.pathname,
+      };
+      return;
+    }
+    const previous = activeRef.current;
+    const direction =
+      navigationType === "POP"
+        ? "back"
+        : transition.mode === "entry"
+          ? transition.direction
+          : getNavigationDirection(previous.pathname, location.pathname);
+
+    activeRef.current = {
+      key: location.key,
+      node: children,
+      pathname: location.pathname,
+    };
+    setEdgeActive(false);
+    edgeX.set(0);
+    setLayers((current) => {
+      let next = current.map((layer) =>
+        layer.key === previous.key ? { ...layer, node: previous.node } : layer,
+      );
+      const previousIndex = next.findIndex(
+        (layer) => layer.key === previous.key,
+      );
+      const destinationIndex = next.findIndex(
+        (layer) => layer.key === location.key,
+      );
+      const destination = {
+        key: location.key,
+        node: children,
+        pathname: location.pathname,
+      };
+
+      if (navigationType === "PUSH") {
+        next = next.slice(0, previousIndex + 1);
+        next.push(destination);
+      } else if (navigationType === "REPLACE") {
+        if (previousIndex >= 0) next.splice(previousIndex, 1, destination);
+        else next.push(destination);
+      } else if (destinationIndex >= 0) {
+        next[destinationIndex] = destination;
+      } else {
+        next.push(destination);
+      }
+
+      return next.length > 8 ? next.slice(next.length - 8) : next;
+    });
+
+    if (instantMotion || direction === "none") return;
+    window.requestAnimationFrame(() => {
+      const currentFrame = frameRefs.current.get(location.key);
+      if (!currentFrame) return;
+      const enteringX = direction === "forward" ? 28 : -18;
+      animate(
+        currentFrame,
+        { opacity: [0.96, 1], x: [enteringX, 0] },
+        motionSpring.navigation,
+      );
+    });
+  }, [
+    children,
+    edgeX,
+    location.key,
+    location.pathname,
+    navigationType,
+    instantMotion,
+    transition.direction,
+    transition.mode,
+  ]);
+
+  const currentIndex = layers.findIndex((layer) => layer.key === location.key);
+  const previousLayer = currentIndex > 0 ? layers[currentIndex - 1] : undefined;
+  const edgeEligiblePath =
+    /^\/entries\/[^/]+$/.test(location.pathname) ||
+    /^\/budgets\/[^/]+$/.test(location.pathname) ||
+    location.pathname.startsWith("/settings/");
+  const edgeAvailable =
+    standalone &&
+    viewportWidth < 768 &&
+    !shouldReduceMotion &&
+    Boolean(previousLayer) &&
+    edgeEligiblePath &&
+    !isEntryEditorPath(location.pathname);
+
+  const finishEdgeDrag = (offset: number, velocity: number) => {
+    const complete =
+      offset >= viewportWidth * 0.33 || (offset >= 48 && velocity >= 650);
+    if (!complete) {
+      void animate(edgeX, 0, motionSpring.edgeReturn).then(() =>
+        setEdgeActive(false),
+      );
+      return;
+    }
+    void animate(edgeX, viewportWidth, {
+      duration: 0.18,
+      ease: [0.32, 0.72, 0, 1],
+    }).then(() => {
+      navigation.beginNavigation("back");
+      navigate(-1);
+    });
+  };
 
   return (
-    <div
-      key={location.pathname}
-      data-slot="app-route-content"
-      data-entry-direction={entryDirection}
-      className="app-route-content"
-    >
-      {children}
+    <div data-slot="app-route-viewport" className="relative isolate">
+      {layers.map((layer) => {
+        const current = layer.key === location.key;
+        const edgePrevious = edgeActive && layer.key === previousLayer?.key;
+        const visible = current || edgePrevious;
+        if (!visible) return null;
+        return (
+          <div
+            key={layer.key}
+            ref={(element) => {
+              if (element) frameRefs.current.set(layer.key, element);
+              else frameRefs.current.delete(layer.key);
+            }}
+            data-slot="app-route-content"
+            data-route-key={layer.key}
+            aria-hidden={!current || undefined}
+            inert={!current || undefined}
+            className={cn(
+              "app-route-content min-w-0",
+              current ? "relative" : "absolute inset-0",
+            )}
+            style={{ zIndex: current ? 2 : 1 }}
+          >
+            <m.div
+              drag={current ? "x" : false}
+              dragConstraints={{ left: 0, right: viewportWidth }}
+              dragControls={current ? dragControls : undefined}
+              dragElastic={0}
+              dragListener={false}
+              onDragEnd={
+                current
+                  ? (_event, info) =>
+                      finishEdgeDrag(info.offset.x, info.velocity.x)
+                  : undefined
+              }
+              style={
+                current
+                  ? { x: edgeX }
+                  : edgePrevious
+                    ? { opacity: previousOpacity, x: previousX }
+                    : undefined
+              }
+            >
+              {current ? children : layer.node}
+            </m.div>
+          </div>
+        );
+      })}
+      {edgeAvailable ? (
+        <div
+          data-slot="edge-back-trigger"
+          aria-hidden="true"
+          className="fixed top-16 bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 z-40 w-5 touch-pan-y md:hidden"
+          onPointerDown={(event) => {
+            if (event.pointerType !== "touch" || !event.isPrimary) return;
+            setEdgeActive(true);
+            dragControls.start(event, { snapToCursor: false });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 export function ActiveNavigationIndicator({
   className = "",
+  layoutId = "active-navigation",
 }: {
   className?: string;
+  layoutId?: string;
 }) {
   return (
-    <span
+    <m.span
       aria-hidden="true"
       data-slot="active-navigation-indicator"
       className={`app-active-navigation-indicator pointer-events-none absolute inset-0 -z-10 rounded-[inherit] ${className}`}
+      layoutId={layoutId}
+      transition={motionSpring.layout}
     />
   );
 }
