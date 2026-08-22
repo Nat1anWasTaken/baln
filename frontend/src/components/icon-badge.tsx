@@ -20,7 +20,7 @@ export function IconBadge({
   return (
     <div
       className={cn(
-        "flex size-12 items-center justify-center rounded-xl",
+        "flex size-12 items-center justify-center rounded-2xl",
         toneClasses[tone],
         className,
       )}

@@ -125,7 +125,7 @@ export function CreateAccountDialog({
             <Field data-invalid={submitted && !keyValid}>
               <FieldLabel htmlFor="account-key">帳戶代碼</FieldLabel>
               <div className="flex items-center gap-2">
-                <span className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-sm">
+                <span className="shrink-0 rounded-2xl bg-input/50 px-3 py-2 text-sm">
                   {type}.
                 </span>
                 <Input
@@ -272,7 +272,7 @@ export function EditAccountDialog({
             <Field data-invalid={submitted && !keyValid}>
               <FieldLabel htmlFor="edit-account-key">帳戶代碼</FieldLabel>
               <div className="flex items-center gap-2">
-                <span className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-sm">
+                <span className="shrink-0 rounded-2xl bg-input/50 px-3 py-2 text-sm">
                   {type}.
                 </span>
                 <Input

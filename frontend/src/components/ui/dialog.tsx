@@ -103,7 +103,7 @@ function DialogOverlay({
       data-slot="dialog-overlay"
       data-presentation={isMobile ? "sheet" : "dialog"}
       className={cn(
-        "fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         isMobile
           ? "duration-(--motion-duration-drawer) ease-(--motion-easing-standard)"
           : "isolate duration-(--motion-duration-modal) ease-(--motion-easing-standard)",
@@ -549,11 +549,11 @@ function DialogContent({
         data-size={isMobile ? mobileSize : undefined}
         className={cn(
           isMobile
-            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-xl border-t bg-popover text-sm text-popover-foreground outline-none [transform:translate3d(0,var(--sheet-drag-y,0px),0)] transition-transform duration-(--motion-duration-drawer) ease-(--motion-easing-standard) will-change-transform data-[dragging=true]:duration-0 data-open:animate-in data-open:slide-in-from-bottom-full data-closed:animate-out data-closed:slide-out-to-bottom-full [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
-            : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-(--motion-duration-modal) ease-(--motion-easing-standard) outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            ? "group/dialog-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-4xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none [transform:translate3d(0,var(--sheet-drag-y,0px),0)] transition-transform duration-(--motion-duration-drawer) ease-(--motion-easing-standard) will-change-transform data-[dragging=true]:duration-0 dark:ring-foreground/10 data-open:animate-in data-open:slide-in-from-bottom-full data-closed:animate-out data-closed:slide-out-to-bottom-full [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden"
+            : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-(--motion-duration-modal) ease-(--motion-easing-standard) outline-none sm:max-w-md dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           isMobile &&
             mobileSize === "near-full" &&
-            "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] rounded-t-2xl",
+            "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] rounded-t-4xl",
           className,
         )}
         onAnimationEnd={(event) => {
@@ -596,7 +596,7 @@ function DialogContent({
           <DialogClose asChild>
             <Button
               variant="ghost"
-              className={cn("absolute right-2", isMobile ? "top-3" : "top-2")}
+              className="absolute top-4 right-4 bg-secondary"
               size="icon-sm"
             >
               <XIcon />
@@ -616,7 +616,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="dialog-header"
       className={cn(
         "flex shrink-0 flex-col",
-        isMobile ? "gap-0.5 px-12 py-4 text-center" : "gap-2",
+        isMobile ? "gap-1.5 px-14 py-5 text-center" : "gap-1.5",
         className,
       )}
       {...props}
@@ -631,8 +631,8 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="dialog-body"
       className={cn(
         isMobile
-          ? "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-5"
-          : "py-5",
+          ? "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-6 py-6"
+          : "py-1",
         className,
       )}
       {...props}
@@ -653,10 +653,10 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex shrink-0 flex-col-reverse gap-2 border-t bg-muted/50 p-4",
+        "flex shrink-0 flex-col-reverse gap-2 px-6 pt-1",
         isMobile
-          ? "pb-[max(env(safe-area-inset-bottom),1rem)]"
-          : "-mx-4 -mb-4 rounded-b-xl sm:flex-row sm:justify-end",
+          ? "pb-[max(env(safe-area-inset-bottom),1.5rem)]"
+          : "px-0 pb-0 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}
@@ -678,7 +678,10 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading text-base font-medium", className)}
+      className={cn(
+        "font-heading text-base leading-none font-medium",
+        className,
+      )}
       {...props}
     />
   );

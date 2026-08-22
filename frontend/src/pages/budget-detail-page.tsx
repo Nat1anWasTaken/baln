@@ -203,7 +203,7 @@ function DayStatus({ day }: { day: BudgetDay }) {
 
 function MobileDayRow({ day, budgetId }: { day: BudgetDay; budgetId: string }) {
   const content = (
-    <div className="grid gap-3 rounded-lg border p-3">
+    <div className="grid gap-3 rounded-3xl bg-input/30 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">{formatShortDate(day.date)}</p>
@@ -239,7 +239,7 @@ function MobileDayRow({ day, budgetId }: { day: BudgetDay; budgetId: string }) {
     <AppLink
       to={dayEntryUrl(budgetId, day.date)}
       aria-label={`查看 ${formatShortDate(day.date)} 的 ${day.entry_count} 筆交易`}
-      className="touch-surface block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="touch-surface block rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       data-budget-day-row="mobile"
     >
       {content}
@@ -596,7 +596,7 @@ export function BudgetDetailPage() {
           <TabsTrigger value="statistics">跨期</TabsTrigger>
         </TabsList>
         {detailView === "period" ? (
-          <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2">
+          <div className="flex items-center justify-between gap-3 rounded-3xl bg-input/30 p-3">
             {value.has_previous ? (
               <Button asChild variant="outline" size="sm">
                 <AppLink
@@ -669,7 +669,7 @@ export function BudgetDetailPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-3">
             <Card>
-              <CardHeader className="pb-1">
+              <CardHeader>
                 <CardDescription>可用額度</CardDescription>
               </CardHeader>
               <CardContent>
@@ -688,7 +688,7 @@ export function BudgetDetailPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-1">
+              <CardHeader>
                 <CardDescription>已使用與排程</CardDescription>
               </CardHeader>
               <CardContent>
@@ -704,7 +704,7 @@ export function BudgetDetailPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="pb-1">
+              <CardHeader>
                 <CardDescription>{overspent ? "超支" : "剩餘"}</CardDescription>
               </CardHeader>
               <CardContent>
@@ -791,7 +791,7 @@ export function BudgetDetailPage() {
               </CardHeader>
               <CardContent className="flex flex-1 flex-col gap-5">
                 {value.period_kind === "upcoming" ? (
-                  <div className="flex flex-1 items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm">
+                  <div className="flex flex-1 items-center gap-2 rounded-2xl bg-muted/50 p-4 text-sm">
                     <CalendarRange
                       className="size-4 shrink-0"
                       aria-hidden="true"
@@ -842,7 +842,7 @@ export function BudgetDetailPage() {
                       </div>
                     </dl>
                     <div className="flex flex-1 flex-col justify-end gap-4">
-                      <div className="grid gap-3 rounded-lg bg-muted/50 p-3">
+                      <div className="grid gap-3 rounded-2xl bg-muted/50 p-4">
                         <div className="grid gap-1.5">
                           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
                             <span>期間進度</span>

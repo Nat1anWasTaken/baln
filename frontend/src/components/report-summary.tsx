@@ -192,10 +192,10 @@ export function SummaryCards({
     <div className="grid gap-3 sm:grid-cols-3">
       {cards.map((item) => (
         <Card key={item.tone} data-finance-tone={item.tone}>
-          <CardHeader className="pb-1">
+          <CardHeader>
             <CardDescription>{item.label}</CardDescription>
             <CardAction>
-              <span className={`block rounded-md p-1.5 ${item.iconClassName}`}>
+              <span className={`block rounded-xl p-1.5 ${item.iconClassName}`}>
                 <item.icon className="size-4" aria-hidden="true" />
               </span>
             </CardAction>
@@ -293,7 +293,7 @@ export function CategoryRanking({
           <AppLink
             key={account.account_id}
             to={entryFilterUrl(account.account_key, dateFrom, dateTo)}
-            className="touch-press grid gap-2 rounded-lg p-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="touch-press grid gap-2 rounded-2xl p-4 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -397,7 +397,7 @@ export function FinancialPositionCard({
         {rows.map((row) => (
           <div
             key={row.label}
-            className="flex items-center justify-between gap-4 rounded-lg border p-3"
+            className="flex items-center justify-between gap-4 rounded-2xl bg-input/30 p-4"
           >
             <div className="flex items-center gap-2">
               <Landmark

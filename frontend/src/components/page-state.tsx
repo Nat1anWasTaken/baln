@@ -13,7 +13,7 @@ function InsightsLoading({ stacked = false }: { stacked?: boolean }) {
       <div className="grid gap-3 sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <Card key={index} aria-hidden="true">
-            <CardHeader className="flex-row items-center justify-between pb-1">
+            <CardHeader className="flex-row items-center justify-between">
               <Skeleton className="h-4 w-14" />
               <Skeleton className="size-4 rounded-full" />
             </CardHeader>
@@ -53,7 +53,7 @@ export function CardLoading({
       </CardHeader>
       <CardContent className="grid gap-3">
         {Array.from({ length: rows }).map((_, index) => (
-          <div key={index} className="grid gap-2 rounded-lg border p-3">
+          <div key={index} className="grid gap-2 rounded-2xl bg-input/30 p-4">
             <div className="flex justify-between gap-4">
               <Skeleton className="h-4 w-24" aria-hidden="true" />
               <Skeleton className="h-4 w-20" aria-hidden="true" />
@@ -160,7 +160,7 @@ export function InlineErrorState({
 }) {
   return (
     <div
-      className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
       role="alert"
     >
       <span>{message}</span>

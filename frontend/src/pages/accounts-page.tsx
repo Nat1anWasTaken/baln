@@ -141,7 +141,7 @@ export function AccountsPage() {
         <div className="grid gap-3 md:hidden">
           {accounts.data.map((account) => (
             <Card key={account.id}>
-              <CardHeader className="pb-2">
+              <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <CardTitle className="truncate">{account.name}</CardTitle>

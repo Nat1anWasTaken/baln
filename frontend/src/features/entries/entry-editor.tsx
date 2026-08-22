@@ -365,7 +365,10 @@ export function EntryEditor({
           </CardHeader>
           <CardContent className="grid gap-3">
             {fields.map((field, index) => (
-              <div key={field.id} className="grid gap-3 rounded-lg border p-3">
+              <div
+                key={field.id}
+                className="grid gap-3 rounded-3xl bg-input/30 p-4"
+              >
                 <div className="grid gap-3 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end">
                   <Field>
                     <FieldLabel htmlFor={`posting-account-${index}`}>
@@ -483,7 +486,7 @@ export function EntryEditor({
         {form.formState.errors.root?.message ? (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+            className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
           >
             <CircleAlert
               className="mt-0.5 size-4 shrink-0"
@@ -497,7 +500,7 @@ export function EntryEditor({
       <EditorFooter
         className={cn(
           presentation === "page"
-            ? "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex shrink-0 justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur md:bottom-4"
+            ? "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex shrink-0 justify-end gap-2 rounded-4xl bg-popover/95 p-4 shadow-xl ring-1 ring-foreground/5 backdrop-blur md:bottom-4 dark:ring-foreground/10"
             : undefined,
         )}
       >

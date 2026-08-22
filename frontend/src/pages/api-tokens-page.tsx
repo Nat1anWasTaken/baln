@@ -228,7 +228,7 @@ function TokenSecretDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="grid gap-3 py-4">
-          <code className="max-h-32 overflow-auto rounded-lg bg-muted p-3 text-xs break-all select-all">
+          <code className="max-h-32 overflow-auto rounded-2xl bg-muted p-4 text-xs break-all select-all">
             {token?.token}
           </code>
           <Button

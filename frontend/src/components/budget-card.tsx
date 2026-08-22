@@ -90,7 +90,7 @@ export function BudgetCard({
       </CardHeader>
       <CardContent className="@container/budget-card grid gap-4">
         {upcoming ? (
-          <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm">
+          <div className="flex items-start gap-2 rounded-2xl bg-muted/50 p-4 text-sm">
             <CalendarRange
               className="mt-0.5 size-4 shrink-0"
               aria-hidden="true"
@@ -236,7 +236,7 @@ export function BudgetCard({
           to={to}
           state={state}
           aria-label={`查看預算：${budget.name}`}
-          className="touch-press grid gap-(--card-spacing) rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="touch-press grid gap-(--card-spacing) rounded-t-4xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           {content}
         </AppLink>
@@ -244,7 +244,7 @@ export function BudgetCard({
         content
       )}
       {footer ? (
-        <CardFooter className="min-h-11 gap-1 px-2 py-0">{footer}</CardFooter>
+        <CardFooter className="min-h-14 gap-2">{footer}</CardFooter>
       ) : null}
     </Card>
   );
@@ -256,7 +256,7 @@ export function BudgetCard({
       to={to}
       state={state}
       aria-label={`查看預算：${budget.name}`}
-      className="touch-press block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="touch-press block h-full rounded-4xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
     >
       {card}
     </AppLink>

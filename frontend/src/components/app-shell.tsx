@@ -215,7 +215,7 @@ export function AppShell() {
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex h-10 items-center gap-2 px-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="flex size-9 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-sm">
               <BrandIcon className="size-4" aria-hidden="true" />
             </div>
             <span className="font-heading font-semibold group-data-[collapsible=icon]:hidden">
@@ -259,7 +259,7 @@ export function AppShell() {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 bg-background/90 px-4 shadow-sm backdrop-blur md:px-6">
           <SidebarTrigger className="hidden md:inline-flex" />
           <h1 className="app-page-title min-w-0 flex-1 truncate font-heading text-lg font-semibold">
             {pageName}
@@ -292,7 +292,7 @@ export function AppShell() {
           )}
         </header>
         <OfflineBanner />
-        <div className="mx-auto w-full max-w-7xl flex-1 overflow-x-clip p-4 md:p-6">
+        <div className="mx-auto w-full max-w-7xl flex-1 overflow-x-clip p-4 md:p-8">
           <Suspense fallback={<PageLoading rows={4} />}>
             <AppRouteTransition>
               <Outlet />
@@ -303,7 +303,7 @@ export function AppShell() {
 
       <nav
         aria-label="主要導覽"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 items-center border-t bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 backdrop-blur md:hidden"
+        className="fixed inset-x-2 bottom-0 z-40 grid grid-cols-5 items-center rounded-t-4xl bg-popover/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-xl ring-1 ring-foreground/5 backdrop-blur md:hidden dark:ring-foreground/10"
       >
         {mobileNavigation.map((item) => {
           const isActive = item.more
@@ -321,7 +321,7 @@ export function AppShell() {
                     variant="ghost"
                     aria-label="更多導覽"
                     aria-current={isActive ? "page" : undefined}
-                    className={`touch-press-frameless relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs ${
+                    className={`touch-press-frameless relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs ${
                       isActive
                         ? "font-semibold text-foreground"
                         : "text-muted-foreground"
@@ -369,9 +369,9 @@ export function AppShell() {
                 variant="ghost"
                 disabled
                 aria-label="新增交易（離線模式不可用）"
-                className="relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs text-muted-foreground opacity-50"
+                className="relative isolate h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs text-muted-foreground opacity-50"
               >
-                <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                <span className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
                   <item.icon className="size-5" aria-hidden="true" />
                 </span>
                 <span className="truncate">{item.label}</span>
@@ -390,7 +390,7 @@ export function AppShell() {
               }
               aria-label={item.primary ? "新增交易" : undefined}
               aria-current={isActive ? "page" : undefined}
-              className={`touch-press touch-press-frameless relative isolate flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`touch-press touch-press-frameless relative isolate flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-3xl px-1 text-xs outline-none active:bg-muted active:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 isActive
                   ? "font-semibold text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -400,7 +400,7 @@ export function AppShell() {
                 <ActiveNavigationIndicator className="bg-muted/70" />
               ) : null}
               {item.primary ? (
-                <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                <span className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
                   <item.icon className="size-5" aria-hidden="true" />
                 </span>
               ) : (

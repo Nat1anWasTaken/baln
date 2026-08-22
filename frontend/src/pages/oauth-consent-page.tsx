@@ -57,7 +57,7 @@ export function OAuthConsentPage() {
             {consent.data.scopes.map((scope) => (
               <li
                 key={scope}
-                className="flex items-start gap-3 rounded-lg border p-3 text-sm"
+                className="flex items-start gap-3 rounded-2xl bg-input/30 p-4 text-sm"
               >
                 <ShieldCheck
                   className="mt-0.5 size-4 shrink-0 text-primary"

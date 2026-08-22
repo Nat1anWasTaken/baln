@@ -272,7 +272,7 @@ function SummaryCards({
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <Card>
-        <CardHeader className="pb-1">
+        <CardHeader>
           <CardDescription>跨期總支出</CardDescription>
         </CardHeader>
         <CardContent>
@@ -291,7 +291,7 @@ function SummaryCards({
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="pb-1">
+        <CardHeader>
           <CardDescription>實際日均支出</CardDescription>
         </CardHeader>
         <CardContent>
@@ -306,7 +306,7 @@ function SummaryCards({
         </CardContent>
       </Card>
       <Card>
-        <CardHeader className="pb-1">
+        <CardHeader>
           <CardDescription>平均額度使用率</CardDescription>
         </CardHeader>
         <CardContent>
@@ -786,7 +786,7 @@ export function BudgetStatisticsView({
 
       <SummaryCards periods={value.periods} summary={value.summary} />
       {value.periods.length === 1 ? (
-        <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+        <p className="rounded-2xl bg-input/30 p-4 text-sm text-muted-foreground">
           目前只有一期資料；建立更多期別後即可比較跨期變化。
         </p>
       ) : null}

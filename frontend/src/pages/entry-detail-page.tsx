@@ -143,7 +143,7 @@ export function EntryDetailPage() {
             <h2 className="mb-3 font-medium">分錄</h2>
             <div className="grid gap-2 md:hidden">
               {entry.data.postings.map((posting) => (
-                <div key={posting.id} className="rounded-lg border p-3">
+                <div key={posting.id} className="rounded-2xl bg-input/30 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium">{posting.account.name}</p>

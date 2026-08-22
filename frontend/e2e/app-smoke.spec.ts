@@ -2157,8 +2157,8 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     const archivedSwitch = page.getByRole("switch", { name: "顯示已封存" });
     const switchBounds = await archivedSwitch.boundingBox();
     expect(switchBounds).not.toBeNull();
-    expect(Math.round(switchBounds!.width)).toBe(40);
-    expect(Math.round(switchBounds!.height)).toBe(24);
+    expect(Math.round(switchBounds!.width)).toBe(44);
+    expect(Math.round(switchBounds!.height)).toBe(20);
 
     const thumbBounds = await archivedSwitch
       .locator('[data-slot="switch-thumb"]')
