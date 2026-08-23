@@ -739,6 +739,30 @@ async function expectEqualSummaryIconSizes(page: Page) {
     ]);
 }
 
+async function expectPressReleased(target: Locator) {
+  const readState = () =>
+    target.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const transform =
+        style.transform === "none"
+          ? new DOMMatrix()
+          : new DOMMatrix(style.transform);
+      const independentScale = Number.parseFloat(style.scale);
+      const scale = Number.isNaN(independentScale)
+        ? transform.a
+        : Math.min(transform.a, independentScale);
+      return [Number.parseFloat(style.opacity), scale, transform.f].map(
+        (value) => Math.round(value * 1_000) / 1_000,
+      );
+    });
+
+  try {
+    await expect.poll(readState).toEqual([1, 1, 0]);
+  } catch {
+    expect(await readState()).toEqual([1, 1, 0]);
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
 });
@@ -1270,6 +1294,7 @@ test("revalidates fresh cached data when returning to a page", async ({
         },
       });
     }
+
     await route.fallback();
   });
 
@@ -2304,6 +2329,44 @@ test("uses Motion for finite interaction feedback across interaction families", 
   expect(
     await cssAnimationStyle('[data-slot="dropdown-menu-content"]'),
   ).toEqual({ animationName: "none", transitionDuration: "0s" });
+});
+
+test("releases composed press feedback after navigation and opening overlays", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+
+  const accountNavigation = page.getByRole("link", {
+    name: "帳戶",
+    exact: true,
+  });
+  await accountNavigation.click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expectPressReleased(accountNavigation);
+
+  const createEntry = page.getByRole("link", { name: "新增交易" });
+  await createEntry.click();
+  await expect(page).toHaveURL(/\/entries\/new$/);
+  await expectPressReleased(createEntry);
+
+  await page.goto("/");
+  const userMenu = page
+    .locator('[data-slot="dropdown-menu-trigger"]')
+    .filter({ hasText: "測試使用者" });
+  await userMenu.click();
+  await expect(
+    page.locator('[data-slot="dropdown-menu-content"]'),
+  ).toBeVisible();
+  await expectPressReleased(userMenu);
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const periodStart = page.getByRole("button", { name: "每月起始日" });
+  await periodStart.click();
+  await expect(page.getByRole("button", { name: "26 日" })).toBeVisible();
+  await expectPressReleased(periodStart);
 });
 
 test("animates route content with Motion without layering over the mobile editor", async ({

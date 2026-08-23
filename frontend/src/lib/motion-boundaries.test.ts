@@ -27,4 +27,25 @@ describe("Motion ownership boundaries", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("routes press feedback through a single ownership-aware boundary", () => {
+    const directPressHelpers = /\bpress(?:State)?MotionProps\s*\(/;
+    const violations = Object.entries(interfaceSources).flatMap(
+      ([path, source]) => {
+        const errors = [];
+        if (directPressHelpers.test(source)) {
+          errors.push(`${path}: bypasses press ownership`);
+        }
+        if (
+          source.includes("useOwnedPress") &&
+          !source.includes("PressMotionBoundary")
+        ) {
+          errors.push(`${path}: does not publish press ownership`);
+        }
+        return errors;
+      },
+    );
+
+    expect(violations).toEqual([]);
+  });
 });
