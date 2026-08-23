@@ -19,7 +19,8 @@ import { PanelLeftIcon } from "lucide-react";
 import {
   motionSpring,
   type MotionSafeProps,
-  pressMotionProps,
+  PressMotionBoundary,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 
 const MotionSlot = m.create(Slot.Root);
@@ -268,27 +269,30 @@ function SidebarRail({
   ...props
 }: MotionSafeProps<React.ComponentProps<"button">>) {
   const { toggleSidebar } = useSidebar();
+  const pressMotion = useOwnedPressMotionProps("icon");
 
   return (
-    <m.button
-      data-sidebar="rail"
-      data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
-      tabIndex={-1}
-      onClick={toggleSidebar}
-      title="Toggle Sidebar"
-      {...pressMotionProps("icon")}
-      className={cn(
-        "focus-ring absolute inset-y-0 z-20 hidden w-4 group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
-        "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
-        "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
-        "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
-        "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
-        "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
-        className,
-      )}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <m.button
+        data-sidebar="rail"
+        data-slot="sidebar-rail"
+        aria-label="Toggle Sidebar"
+        tabIndex={-1}
+        onClick={toggleSidebar}
+        title="Toggle Sidebar"
+        {...pressMotion}
+        className={cn(
+          "focus-ring absolute inset-y-0 z-20 hidden w-4 group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+          "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
+          "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
+          "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
+          "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
+          "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
+          className,
+        )}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 
@@ -409,18 +413,21 @@ function SidebarGroupAction({
   ...props
 }: MotionSafeProps<React.ComponentProps<"button">> & { asChild?: boolean }) {
   const Comp = asChild ? MotionSlot : m.button;
+  const pressMotion = useOwnedPressMotionProps("icon", Boolean(props.disabled));
 
   return (
-    <Comp
-      data-slot="sidebar-group-action"
-      data-sidebar="group-action"
-      className={cn(
-        "focus-ring absolute top-3.5 right-3 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
-        className,
-      )}
-      {...pressMotionProps("icon", Boolean(props.disabled))}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <Comp
+        data-slot="sidebar-group-action"
+        data-sidebar="group-action"
+        className={cn(
+          "focus-ring absolute top-3.5 right-3 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+          className,
+        )}
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 
@@ -497,6 +504,10 @@ function SidebarMenuButton({
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? MotionSlot : m.button;
   const { state } = useSidebar();
+  const pressMotion = useOwnedPressMotionProps(
+    "navigation",
+    Boolean(props.disabled),
+  );
 
   const button = (
     <Comp
@@ -505,13 +516,13 @@ function SidebarMenuButton({
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-      {...pressMotionProps("navigation", Boolean(props.disabled))}
+      {...pressMotion}
       {...props}
     />
   );
 
   if (!tooltip) {
-    return button;
+    return <PressMotionBoundary>{button}</PressMotionBoundary>;
   }
 
   if (typeof tooltip === "string") {
@@ -521,15 +532,17 @@ function SidebarMenuButton({
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent
-        side="right"
-        align="center"
-        hidden={state !== "collapsed"}
-        {...tooltip}
-      />
-    </Tooltip>
+    <PressMotionBoundary>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent
+          side="right"
+          align="center"
+          hidden={state !== "collapsed"}
+          {...tooltip}
+        />
+      </Tooltip>
+    </PressMotionBoundary>
   );
 }
 
@@ -543,20 +556,23 @@ function SidebarMenuAction({
   showOnHover?: boolean;
 }) {
   const Comp = asChild ? MotionSlot : m.button;
+  const pressMotion = useOwnedPressMotionProps("icon", Boolean(props.disabled));
 
   return (
-    <Comp
-      data-slot="sidebar-menu-action"
-      data-sidebar="menu-action"
-      className={cn(
-        "focus-ring absolute top-1.5 right-1 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-2 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
-        showOnHover &&
-          "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-sidebar-accent-foreground aria-expanded:opacity-100 md:opacity-0",
-        className,
-      )}
-      {...pressMotionProps("icon", Boolean(props.disabled))}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <Comp
+        data-slot="sidebar-menu-action"
+        data-sidebar="menu-action"
+        className={cn(
+          "focus-ring absolute top-1.5 right-1 flex aspect-square w-5 touch-manipulation items-center justify-center rounded-xl p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[size=default]/menu-button:top-2 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0",
+          showOnHover &&
+            "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-sidebar-accent-foreground aria-expanded:opacity-100 md:opacity-0",
+          className,
+        )}
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 

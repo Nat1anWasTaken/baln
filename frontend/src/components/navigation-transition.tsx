@@ -43,10 +43,11 @@ import {
 import { preloadAppRoute } from "@/lib/route-modules";
 import {
   motionSpring,
+  PressMotionBoundary,
   type MotionSafeProps,
-  pressMotionProps,
   type PressFeedback,
   useInstantMotion,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -346,68 +347,74 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
       transitionIntent,
       reloadDocument,
     );
+    const pressMotion = useOwnedPressMotionProps(
+      pressFeedback,
+      Boolean(props["aria-disabled"]),
+    );
 
     return (
-      <MotionLink
-        {...props}
-        className={cn("focus-ring", className)}
-        ref={ref}
-        to={to}
-        target={target}
-        mask={mask}
-        state={state}
-        replace={replace}
-        relative={relative}
-        preventScrollReset={preventScrollReset}
-        reloadDocument={reloadDocument}
-        defaultShouldRevalidate={defaultShouldRevalidate}
-        viewTransition={false}
-        data-navigation-transition={
-          navigation.direction === "none"
-            ? "none"
-            : navigation.animate
-              ? "motion"
-              : "none"
-        }
-        {...pressMotionProps(pressFeedback, Boolean(props["aria-disabled"]))}
-        onFocus={(event) => {
-          onFocus?.(event);
-          if (!event.defaultPrevented) void navigation.preload();
-        }}
-        onPointerDown={(event) => {
-          onPointerDown?.(event);
-          if (!event.defaultPrevented) void navigation.preload();
-        }}
-        onPointerEnter={(event) => {
-          onPointerEnter?.(event);
-          if (!event.defaultPrevented) void navigation.preload();
-        }}
-        onClick={(event) => {
-          onClick?.(event);
-          if (!shouldHandleClick(event, target)) return;
-          if (!navigation.animate) {
-            navigation.prepare();
-            return;
+      <PressMotionBoundary>
+        <MotionLink
+          {...props}
+          className={cn("focus-ring", className)}
+          ref={ref}
+          to={to}
+          target={target}
+          mask={mask}
+          state={state}
+          replace={replace}
+          relative={relative}
+          preventScrollReset={preventScrollReset}
+          reloadDocument={reloadDocument}
+          defaultShouldRevalidate={defaultShouldRevalidate}
+          viewTransition={false}
+          data-navigation-transition={
+            navigation.direction === "none"
+              ? "none"
+              : navigation.animate
+                ? "motion"
+                : "none"
           }
-          event.preventDefault();
-          void navigation
-            .preload()
-            .catch(() => {})
-            .then(() => {
+          {...pressMotion}
+          onFocus={(event) => {
+            onFocus?.(event);
+            if (!event.defaultPrevented) void navigation.preload();
+          }}
+          onPointerDown={(event) => {
+            onPointerDown?.(event);
+            if (!event.defaultPrevented) void navigation.preload();
+          }}
+          onPointerEnter={(event) => {
+            onPointerEnter?.(event);
+            if (!event.defaultPrevented) void navigation.preload();
+          }}
+          onClick={(event) => {
+            onClick?.(event);
+            if (!shouldHandleClick(event, target)) return;
+            if (!navigation.animate) {
               navigation.prepare();
-              navigate(to, {
-                flushSync: true,
-                mask,
-                preventScrollReset,
-                relative,
-                replace,
-                state,
-                viewTransition: false,
-                defaultShouldRevalidate,
+              return;
+            }
+            event.preventDefault();
+            void navigation
+              .preload()
+              .catch(() => {})
+              .then(() => {
+                navigation.prepare();
+                navigate(to, {
+                  flushSync: true,
+                  mask,
+                  preventScrollReset,
+                  relative,
+                  replace,
+                  state,
+                  viewTransition: false,
+                  defaultShouldRevalidate,
+                });
               });
-            });
-        }}
-      />
+          }}
+        />
+      </PressMotionBoundary>
     );
   },
 );
@@ -448,73 +455,79 @@ export const AppNavLink = forwardRef<HTMLAnchorElement, AppNavLinkProps>(
       transitionIntent,
       reloadDocument,
     );
+    const pressMotion = useOwnedPressMotionProps(
+      pressFeedback,
+      Boolean(props["aria-disabled"]),
+    );
 
     return (
-      <MotionNavLink
-        {...props}
-        className={(state) =>
-          cn(
-            "focus-ring",
-            typeof className === "function" ? className(state) : className,
-          )
-        }
-        ref={ref}
-        to={to}
-        target={target}
-        mask={mask}
-        state={state}
-        replace={replace}
-        relative={relative}
-        preventScrollReset={preventScrollReset}
-        reloadDocument={reloadDocument}
-        defaultShouldRevalidate={defaultShouldRevalidate}
-        viewTransition={false}
-        data-navigation-transition={
-          navigation.direction === "none"
-            ? "none"
-            : navigation.animate
-              ? "motion"
-              : "none"
-        }
-        {...pressMotionProps(pressFeedback, Boolean(props["aria-disabled"]))}
-        onFocus={(event) => {
-          onFocus?.(event);
-          if (!event.defaultPrevented) void navigation.preload();
-        }}
-        onPointerDown={(event) => {
-          onPointerDown?.(event);
-          if (!event.defaultPrevented) void navigation.preload();
-        }}
-        onPointerEnter={(event) => {
-          onPointerEnter?.(event);
-          if (!event.defaultPrevented) void navigation.preload();
-        }}
-        onClick={(event) => {
-          onClick?.(event);
-          if (!shouldHandleClick(event, target)) return;
-          if (!navigation.animate) {
-            navigation.prepare();
-            return;
+      <PressMotionBoundary>
+        <MotionNavLink
+          {...props}
+          className={(state) =>
+            cn(
+              "focus-ring",
+              typeof className === "function" ? className(state) : className,
+            )
           }
-          event.preventDefault();
-          void navigation
-            .preload()
-            .catch(() => {})
-            .then(() => {
+          ref={ref}
+          to={to}
+          target={target}
+          mask={mask}
+          state={state}
+          replace={replace}
+          relative={relative}
+          preventScrollReset={preventScrollReset}
+          reloadDocument={reloadDocument}
+          defaultShouldRevalidate={defaultShouldRevalidate}
+          viewTransition={false}
+          data-navigation-transition={
+            navigation.direction === "none"
+              ? "none"
+              : navigation.animate
+                ? "motion"
+                : "none"
+          }
+          {...pressMotion}
+          onFocus={(event) => {
+            onFocus?.(event);
+            if (!event.defaultPrevented) void navigation.preload();
+          }}
+          onPointerDown={(event) => {
+            onPointerDown?.(event);
+            if (!event.defaultPrevented) void navigation.preload();
+          }}
+          onPointerEnter={(event) => {
+            onPointerEnter?.(event);
+            if (!event.defaultPrevented) void navigation.preload();
+          }}
+          onClick={(event) => {
+            onClick?.(event);
+            if (!shouldHandleClick(event, target)) return;
+            if (!navigation.animate) {
               navigation.prepare();
-              navigate(to, {
-                flushSync: true,
-                mask,
-                preventScrollReset,
-                relative,
-                replace,
-                state,
-                viewTransition: false,
-                defaultShouldRevalidate,
+              return;
+            }
+            event.preventDefault();
+            void navigation
+              .preload()
+              .catch(() => {})
+              .then(() => {
+                navigation.prepare();
+                navigate(to, {
+                  flushSync: true,
+                  mask,
+                  preventScrollReset,
+                  relative,
+                  replace,
+                  state,
+                  viewTransition: false,
+                  defaultShouldRevalidate,
+                });
               });
-            });
-        }}
-      />
+          }}
+        />
+      </PressMotionBoundary>
     );
   },
 );

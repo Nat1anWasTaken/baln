@@ -6,9 +6,10 @@ import { useDialogPortalContainer } from "@/components/ui/dialog";
 import {
   floatingMotion,
   type MotionSafeProps,
-  pressMotionProps,
+  PressMotionBoundary,
   type PressFeedback,
   useInstantMotion,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -48,12 +49,19 @@ function PopoverTrigger({
 }: MotionSafeProps<React.ComponentProps<typeof PopoverPrimitive.Trigger>> & {
   pressFeedback?: PressFeedback;
 }) {
+  const pressMotion = useOwnedPressMotionProps(
+    pressFeedback,
+    Boolean(props.disabled),
+  );
+
   return (
-    <MotionPopoverTrigger
-      data-slot="popover-trigger"
-      {...pressMotionProps(pressFeedback, Boolean(props.disabled))}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <MotionPopoverTrigger
+        data-slot="popover-trigger"
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 

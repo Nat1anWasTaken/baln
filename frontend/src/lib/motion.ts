@@ -3,6 +3,12 @@ import {
   type TargetAndTransition,
   type Transition,
 } from "motion/react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  type ReactNode,
+} from "react";
 
 export type PressFeedback =
   "control" | "icon" | "prominent" | "surface" | "navigation" | "none";
@@ -63,6 +69,20 @@ const pressTargets = {
 
 const pressRestTarget = { opacity: 1, scale: 1, y: 0 };
 
+const PressMotionOwnerContext = createContext(false);
+
+export function PressMotionBoundary({ children }: { children: ReactNode }) {
+  return createElement(
+    PressMotionOwnerContext.Provider,
+    { value: true },
+    children,
+  );
+}
+
+export function usePressMotionOwnership() {
+  return !useContext(PressMotionOwnerContext);
+}
+
 export function pressStateMotionProps(
   feedback: PressFeedback,
   pressed: boolean,
@@ -86,6 +106,25 @@ export function pressMotionProps(feedback: PressFeedback, disabled = false) {
       transition: motionSpring.press,
     },
   };
+}
+
+export function useOwnedPressStateMotionProps(
+  feedback: PressFeedback,
+  pressed: boolean,
+  disabled = false,
+) {
+  const ownsPressMotion = usePressMotionOwnership();
+  return ownsPressMotion
+    ? pressStateMotionProps(feedback, pressed, disabled)
+    : {};
+}
+
+export function useOwnedPressMotionProps(
+  feedback: PressFeedback,
+  disabled = false,
+) {
+  const ownsPressMotion = usePressMotionOwnership();
+  return ownsPressMotion ? pressMotionProps(feedback, disabled) : {};
 }
 
 export const floatingMotion = {

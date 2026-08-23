@@ -3,7 +3,11 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { m } from "motion/react";
 import { Toggle as TogglePrimitive } from "radix-ui";
 
-import { type MotionSafeProps, pressMotionProps } from "@/lib/motion";
+import {
+  type MotionSafeProps,
+  PressMotionBoundary,
+  useOwnedPressMotionProps,
+} from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const MotionToggle = m.create(TogglePrimitive.Root);
@@ -39,14 +43,18 @@ function Toggle({
   ...props
 }: MotionSafeProps<React.ComponentProps<typeof TogglePrimitive.Root>> &
   VariantProps<typeof toggleVariants>) {
+  const pressMotion = useOwnedPressMotionProps("control", disabled);
+
   return (
-    <MotionToggle
-      data-slot="toggle"
-      disabled={disabled}
-      className={cn(toggleVariants({ variant, size, className }))}
-      {...pressMotionProps("control", disabled)}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <MotionToggle
+        data-slot="toggle"
+        disabled={disabled}
+        className={cn(toggleVariants({ variant, size, className }))}
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 

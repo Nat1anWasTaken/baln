@@ -9,9 +9,10 @@ import {
   modalMotion,
   motionSpring,
   type MotionSafeProps,
-  pressMotionProps,
+  PressMotionBoundary,
   type PressFeedback,
   useInstantMotion,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -103,12 +104,19 @@ function DialogTrigger({
 }: MotionSafeProps<React.ComponentProps<typeof DialogPrimitive.Trigger>> & {
   pressFeedback?: PressFeedback;
 }) {
+  const pressMotion = useOwnedPressMotionProps(
+    pressFeedback,
+    Boolean(props.disabled),
+  );
+
   return (
-    <MotionDialogTrigger
-      data-slot="dialog-trigger"
-      {...pressMotionProps(pressFeedback, Boolean(props.disabled))}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <MotionDialogTrigger
+        data-slot="dialog-trigger"
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 

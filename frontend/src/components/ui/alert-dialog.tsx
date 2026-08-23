@@ -17,8 +17,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   modalMotion,
   type MotionSafeProps,
-  pressMotionProps,
+  PressMotionBoundary,
   useInstantMotion,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -73,15 +74,21 @@ function AlertDialogTrigger({
   ...props
 }: MotionSafeProps<React.ComponentProps<typeof AlertDialogPrimitive.Trigger>>) {
   const { isMobile } = React.useContext(AlertDialogContext);
+  const pressMotion = useOwnedPressMotionProps(
+    "control",
+    Boolean(props.disabled),
+  );
   if (isMobile) {
     return <DialogTrigger data-slot="alert-dialog-trigger" {...props} />;
   }
   return (
-    <MotionAlertDialogTrigger
-      data-slot="alert-dialog-trigger"
-      {...pressMotionProps("control", Boolean(props.disabled))}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <MotionAlertDialogTrigger
+        data-slot="alert-dialog-trigger"
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 

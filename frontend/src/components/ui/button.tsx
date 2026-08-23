@@ -4,9 +4,10 @@ import { m } from "motion/react";
 import { Slot } from "radix-ui";
 
 import {
+  PressMotionBoundary,
   type MotionSafeProps,
   type PressFeedback,
-  pressStateMotionProps,
+  useOwnedPressStateMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -75,37 +76,44 @@ function Button({
       : variant === "default"
         ? "prominent"
         : "control");
+  const pressMotion = useOwnedPressStateMotionProps(
+    resolvedFeedback,
+    pressed,
+    disabled || loading,
+  );
 
   return (
-    <Comp
-      data-button=""
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      data-loading={loading}
-      data-pressed={pressed || undefined}
-      aria-busy={loading || undefined}
-      disabled={disabled || loading}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...pressStateMotionProps(resolvedFeedback, pressed, disabled || loading)}
-      onPointerCancel={(event) => {
-        setPressed(false);
-        onPointerCancel?.(event as React.PointerEvent<HTMLButtonElement>);
-      }}
-      onPointerDown={(event) => {
-        setPressed(true);
-        onPointerDown?.(event as React.PointerEvent<HTMLButtonElement>);
-      }}
-      onPointerLeave={(event) => {
-        setPressed(false);
-        onPointerLeave?.(event as React.PointerEvent<HTMLButtonElement>);
-      }}
-      onPointerUp={(event) => {
-        setPressed(false);
-        onPointerUp?.(event as React.PointerEvent<HTMLButtonElement>);
-      }}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <Comp
+        data-button=""
+        data-slot="button"
+        data-variant={variant}
+        data-size={size}
+        data-loading={loading}
+        data-pressed={pressed || undefined}
+        aria-busy={loading || undefined}
+        disabled={disabled || loading}
+        className={cn(buttonVariants({ variant, size, className }))}
+        {...pressMotion}
+        onPointerCancel={(event) => {
+          setPressed(false);
+          onPointerCancel?.(event as React.PointerEvent<HTMLButtonElement>);
+        }}
+        onPointerDown={(event) => {
+          setPressed(true);
+          onPointerDown?.(event as React.PointerEvent<HTMLButtonElement>);
+        }}
+        onPointerLeave={(event) => {
+          setPressed(false);
+          onPointerLeave?.(event as React.PointerEvent<HTMLButtonElement>);
+        }}
+        onPointerUp={(event) => {
+          setPressed(false);
+          onPointerUp?.(event as React.PointerEvent<HTMLButtonElement>);
+        }}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 

@@ -8,9 +8,10 @@ import { useDialogPortalContainer } from "@/components/ui/dialog";
 import {
   floatingMotion,
   type MotionSafeProps,
-  pressMotionProps,
+  PressMotionBoundary,
   type PressFeedback,
   useInstantMotion,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
@@ -73,12 +74,19 @@ function DropdownMenuTrigger({
 > & {
   pressFeedback?: PressFeedback;
 }) {
+  const pressMotion = useOwnedPressMotionProps(
+    pressFeedback,
+    Boolean(props.disabled),
+  );
+
   return (
-    <MotionDropdownTrigger
-      data-slot="dropdown-menu-trigger"
-      {...pressMotionProps(pressFeedback, Boolean(props.disabled))}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <MotionDropdownTrigger
+        data-slot="dropdown-menu-trigger"
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 
@@ -147,19 +155,23 @@ function DropdownMenuItem({
   inset?: boolean;
   variant?: "default" | "destructive";
 }) {
+  const pressMotion = useOwnedPressMotionProps("control", disabled);
+
   return (
-    <MotionDropdownItem
-      data-slot="dropdown-menu-item"
-      data-inset={inset}
-      data-variant={variant}
-      disabled={disabled}
-      className={cn(
-        "group/dropdown-menu-item relative flex cursor-default touch-manipulation items-center gap-2.5 rounded-2xl px-3 py-2 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-9.5 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
-        className,
-      )}
-      {...pressMotionProps("control", disabled)}
-      {...props}
-    />
+    <PressMotionBoundary>
+      <MotionDropdownItem
+        data-slot="dropdown-menu-item"
+        data-inset={inset}
+        data-variant={variant}
+        disabled={disabled}
+        className={cn(
+          "group/dropdown-menu-item relative flex cursor-default touch-manipulation items-center gap-2.5 rounded-2xl px-3 py-2 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-9.5 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
+          className,
+        )}
+        {...pressMotion}
+        {...props}
+      />
+    </PressMotionBoundary>
   );
 }
 
@@ -175,29 +187,33 @@ function DropdownMenuCheckboxItem({
 > & {
   inset?: boolean;
 }) {
+  const pressMotion = useOwnedPressMotionProps("control", disabled);
+
   return (
-    <MotionDropdownCheckboxItem
-      data-slot="dropdown-menu-checkbox-item"
-      data-inset={inset}
-      disabled={disabled}
-      className={cn(
-        "relative flex cursor-default touch-manipulation items-center gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-9.5 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      checked={checked}
-      {...pressMotionProps("control", disabled)}
-      {...props}
-    >
-      <span
-        className="pointer-events-none absolute right-2 flex items-center justify-center"
-        data-slot="dropdown-menu-checkbox-item-indicator"
+    <PressMotionBoundary>
+      <MotionDropdownCheckboxItem
+        data-slot="dropdown-menu-checkbox-item"
+        data-inset={inset}
+        disabled={disabled}
+        className={cn(
+          "relative flex cursor-default touch-manipulation items-center gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-9.5 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+          className,
+        )}
+        checked={checked}
+        {...pressMotion}
+        {...props}
       >
-        <DropdownMenuPrimitive.ItemIndicator>
-          <CheckIcon />
-        </DropdownMenuPrimitive.ItemIndicator>
-      </span>
-      {children}
-    </MotionDropdownCheckboxItem>
+        <span
+          className="pointer-events-none absolute right-2 flex items-center justify-center"
+          data-slot="dropdown-menu-checkbox-item-indicator"
+        >
+          <DropdownMenuPrimitive.ItemIndicator>
+            <CheckIcon />
+          </DropdownMenuPrimitive.ItemIndicator>
+        </span>
+        {children}
+      </MotionDropdownCheckboxItem>
+    </PressMotionBoundary>
   );
 }
 
@@ -223,28 +239,32 @@ function DropdownMenuRadioItem({
 > & {
   inset?: boolean;
 }) {
+  const pressMotion = useOwnedPressMotionProps("control", disabled);
+
   return (
-    <MotionDropdownRadioItem
-      data-slot="dropdown-menu-radio-item"
-      data-inset={inset}
-      disabled={disabled}
-      className={cn(
-        "relative flex cursor-default touch-manipulation items-center gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-9.5 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      {...pressMotionProps("control", disabled)}
-      {...props}
-    >
-      <span
-        className="pointer-events-none absolute right-2 flex items-center justify-center"
-        data-slot="dropdown-menu-radio-item-indicator"
+    <PressMotionBoundary>
+      <MotionDropdownRadioItem
+        data-slot="dropdown-menu-radio-item"
+        data-inset={inset}
+        disabled={disabled}
+        className={cn(
+          "relative flex cursor-default touch-manipulation items-center gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-9.5 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+          className,
+        )}
+        {...pressMotion}
+        {...props}
       >
-        <DropdownMenuPrimitive.ItemIndicator>
-          <CheckIcon />
-        </DropdownMenuPrimitive.ItemIndicator>
-      </span>
-      {children}
-    </MotionDropdownRadioItem>
+        <span
+          className="pointer-events-none absolute right-2 flex items-center justify-center"
+          data-slot="dropdown-menu-radio-item-indicator"
+        >
+          <DropdownMenuPrimitive.ItemIndicator>
+            <CheckIcon />
+          </DropdownMenuPrimitive.ItemIndicator>
+        </span>
+        {children}
+      </MotionDropdownRadioItem>
+    </PressMotionBoundary>
   );
 }
 
@@ -334,21 +354,25 @@ function DropdownMenuSubTrigger({
 > & {
   inset?: boolean;
 }) {
+  const pressMotion = useOwnedPressMotionProps("control", disabled);
+
   return (
-    <MotionDropdownSubTrigger
-      data-slot="dropdown-menu-sub-trigger"
-      data-inset={inset}
-      disabled={disabled}
-      className={cn(
-        "flex cursor-default touch-manipulation items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-9.5 data-open:bg-accent data-open:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      {...pressMotionProps("control", disabled)}
-      {...props}
-    >
-      {children}
-      <ChevronRightIcon className="ml-auto" />
-    </MotionDropdownSubTrigger>
+    <PressMotionBoundary>
+      <MotionDropdownSubTrigger
+        data-slot="dropdown-menu-sub-trigger"
+        data-inset={inset}
+        disabled={disabled}
+        className={cn(
+          "flex cursor-default touch-manipulation items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-9.5 data-open:bg-accent data-open:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+          className,
+        )}
+        {...pressMotion}
+        {...props}
+      >
+        {children}
+        <ChevronRightIcon className="ml-auto" />
+      </MotionDropdownSubTrigger>
+    </PressMotionBoundary>
   );
 }
 

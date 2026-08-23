@@ -6,7 +6,8 @@ import { Tabs as TabsPrimitive } from "radix-ui";
 import {
   motionSpring,
   type MotionSafeProps,
-  pressMotionProps,
+  PressMotionBoundary,
+  useOwnedPressMotionProps,
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -94,30 +95,33 @@ function TabsTrigger({
 }: MotionSafeProps<React.ComponentProps<typeof TabsPrimitive.Trigger>>) {
   const motion = React.useContext(TabsMotionContext);
   const active = motion.value === value;
+  const pressMotion = useOwnedPressMotionProps("control", disabled);
   return (
-    <MotionTabsTrigger
-      data-slot="tabs-trigger"
-      disabled={disabled}
-      value={value}
-      className={cn(
-        "focus-ring relative isolate inline-flex h-[calc(100%-1px)] flex-1 touch-manipulation items-center justify-center gap-2 rounded-full border border-transparent! px-3 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start group-data-vertical/tabs:rounded-2xl group-data-vertical/tabs:px-3 group-data-vertical/tabs:py-1.5 hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
-        "data-active:text-foreground dark:data-active:border-input dark:data-active:text-foreground",
-        className,
-      )}
-      {...pressMotionProps("control", disabled)}
-      {...props}
-    >
-      {active ? (
-        <m.span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 rounded-[inherit] bg-background shadow-sm dark:bg-input/30 group-data-[variant=line]/tabs-list:inset-x-0 group-data-[variant=line]/tabs-list:top-auto group-data-[variant=line]/tabs-list:bottom-[-5px] group-data-[variant=line]/tabs-list:h-0.5 group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:bg-foreground group-data-[variant=line]/tabs-list:shadow-none"
-          layoutId={motion.layoutId}
-          transition={motionSpring.layout}
-        />
-      ) : null}
-      {children}
-    </MotionTabsTrigger>
+    <PressMotionBoundary>
+      <MotionTabsTrigger
+        data-slot="tabs-trigger"
+        disabled={disabled}
+        value={value}
+        className={cn(
+          "focus-ring relative isolate inline-flex h-[calc(100%-1px)] flex-1 touch-manipulation items-center justify-center gap-2 rounded-full border border-transparent! px-3 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start group-data-vertical/tabs:rounded-2xl group-data-vertical/tabs:px-3 group-data-vertical/tabs:py-1.5 hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+          "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
+          "data-active:text-foreground dark:data-active:border-input dark:data-active:text-foreground",
+          className,
+        )}
+        {...pressMotion}
+        {...props}
+      >
+        {active ? (
+          <m.span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 rounded-[inherit] bg-background shadow-sm dark:bg-input/30 group-data-[variant=line]/tabs-list:inset-x-0 group-data-[variant=line]/tabs-list:top-auto group-data-[variant=line]/tabs-list:bottom-[-5px] group-data-[variant=line]/tabs-list:h-0.5 group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:bg-foreground group-data-[variant=line]/tabs-list:shadow-none"
+            layoutId={motion.layoutId}
+            transition={motionSpring.layout}
+          />
+        ) : null}
+        {children}
+      </MotionTabsTrigger>
+    </PressMotionBoundary>
   );
 }
 
