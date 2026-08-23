@@ -259,8 +259,9 @@ export function AppShell() {
                           <>
                             {isActive ? (
                               <ActiveNavigationIndicator
-                                className="bg-sidebar-accent"
+                                className="bg-sidebar-primary"
                                 layoutId="sidebar-navigation"
+                                placement="rail"
                               />
                             ) : null}
                             <item.icon aria-hidden="true" />

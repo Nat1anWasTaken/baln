@@ -2335,6 +2335,7 @@ test("releases composed press feedback after navigation and opening overlays", a
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
 
   const accountNavigation = page.getByRole("link", {
@@ -2343,7 +2344,42 @@ test("releases composed press feedback after navigation and opening overlays", a
   });
   await accountNavigation.click();
   await expect(page).toHaveURL(/\/accounts$/);
+  await page.mouse.move(800, 400);
   await expectPressReleased(accountNavigation);
+  await expect(accountNavigation).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  expect(
+    await accountNavigation.evaluate((element) => ({
+      active: element.matches(":active"),
+      focusVisible: element.matches(":focus-visible"),
+      hover: element.matches(":hover"),
+    })),
+  ).toEqual({ active: false, focusVisible: false, hover: false });
+  const sidebarSelection = accountNavigation.locator(
+    '[data-slot="active-navigation-indicator"]',
+  );
+  await expect(sidebarSelection).toHaveCSS("width", "4px");
+  await expect
+    .poll(async () => {
+      const [selectionBounds, linkBounds] = await Promise.all([
+        sidebarSelection.boundingBox(),
+        accountNavigation.boundingBox(),
+      ]);
+      if (!selectionBounds || !linkBounds) return false;
+      return (
+        selectionBounds.y >= linkBounds.y &&
+        selectionBounds.y + selectionBounds.height <=
+          linkBounds.y + linkBounds.height
+      );
+    })
+    .toBe(true);
+  expect(
+    await sidebarSelection.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    ),
+  ).not.toBe("rgba(0, 0, 0, 0)");
 
   const createEntry = page.getByRole("link", { name: "新增交易" });
   await createEntry.click();
