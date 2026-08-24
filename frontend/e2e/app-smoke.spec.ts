@@ -718,6 +718,45 @@ async function dragTouch(page: Page, target: Locator, distance: number) {
   });
 }
 
+async function measureNextSheetEntrance(page: Page) {
+  return page.evaluate(
+    () =>
+      new Promise<{ height: number; maxY: number }>((resolve) => {
+        const observer = new MutationObserver(() => {
+          const sheet = document.querySelector<HTMLElement>(
+            '[data-slot="sheet-content"]',
+          );
+          if (!sheet) return;
+          observer.disconnect();
+
+          const startedAt = performance.now();
+          const height = sheet.getBoundingClientRect().height;
+          let maxY = 0;
+          let frames = 0;
+
+          const sample = () => {
+            const transform = getComputedStyle(sheet).transform;
+            const y = transform === "none" ? 0 : new DOMMatrix(transform).m42;
+            maxY = Math.max(maxY, y);
+            frames += 1;
+
+            if (
+              (maxY > 1 && y <= 1) ||
+              (frames >= 12 && maxY <= 1) ||
+              performance.now() - startedAt >= 1_500
+            ) {
+              resolve({ height, maxY });
+              return;
+            }
+            requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }),
+  );
+}
+
 async function expectEqualSummaryIconSizes(page: Page) {
   const icons = page.locator(
     '[data-finance-tone] [data-slot="card-action"] > span',
@@ -1149,7 +1188,11 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
 
     const sheet = page.getByRole("dialog", { name: "新增帳戶" });
     const trigger = sheet.getByRole("combobox", { name: "帳戶類型" });
-    await trigger.click();
+    const [entrance] = await Promise.all([
+      measureNextSheetEntrance(page),
+      trigger.click(),
+    ]);
+    expect(entrance.maxY).toBeGreaterThan(entrance.height * 0.8);
 
     const picker = page.getByRole("dialog", { name: "帳戶類型" });
     const search = picker.getByPlaceholder("搜尋帳戶類型…");

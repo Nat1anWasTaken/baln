@@ -185,7 +185,7 @@ function useSheetDrag(
     React.useState<HTMLDivElement | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
   const inertiaFrameRef = React.useRef<number | null>(null);
-  const y = useMotionValue(0);
+  const y = useMotionValue<number | string>("100%");
 
   const setContentRef = React.useCallback((element: HTMLDivElement | null) => {
     contentRef.current = element;
