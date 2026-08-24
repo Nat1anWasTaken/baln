@@ -112,6 +112,7 @@ export function CreateAccountDialog({
               <FieldLabel htmlFor="account-type">帳戶類型</FieldLabel>
               <Combobox
                 id="account-type"
+                sheetTitle="帳戶類型"
                 value={type}
                 onValueChange={(value) => setType(value as AccountType)}
                 options={accountTypes.map((value) => ({
@@ -259,6 +260,7 @@ export function EditAccountDialog({
               <FieldLabel htmlFor="edit-account-type">帳戶類型</FieldLabel>
               <Combobox
                 id="edit-account-type"
+                sheetTitle="帳戶類型"
                 value={type}
                 onValueChange={(value) => setType(value as AccountType)}
                 options={accountTypes.map((value) => ({

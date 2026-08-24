@@ -308,6 +308,7 @@ export function BudgetDialog({
                   <FieldLabel htmlFor="budget-period-unit">單位</FieldLabel>
                   <Combobox
                     id="budget-period-unit"
+                    sheetTitle="單位"
                     value={values.period_unit}
                     onValueChange={(value) =>
                       setValues((current) => ({
@@ -330,6 +331,7 @@ export function BudgetDialog({
                 </FieldLabel>
                 <Combobox
                   id="budget-rollover-mode"
+                  sheetTitle="餘額沿襲方式"
                   value={values.rollover_mode}
                   onValueChange={(value) =>
                     setValues((current) => ({

@@ -542,6 +542,7 @@ function NormalizedTrendChart({
         </CardDescription>
         <CardAction className="hidden w-44 sm:block">
           <Combobox
+            sheetTitle="期別"
             value={activeHighlighted}
             onValueChange={setHighlighted}
             options={periods.map((period) => ({
@@ -558,6 +559,7 @@ function NormalizedTrendChart({
       <CardContent>
         <div className="mb-4 sm:hidden">
           <Combobox
+            sheetTitle="期別"
             value={activeHighlighted}
             onValueChange={setHighlighted}
             options={periods.map((period) => ({

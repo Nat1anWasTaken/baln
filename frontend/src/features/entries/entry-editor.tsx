@@ -110,6 +110,7 @@ function AccountCombobox({
   return (
     <Combobox
       id={id}
+      sheetTitle="帳戶"
       value={value || undefined}
       onValueChange={onValueChange}
       placeholder={placeholder}
@@ -397,6 +398,7 @@ export function EntryEditor({
                       render={({ field: directionField }) => (
                         <Combobox
                           id={`posting-direction-${index}`}
+                          sheetTitle="方向"
                           value={directionField.value}
                           onValueChange={directionField.onChange}
                           options={[

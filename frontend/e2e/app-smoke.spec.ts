@@ -1136,7 +1136,9 @@ test("dismisses the account edit sheet with a touch drag", async ({
   }
 });
 
-test("scrolls a combobox menu inside a mobile sheet", async ({ browser }) => {
+test("opens and scrolls a mobile combobox picker without focusing search", async ({
+  browser,
+}) => {
   const context = await browser.newContext({ ...devices["Pixel 7"] });
   const page = await context.newPage();
   await mockApi(page);
@@ -1146,9 +1148,17 @@ test("scrolls a combobox menu inside a mobile sheet", async ({ browser }) => {
     await page.getByRole("button", { name: "新增帳戶" }).click();
 
     const sheet = page.getByRole("dialog", { name: "新增帳戶" });
-    await sheet.getByRole("combobox", { name: "帳戶類型" }).click();
+    const trigger = sheet.getByRole("combobox", { name: "帳戶類型" });
+    await trigger.click();
 
-    const list = page.locator('[data-slot="command-list"]');
+    const picker = page.getByRole("dialog", { name: "帳戶類型" });
+    const search = picker.getByPlaceholder("搜尋帳戶類型…");
+    await expect(picker).toBeVisible();
+    await expect(picker).toHaveAttribute("data-presentation", "sheet");
+    await expect(picker).toBeFocused();
+    await expect(search).not.toBeFocused();
+
+    const list = picker.locator('[data-slot="command-list"]');
     await expect(list).toBeVisible();
     await list.evaluate((element) => {
       element.style.maxHeight = "64px";
@@ -1163,6 +1173,13 @@ test("scrolls a combobox menu inside a mobile sheet", async ({ browser }) => {
     await expect
       .poll(() => list.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
+
+    await search.click();
+    await expect(search).toBeFocused();
+    await picker.getByRole("button", { name: "關閉" }).click();
+    await expect(picker).not.toBeVisible();
+    await expect(sheet).toBeVisible();
+    await expect(trigger).toBeFocused();
   } finally {
     await context.close();
   }

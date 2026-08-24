@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Combobox } from "@/components/ui/combobox";
@@ -38,14 +38,16 @@ function MobileDialog({ children }: { children: React.ReactNode }) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("floating content in a mobile dialog", () => {
-  it("portals combobox content into the sheet scroll boundary", async () => {
+  it("opens a combobox picker above its parent sheet", async () => {
     setMobileViewport();
+    const onValueChange = vi.fn();
 
     render(
       <MobileDialog>
         <Combobox
+          sheetTitle="帳戶類型"
           value=""
-          onValueChange={() => undefined}
+          onValueChange={onValueChange}
           options={[
             { value: "checking", label: "支票帳戶" },
             { value: "savings", label: "儲蓄帳戶" },
@@ -54,14 +56,28 @@ describe("floating content in a mobile dialog", () => {
       </MobileDialog>,
     );
 
-    fireEvent.click(screen.getByRole("combobox"));
-    await screen.findByRole("option", { name: "支票帳戶" });
+    const trigger = screen.getByRole("combobox");
+    fireEvent.click(trigger);
 
-    const sheet = screen.getByRole("dialog", { name: "編輯項目" });
-    const content = document.querySelector<HTMLElement>(
-      '[data-slot="popover-content"]',
+    const picker = await screen.findByRole("dialog", { name: "帳戶類型" });
+    const search = screen.getByPlaceholderText("搜尋…");
+    expect(picker).toHaveAttribute("data-presentation", "sheet");
+    expect(picker).toHaveFocus();
+    expect(search).not.toHaveFocus();
+    expect(
+      document.querySelector('[data-slot="popover-content"]'),
+    ).not.toBeInTheDocument();
+
+    const parentSheet = document.querySelector<HTMLElement>(
+      '[data-slot="dialog-content"]',
     );
-    expect(sheet).toContainElement(content);
+    expect(parentSheet).toHaveAttribute("data-presentation", "sheet");
+
+    fireEvent.click(screen.getByRole("option", { name: "支票帳戶" }));
+    expect(onValueChange).toHaveBeenCalledWith("checking");
+    await waitFor(() => expect(picker).not.toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "編輯項目" })).toBeVisible();
+    expect(trigger).toHaveFocus();
   });
 
   it("portals dropdown content into the sheet scroll boundary", async () => {

@@ -168,6 +168,7 @@ function CreateTokenDialog({
               <FieldLabel htmlFor="api-token-expiration">有效期限</FieldLabel>
               <Combobox
                 id="api-token-expiration"
+                sheetTitle="有效期限"
                 value={expiration}
                 onValueChange={(value) =>
                   setExpiration(value as ExpirationChoice)
