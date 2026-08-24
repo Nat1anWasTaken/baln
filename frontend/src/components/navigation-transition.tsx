@@ -830,23 +830,15 @@ export function AppRouteTransition({ children }: { children: ReactNode }) {
 export function ActiveNavigationIndicator({
   className = "",
   layoutId = "active-navigation",
-  placement = "fill",
 }: {
   className?: string;
   layoutId?: string;
-  placement?: "fill" | "rail";
 }) {
   return (
     <m.span
       aria-hidden="true"
       data-slot="active-navigation-indicator"
-      className={cn(
-        "app-active-navigation-indicator pointer-events-none absolute -z-10",
-        placement === "rail"
-          ? "inset-y-2 left-0 w-1 rounded-full"
-          : "inset-0 rounded-[inherit]",
-        className,
-      )}
+      className={`app-active-navigation-indicator pointer-events-none absolute inset-0 -z-10 rounded-[inherit] ${className}`}
       layoutId={layoutId}
       transition={motionSpring.layout}
     />

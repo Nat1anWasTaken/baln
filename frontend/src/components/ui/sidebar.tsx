@@ -502,7 +502,7 @@ function SidebarMenuButton({
   isActive?: boolean;
   tooltip?: string | React.ComponentProps<typeof TooltipContent>;
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
-  const Comp = asChild ? MotionSlot : m.button;
+  const Comp = asChild ? Slot.Root : m.button;
   const { state } = useSidebar();
   const pressMotion = useOwnedPressMotionProps(
     "navigation",
@@ -516,14 +516,17 @@ function SidebarMenuButton({
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-      {...pressMotion}
+      {...(!asChild ? pressMotion : {})}
       {...props}
     />
   );
 
-  if (!tooltip) {
-    return <PressMotionBoundary>{button}</PressMotionBoundary>;
-  }
+  if (!tooltip)
+    return asChild ? (
+      button
+    ) : (
+      <PressMotionBoundary>{button}</PressMotionBoundary>
+    );
 
   if (typeof tooltip === "string") {
     tooltip = {
@@ -531,18 +534,22 @@ function SidebarMenuButton({
     };
   }
 
-  return (
-    <PressMotionBoundary>
-      <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="center"
-          hidden={state !== "collapsed"}
-          {...tooltip}
-        />
-      </Tooltip>
-    </PressMotionBoundary>
+  const content = (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent
+        side="right"
+        align="center"
+        hidden={state !== "collapsed"}
+        {...tooltip}
+      />
+    </Tooltip>
+  );
+
+  return asChild ? (
+    content
+  ) : (
+    <PressMotionBoundary>{content}</PressMotionBoundary>
   );
 }
 

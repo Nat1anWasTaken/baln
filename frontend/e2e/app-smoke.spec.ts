@@ -2404,8 +2404,9 @@ test("releases composed press feedback after navigation and opening overlays", a
   });
   await accountNavigation.click();
   await expect(page).toHaveURL(/\/accounts$/);
-  await page.mouse.move(800, 400);
   await expectPressReleased(accountNavigation);
+
+  await page.mouse.move(800, 400);
   await expect(accountNavigation).toHaveCSS(
     "background-color",
     "rgba(0, 0, 0, 0)",
@@ -2420,7 +2421,6 @@ test("releases composed press feedback after navigation and opening overlays", a
   const sidebarSelection = accountNavigation.locator(
     '[data-slot="active-navigation-indicator"]',
   );
-  await expect(sidebarSelection).toHaveCSS("width", "4px");
   await expect
     .poll(async () => {
       const [selectionBounds, linkBounds] = await Promise.all([
@@ -2429,9 +2429,10 @@ test("releases composed press feedback after navigation and opening overlays", a
       ]);
       if (!selectionBounds || !linkBounds) return false;
       return (
-        selectionBounds.y >= linkBounds.y &&
-        selectionBounds.y + selectionBounds.height <=
-          linkBounds.y + linkBounds.height
+        Math.abs(selectionBounds.x - linkBounds.x) <= 1 &&
+        Math.abs(selectionBounds.y - linkBounds.y) <= 1 &&
+        Math.abs(selectionBounds.width - linkBounds.width) <= 1 &&
+        Math.abs(selectionBounds.height - linkBounds.height) <= 1
       );
     })
     .toBe(true);
