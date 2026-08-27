@@ -18,7 +18,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,6 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  PostingDirectionBadge,
+  PostingDirectionText,
+  postingDirectionFromAmount,
+} from "@/features/entries/posting-direction";
 import { accountTypeLabels } from "@/lib/account";
 import { entriesApi } from "@/lib/api-client";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
@@ -152,9 +156,11 @@ export function EntryDetailPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <Badge variant="outline">
-                        {posting.amount_minor > 0 ? "借方" : "貸方"}
-                      </Badge>
+                      <PostingDirectionBadge
+                        direction={postingDirectionFromAmount(
+                          posting.amount_minor,
+                        )}
+                      />
                       <p className="mt-1 font-medium tabular-nums">
                         {formatMoney(Math.abs(posting.amount_minor))}
                       </p>
@@ -175,8 +181,12 @@ export function EntryDetailPage() {
                     <TableHead>帳戶</TableHead>
                     <TableHead>類型</TableHead>
                     <TableHead>備註</TableHead>
-                    <TableHead className="text-right">借方</TableHead>
-                    <TableHead className="text-right">貸方</TableHead>
+                    <TableHead className="text-right">
+                      <PostingDirectionText direction="debit" />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <PostingDirectionText direction="credit" />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

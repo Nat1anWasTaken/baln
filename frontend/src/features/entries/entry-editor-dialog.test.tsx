@@ -148,6 +148,17 @@ describe("mobile posting editor", () => {
     const firstPosting = screen.getByRole("button", {
       name: "編輯第 1 筆分錄",
     });
+    const secondPosting = screen.getByRole("button", {
+      name: "編輯第 2 筆分錄",
+    });
+    expect(within(firstPosting).getByText("借方")).toHaveClass(
+      "bg-finance-debit/10",
+      "text-finance-debit",
+    );
+    expect(within(secondPosting).getByText("貸方")).toHaveClass(
+      "bg-finance-credit/10",
+      "text-finance-credit",
+    );
     expect(within(firstPosting).getByText("餐飲")).toBeInTheDocument();
     expect(within(firstPosting).getByText(/320/)).toBeInTheDocument();
 

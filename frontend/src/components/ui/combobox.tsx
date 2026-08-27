@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 type ComboboxOption = {
   value: string;
   label: string;
+  content?: React.ReactNode;
   keywords?: string[];
   disabled?: boolean;
 };
@@ -84,7 +85,7 @@ function Combobox({
           setOpen(false);
         }}
       >
-        {option.label}
+        {option.content ?? option.label}
       </CommandItem>
     );
   }
@@ -105,7 +106,9 @@ function Combobox({
           className,
         )}
       >
-        <span className="truncate">{selectedOption?.label ?? placeholder}</span>
+        <span className="truncate">
+          {selectedOption?.content ?? selectedOption?.label ?? placeholder}
+        </span>
         <ChevronsUpDownIcon className="text-muted-foreground" />
       </Button>
     );

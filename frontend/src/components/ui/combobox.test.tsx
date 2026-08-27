@@ -108,4 +108,42 @@ describe("Combobox", () => {
       screen.queryByRole("dialog", { name: "帳戶類型" }),
     ).not.toBeInTheDocument();
   });
+
+  it("renders custom option content without changing its searchable label", async () => {
+    setViewport(false);
+    const user = userEvent.setup();
+
+    render(
+      <Combobox
+        sheetTitle="方向"
+        value="debit"
+        onValueChange={() => undefined}
+        options={[
+          {
+            value: "debit",
+            label: "借方",
+            content: <span data-tone="debit">借方</span>,
+          },
+          {
+            value: "credit",
+            label: "貸方",
+            content: <span data-tone="credit">貸方</span>,
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("combobox");
+    expect(trigger.querySelector('[data-tone="debit"]')).toBeInTheDocument();
+
+    await user.click(trigger);
+    const search = await screen.findByPlaceholderText("搜尋…");
+    await user.type(search, "貸方");
+
+    const option = screen.getByRole("option", { name: "貸方" });
+    expect(option.querySelector('[data-tone="credit"]')).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "借方" }),
+    ).not.toBeInTheDocument();
+  });
 });

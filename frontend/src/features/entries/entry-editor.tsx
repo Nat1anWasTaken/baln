@@ -23,7 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -47,6 +46,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PostingDirectionBadge,
+  PostingDirectionText,
+  postingDirectionFromAmount,
+  postingDirectionOptions,
+  type PostingDirection,
+} from "@/features/entries/posting-direction";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { ApiError, entriesApi } from "@/lib/api-client";
@@ -62,7 +68,6 @@ import type {
   PostingInput,
 } from "@/lib/schemas";
 
-type Direction = "debit" | "credit";
 type EntrySubmission = {
   body: EntryWriteRequest;
   confirmedDistinct: boolean;
@@ -70,7 +75,7 @@ type EntrySubmission = {
 
 type EditorPosting = {
   accountKey: string;
-  direction: Direction;
+  direction: PostingDirection;
   amount: number;
   memo: string;
 };
@@ -91,7 +96,7 @@ type PostingEditorErrors = {
   amount?: string;
 };
 
-function emptyPosting(direction: Direction): EditorPosting {
+function emptyPosting(direction: PostingDirection): EditorPosting {
   return { accountKey: "", direction, amount: 0, memo: "" };
 }
 
@@ -112,8 +117,7 @@ function entryDefaults(entry: EntryResponse): EditorValues {
     note: entry.note ?? "",
     postings: entry.postings.map((posting) => ({
       accountKey: posting.account.key,
-      direction:
-        posting.amount_minor > 0 ? ("debit" as const) : ("credit" as const),
+      direction: postingDirectionFromAmount(posting.amount_minor),
       amount: Math.abs(posting.amount_minor),
       memo: posting.memo ?? "",
     })),
@@ -170,8 +174,6 @@ function MobilePostingRow({
   posting: EditorPosting;
   onClick: () => void;
 }) {
-  const directionLabel = posting.direction === "debit" ? "借方" : "貸方";
-
   return (
     <Button
       type="button"
@@ -184,11 +186,7 @@ function MobilePostingRow({
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="grid min-w-0 flex-1 gap-1.5">
           <div className="flex min-w-0 items-center gap-2">
-            <Badge
-              variant={posting.direction === "debit" ? "secondary" : "outline"}
-            >
-              {directionLabel}
-            </Badge>
+            <PostingDirectionBadge direction={posting.direction} />
             <span
               className={cn(
                 "truncate font-medium",
@@ -576,10 +574,7 @@ export function EntryEditor({
                               sheetTitle="方向"
                               value={directionField.value}
                               onValueChange={directionField.onChange}
-                              options={[
-                                { value: "debit", label: "借方" },
-                                { value: "credit", label: "貸方" },
-                              ]}
+                              options={postingDirectionOptions}
                               searchPlaceholder="搜尋方向…"
                               emptyText="找不到方向。"
                             />
@@ -640,13 +635,17 @@ export function EntryEditor({
           </CardContent>
           <CardFooter className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xs text-muted-foreground">借方合計</p>
+              <p className="text-xs">
+                <PostingDirectionText direction="debit" suffix="合計" />
+              </p>
               <p className="font-medium tabular-nums">
                 {formatMoney(debitTotal)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">貸方合計</p>
+              <p className="text-xs">
+                <PostingDirectionText direction="credit" suffix="合計" />
+              </p>
               <p className="font-medium tabular-nums">
                 {formatMoney(creditTotal)}
               </p>
@@ -763,12 +762,11 @@ export function EntryEditor({
                   sheetTitle="方向"
                   value={postingEditor?.draft.direction}
                   onValueChange={(direction) =>
-                    updatePostingDraft({ direction: direction as Direction })
+                    updatePostingDraft({
+                      direction: direction as PostingDirection,
+                    })
                   }
-                  options={[
-                    { value: "debit", label: "借方" },
-                    { value: "credit", label: "貸方" },
-                  ]}
+                  options={postingDirectionOptions}
                   searchPlaceholder="搜尋方向…"
                   emptyText="找不到方向。"
                 />
