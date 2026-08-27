@@ -1,5 +1,11 @@
 import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
-import { ArrowLeft, CircleAlert, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  CircleAlert,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,7 +37,17 @@ import { Combobox } from "@/components/ui/combobox";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { ApiError, entriesApi } from "@/lib/api-client";
 import { formatMoney, todayTaipei } from "@/lib/format";
@@ -63,6 +80,15 @@ type EditorValues = {
   description: string;
   note: string;
   postings: EditorPosting[];
+};
+
+type PostingEditorState =
+  | { kind: "existing"; index: number; draft: EditorPosting }
+  | { kind: "new"; draft: EditorPosting };
+
+type PostingEditorErrors = {
+  accountKey?: string;
+  amount?: string;
 };
 
 function emptyPosting(direction: Direction): EditorPosting {
@@ -100,12 +126,14 @@ function AccountCombobox({
   accounts,
   id,
   placeholder = "選擇帳戶",
+  ariaInvalid,
 }: {
   value: string;
   onValueChange: (value: string) => void;
   accounts: Account[];
   id?: string;
   placeholder?: string;
+  ariaInvalid?: boolean;
 }) {
   return (
     <Combobox
@@ -114,6 +142,7 @@ function AccountCombobox({
       value={value || undefined}
       onValueChange={onValueChange}
       placeholder={placeholder}
+      aria-invalid={ariaInvalid}
       searchPlaceholder="搜尋帳戶…"
       emptyText="找不到帳戶。"
       groups={accountTypes.map((type) => ({
@@ -127,6 +156,60 @@ function AccountCombobox({
           })),
       }))}
     />
+  );
+}
+
+function MobilePostingRow({
+  accountName,
+  index,
+  posting,
+  onClick,
+}: {
+  accountName?: string;
+  index: number;
+  posting: EditorPosting;
+  onClick: () => void;
+}) {
+  const directionLabel = posting.direction === "debit" ? "借方" : "貸方";
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      pressFeedback="surface"
+      aria-label={`編輯第 ${index + 1} 筆分錄`}
+      className="h-auto w-full justify-start rounded-3xl bg-input/30 p-4 text-left whitespace-normal hover:bg-input/40 dark:hover:bg-input/40"
+      onClick={onClick}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="grid min-w-0 flex-1 gap-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <Badge
+              variant={posting.direction === "debit" ? "secondary" : "outline"}
+            >
+              {directionLabel}
+            </Badge>
+            <span
+              className={cn(
+                "truncate font-medium",
+                !accountName && "text-muted-foreground",
+              )}
+            >
+              {accountName ?? "尚未選擇帳戶"}
+            </span>
+          </div>
+          {posting.memo.trim() ? (
+            <span className="truncate text-xs font-normal text-muted-foreground">
+              {posting.memo.trim()}
+            </span>
+          ) : null}
+        </div>
+        <span className="shrink-0 font-medium tabular-nums">
+          {formatMoney(Number.isFinite(posting.amount) ? posting.amount : 0)}
+        </span>
+        <ChevronRight className="text-muted-foreground" aria-hidden="true" />
+      </div>
+    </Button>
   );
 }
 
@@ -150,6 +233,13 @@ export function EntryEditor({
   const { search } = useLocation();
   const navigate = useAppNavigate();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const [postingEditor, setPostingEditor] = useState<PostingEditorState | null>(
+    null,
+  );
+  const [postingEditorOpen, setPostingEditorOpen] = useState(false);
+  const [postingEditorErrors, setPostingEditorErrors] =
+    useState<PostingEditorErrors>({});
   const [duplicateReview, setDuplicateReview] = useState<{
     submission: EntrySubmission;
     fields: PossibleDuplicateFields;
@@ -228,6 +318,73 @@ export function EntryEditor({
   useEffect(() => {
     onPendingChange?.(mutation.isPending);
   }, [mutation.isPending, onPendingChange]);
+
+  function openPostingEditor(index: number) {
+    const posting = form.getValues(`postings.${index}`);
+    setPostingEditor({
+      kind: "existing",
+      index,
+      draft: { ...posting },
+    });
+    setPostingEditorErrors({});
+    setPostingEditorOpen(true);
+  }
+
+  function openNewPostingEditor() {
+    setPostingEditor({ kind: "new", draft: emptyPosting("debit") });
+    setPostingEditorErrors({});
+    setPostingEditorOpen(true);
+  }
+
+  function closePostingEditor() {
+    setPostingEditorOpen(false);
+  }
+
+  function updatePostingDraft(patch: Partial<EditorPosting>) {
+    setPostingEditor((current) =>
+      current
+        ? {
+            ...current,
+            draft: { ...current.draft, ...patch },
+          }
+        : null,
+    );
+  }
+
+  function completePostingEditor() {
+    if (!postingEditor) return;
+
+    const errors: PostingEditorErrors = {};
+    if (!postingEditor.draft.accountKey) {
+      errors.accountKey = "請選擇帳戶。";
+    }
+    if (
+      !Number.isSafeInteger(postingEditor.draft.amount) ||
+      postingEditor.draft.amount <= 0
+    ) {
+      errors.amount = "請輸入大於零的整數金額。";
+    }
+    if (Object.keys(errors).length > 0) {
+      setPostingEditorErrors(errors);
+      return;
+    }
+
+    if (postingEditor.kind === "new") {
+      append(postingEditor.draft);
+    } else {
+      form.setValue(`postings.${postingEditor.index}`, postingEditor.draft, {
+        shouldDirty: true,
+        shouldTouch: true,
+      });
+    }
+    closePostingEditor();
+  }
+
+  function removePostingFromEditor() {
+    if (postingEditor?.kind !== "existing" || fields.length <= 2) return;
+    remove(postingEditor.index);
+    closePostingEditor();
+  }
 
   function validateAndSubmit(values: EditorValues) {
     form.clearErrors("root");
@@ -365,95 +522,117 @@ export function EntryEditor({
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            {fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="grid gap-3 rounded-3xl bg-input/30 p-4"
-              >
-                <div className="grid gap-3 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end">
-                  <Field>
-                    <FieldLabel htmlFor={`posting-account-${index}`}>
-                      帳戶
-                    </FieldLabel>
-                    <Controller
-                      control={form.control}
-                      name={`postings.${index}.accountKey`}
-                      render={({ field: accountField }) => (
-                        <AccountCombobox
-                          id={`posting-account-${index}`}
-                          value={accountField.value}
-                          onValueChange={accountField.onChange}
-                          accounts={selectableAccounts}
-                        />
-                      )}
+            {isMobile
+              ? fields.map((field, index) => {
+                  const posting =
+                    watchedPostings?.[index] ??
+                    form.getValues(`postings.${index}`);
+                  const accountName = selectableAccounts.find(
+                    (account) => account.key === posting.accountKey,
+                  )?.name;
+                  return (
+                    <MobilePostingRow
+                      key={field.id}
+                      accountName={accountName}
+                      index={index}
+                      posting={posting}
+                      onClick={() => openPostingEditor(index)}
                     />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`posting-direction-${index}`}>
-                      方向
-                    </FieldLabel>
-                    <Controller
-                      control={form.control}
-                      name={`postings.${index}.direction`}
-                      render={({ field: directionField }) => (
-                        <Combobox
-                          id={`posting-direction-${index}`}
-                          sheetTitle="方向"
-                          value={directionField.value}
-                          onValueChange={directionField.onChange}
-                          options={[
-                            { value: "debit", label: "借方" },
-                            { value: "credit", label: "貸方" },
-                          ]}
-                          searchPlaceholder="搜尋方向…"
-                          emptyText="找不到方向。"
-                        />
-                      )}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`posting-amount-${index}`}>
-                      金額
-                    </FieldLabel>
-                    <Input
-                      id={`posting-amount-${index}`}
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      {...form.register(`postings.${index}.amount`, {
-                        valueAsNumber: true,
-                      })}
-                    />
-                  </Field>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`移除第 ${index + 1} 筆分錄`}
-                    disabled={fields.length <= 2}
-                    onClick={() => remove(index)}
+                  );
+                })
+              : fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className="grid gap-3 rounded-3xl bg-input/30 p-4"
                   >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-                <Field>
-                  <FieldLabel htmlFor={`posting-memo-${index}`}>
-                    分錄備註
-                  </FieldLabel>
-                  <Input
-                    id={`posting-memo-${index}`}
-                    placeholder="選填"
-                    {...form.register(`postings.${index}.memo`)}
-                  />
-                </Field>
-              </div>
-            ))}
+                    <div className="grid gap-3 sm:grid-cols-[1fr_8rem_10rem_auto] sm:items-end">
+                      <Field>
+                        <FieldLabel htmlFor={`posting-account-${index}`}>
+                          帳戶
+                        </FieldLabel>
+                        <Controller
+                          control={form.control}
+                          name={`postings.${index}.accountKey`}
+                          render={({ field: accountField }) => (
+                            <AccountCombobox
+                              id={`posting-account-${index}`}
+                              value={accountField.value}
+                              onValueChange={accountField.onChange}
+                              accounts={selectableAccounts}
+                            />
+                          )}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`posting-direction-${index}`}>
+                          方向
+                        </FieldLabel>
+                        <Controller
+                          control={form.control}
+                          name={`postings.${index}.direction`}
+                          render={({ field: directionField }) => (
+                            <Combobox
+                              id={`posting-direction-${index}`}
+                              sheetTitle="方向"
+                              value={directionField.value}
+                              onValueChange={directionField.onChange}
+                              options={[
+                                { value: "debit", label: "借方" },
+                                { value: "credit", label: "貸方" },
+                              ]}
+                              searchPlaceholder="搜尋方向…"
+                              emptyText="找不到方向。"
+                            />
+                          )}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`posting-amount-${index}`}>
+                          金額
+                        </FieldLabel>
+                        <Input
+                          id={`posting-amount-${index}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          {...form.register(`postings.${index}.amount`, {
+                            valueAsNumber: true,
+                          })}
+                        />
+                      </Field>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`移除第 ${index + 1} 筆分錄`}
+                        disabled={fields.length <= 2}
+                        onClick={() => remove(index)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor={`posting-memo-${index}`}>
+                        分錄備註
+                      </FieldLabel>
+                      <Input
+                        id={`posting-memo-${index}`}
+                        placeholder="選填"
+                        {...form.register(`postings.${index}.memo`)}
+                      />
+                    </Field>
+                  </div>
+                ))}
             <Button
               type="button"
               variant="outline"
               className="w-fit"
-              onClick={() => append(emptyPosting("debit"))}
+              onClick={
+                isMobile
+                  ? openNewPostingEditor
+                  : () => append(emptyPosting("debit"))
+              }
             >
               <Plus aria-hidden="true" />
               新增分錄
@@ -532,6 +711,129 @@ export function EntryEditor({
           {entry ? "儲存變更" : "建立交易"}
         </Button>
       </EditorFooter>
+
+      {isMobile ? (
+        <Sheet
+          open={postingEditorOpen}
+          onAnimationEnd={(open) => {
+            if (!open) {
+              setPostingEditor(null);
+              setPostingEditorErrors({});
+            }
+          }}
+          onOpenChange={(open) => {
+            if (!open) closePostingEditor();
+          }}
+        >
+          <SheetContent closeLabel="關閉分錄編輯">
+            <SheetHeader>
+              <SheetTitle>
+                {postingEditor?.kind === "new"
+                  ? "新增分錄"
+                  : `編輯第 ${(postingEditor?.index ?? 0) + 1} 筆分錄`}
+              </SheetTitle>
+              <SheetDescription>
+                完成後才會將內容套用到交易草稿。
+              </SheetDescription>
+            </SheetHeader>
+            <SheetBody className="grid auto-rows-max content-start gap-4">
+              <Field data-invalid={Boolean(postingEditorErrors.accountKey)}>
+                <FieldLabel htmlFor="mobile-posting-account">帳戶</FieldLabel>
+                <AccountCombobox
+                  id="mobile-posting-account"
+                  value={postingEditor?.draft.accountKey ?? ""}
+                  onValueChange={(accountKey) => {
+                    updatePostingDraft({ accountKey });
+                    setPostingEditorErrors((current) => ({
+                      ...current,
+                      accountKey: undefined,
+                    }));
+                  }}
+                  accounts={selectableAccounts}
+                  ariaInvalid={Boolean(postingEditorErrors.accountKey)}
+                />
+                {postingEditorErrors.accountKey ? (
+                  <FieldError>{postingEditorErrors.accountKey}</FieldError>
+                ) : null}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="mobile-posting-direction">方向</FieldLabel>
+                <Combobox
+                  id="mobile-posting-direction"
+                  sheetTitle="方向"
+                  value={postingEditor?.draft.direction}
+                  onValueChange={(direction) =>
+                    updatePostingDraft({ direction: direction as Direction })
+                  }
+                  options={[
+                    { value: "debit", label: "借方" },
+                    { value: "credit", label: "貸方" },
+                  ]}
+                  searchPlaceholder="搜尋方向…"
+                  emptyText="找不到方向。"
+                />
+              </Field>
+              <Field data-invalid={Boolean(postingEditorErrors.amount)}>
+                <FieldLabel htmlFor="mobile-posting-amount">金額</FieldLabel>
+                <Input
+                  id="mobile-posting-amount"
+                  aria-invalid={Boolean(postingEditorErrors.amount)}
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={postingEditor?.draft.amount || ""}
+                  onChange={(event) => {
+                    updatePostingDraft({ amount: Number(event.target.value) });
+                    setPostingEditorErrors((current) => ({
+                      ...current,
+                      amount: undefined,
+                    }));
+                  }}
+                />
+                {postingEditorErrors.amount ? (
+                  <FieldError>{postingEditorErrors.amount}</FieldError>
+                ) : null}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="mobile-posting-memo">分錄備註</FieldLabel>
+                <Input
+                  id="mobile-posting-memo"
+                  placeholder="選填"
+                  value={postingEditor?.draft.memo ?? ""}
+                  onChange={(event) =>
+                    updatePostingDraft({ memo: event.target.value })
+                  }
+                />
+              </Field>
+            </SheetBody>
+            <SheetFooter>
+              {postingEditor?.kind === "existing" ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  aria-label={`移除第 ${postingEditor.index + 1} 筆分錄`}
+                  disabled={fields.length <= 2}
+                  onClick={removePostingFromEditor}
+                >
+                  <Trash2 aria-hidden="true" />
+                  移除分錄
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closePostingEditor}
+              >
+                取消
+              </Button>
+              <Button type="button" onClick={completePostingEditor}>
+                完成
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      ) : null}
 
       <AlertDialog
         open={duplicateReview !== null}

@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EntryEditor } from "@/features/entries/entry-editor";
 import { API_BASE_URL } from "@/lib/api-client";
@@ -69,6 +69,40 @@ const existingEntry: EntryResponse = {
   ],
 };
 
+function setMobileViewport() {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      addEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: query === "(max-width: 767px)",
+      media: query,
+      onchange: null,
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+function renderMobileEditor(entry?: EntryResponse) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <MemoryRouter initialEntries={["/entries/new"]}>
+      <QueryClientProvider client={queryClient}>
+        <Routes>
+          <Route
+            path="/entries/new"
+            element={<EntryEditor accounts={accounts} entry={entry} />}
+          />
+        </Routes>
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+}
+
 function renderEditor() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -104,6 +138,129 @@ async function fillEntry(user: ReturnType<typeof userEvent.setup>) {
     await user.type(amountInput, "320");
   }
 }
+
+describe("mobile posting editor", () => {
+  it("discards canceled edits and applies completed edits to the summary", async () => {
+    setMobileViewport();
+    const user = userEvent.setup();
+    renderMobileEditor(existingEntry);
+
+    const firstPosting = screen.getByRole("button", {
+      name: "編輯第 1 筆分錄",
+    });
+    expect(within(firstPosting).getByText("餐飲")).toBeInTheDocument();
+    expect(within(firstPosting).getByText(/320/)).toBeInTheDocument();
+
+    await user.click(firstPosting);
+    let postingSheet = await screen.findByRole("dialog", {
+      name: "編輯第 1 筆分錄",
+    });
+    await user.clear(within(postingSheet).getByLabelText("金額"));
+    await user.type(within(postingSheet).getByLabelText("金額"), "999");
+    await user.type(within(postingSheet).getByLabelText("分錄備註"), "不保留");
+    await user.click(
+      within(postingSheet).getByRole("button", { name: "取消" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "編輯第 1 筆分錄" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    await user.click(firstPosting);
+    postingSheet = await screen.findByRole("dialog", {
+      name: "編輯第 1 筆分錄",
+    });
+    expect(within(postingSheet).getByLabelText("金額")).toHaveValue(320);
+    expect(within(postingSheet).getByLabelText("分錄備註")).toHaveValue("");
+
+    await user.clear(within(postingSheet).getByLabelText("金額"));
+    await user.type(within(postingSheet).getByLabelText("金額"), "450");
+    await user.type(within(postingSheet).getByLabelText("分錄備註"), "午餐");
+    await user.click(
+      within(postingSheet).getByRole("button", { name: "完成" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "編輯第 1 筆分錄" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    expect(within(firstPosting).getByText(/450/)).toBeInTheDocument();
+    expect(within(firstPosting).getByText("午餐")).toBeInTheDocument();
+  });
+
+  it("validates a new posting before append and removes it from its sheet", async () => {
+    setMobileViewport();
+    const user = userEvent.setup();
+    renderMobileEditor();
+
+    await user.click(screen.getByRole("button", { name: "編輯第 1 筆分錄" }));
+    let postingSheet = await screen.findByRole("dialog", {
+      name: "編輯第 1 筆分錄",
+    });
+    expect(
+      within(postingSheet).getByRole("button", {
+        name: "移除第 1 筆分錄",
+      }),
+    ).toBeDisabled();
+    await user.click(
+      within(postingSheet).getByRole("button", { name: "取消" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "編輯第 1 筆分錄" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "新增分錄" }));
+    postingSheet = await screen.findByRole("dialog", { name: "新增分錄" });
+    await user.click(
+      within(postingSheet).getByRole("button", { name: "完成" }),
+    );
+    expect(within(postingSheet).getByText("請選擇帳戶。")).toBeInTheDocument();
+    expect(
+      within(postingSheet).getByText("請輸入大於零的整數金額。"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(postingSheet).getByRole("combobox", { name: "帳戶" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "餐飲" }));
+    await user.type(within(postingSheet).getByLabelText("金額"), "120");
+    await user.type(within(postingSheet).getByLabelText("分錄備註"), "加點");
+    await user.click(
+      within(postingSheet).getByRole("button", { name: "完成" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "新增分錄" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    const thirdPosting = screen.getByRole("button", {
+      name: "編輯第 3 筆分錄",
+    });
+    expect(within(thirdPosting).getByText("餐飲")).toBeInTheDocument();
+    expect(within(thirdPosting).getByText(/120/)).toBeInTheDocument();
+    expect(within(thirdPosting).getByText("加點")).toBeInTheDocument();
+
+    await user.click(thirdPosting);
+    postingSheet = await screen.findByRole("dialog", {
+      name: "編輯第 3 筆分錄",
+    });
+    await user.click(
+      within(postingSheet).getByRole("button", {
+        name: "移除第 3 筆分錄",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "編輯第 3 筆分錄" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+});
 
 describe("entry duplicate confirmation", () => {
   it("preserves the draft on cancel and retries the exact request after confirmation", async () => {

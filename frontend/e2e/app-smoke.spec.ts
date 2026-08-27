@@ -668,15 +668,19 @@ async function mockApi(page: Page) {
 }
 
 async function fillBalancedPostings(page: Page, amount: string) {
-  const accountInputs = page.getByRole("combobox", { name: "帳戶" });
-  await accountInputs.nth(0).click();
-  await page.getByRole("option", { name: "餐飲" }).click();
-  await accountInputs.nth(1).click();
-  await page.getByRole("option", { name: "現金" }).last().click();
-
-  const amountInputs = page.getByLabel("金額", { exact: true });
-  await amountInputs.nth(0).fill(amount);
-  await amountInputs.nth(1).fill(amount);
+  for (const [index, accountName] of ["餐飲", "現金"].entries()) {
+    await page
+      .getByRole("button", { name: `編輯第 ${index + 1} 筆分錄` })
+      .click();
+    const postingSheet = page.getByRole("dialog", {
+      name: `編輯第 ${index + 1} 筆分錄`,
+    });
+    await postingSheet.getByRole("combobox", { name: "帳戶" }).click();
+    await page.getByRole("option", { name: accountName }).click();
+    await postingSheet.getByLabel("金額", { exact: true }).fill(amount);
+    await postingSheet.getByRole("button", { name: "完成" }).click();
+    await expect(postingSheet).not.toBeVisible();
+  }
 }
 
 async function dragMouse(page: Page, target: Locator, distance: number) {
@@ -1763,6 +1767,21 @@ test("edits through the same route-backed mobile transaction sheet", async ({
       return bounds ? bounds.y + bounds.height : null;
     })
     .toBeCloseTo(667, 0);
+
+  const firstPosting = directSheet.getByRole("button", {
+    name: "編輯第 1 筆分錄",
+  });
+  await expect(firstPosting).toContainText("餐飲");
+  await expect(firstPosting).toContainText("TWD 120");
+  await firstPosting.click();
+  const postingSheet = page.getByRole("dialog", {
+    name: "編輯第 1 筆分錄",
+  });
+  await expect(postingSheet).toHaveAttribute("data-presentation", "sheet");
+  await expect(postingSheet.getByLabel("金額")).toHaveValue("120");
+  await postingSheet.getByRole("button", { name: "取消" }).click();
+  await expect(postingSheet).not.toBeVisible();
+
   await page.getByRole("button", { name: "關閉編輯交易" }).click();
   await expect(page).toHaveURL(
     /\/entries\/01980000-0000-7000-8000-000000000010\?q=%E4%BE%BF%E5%88%A9%E5%95%86%E5%BA%97$/,
@@ -2233,19 +2252,30 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await expect(
       page.getByRole("dialog", { name: "新增交易" }).getByRole("tab"),
     ).toHaveCount(0);
-    await expectTouchTarget(
-      page.getByRole("combobox", { name: "帳戶" }).first(),
-    );
-    await expectTouchTarget(
-      page.getByRole("combobox", { name: "方向" }).first(),
-    );
-
     await page.setViewportSize({ width: 320, height: 844 });
-    await expectTouchTarget(page.getByLabel("金額", { exact: true }).first());
-    await expectTouchTarget(page.getByRole("button", { name: "新增分錄" }));
+    const firstPosting = page.getByRole("button", {
+      name: "編輯第 1 筆分錄",
+    });
+    await expectTouchTarget(firstPosting);
+    await firstPosting.click();
+
+    const postingSheet = page.getByRole("dialog", {
+      name: "編輯第 1 筆分錄",
+    });
     await expectTouchTarget(
-      page.getByRole("button", { name: "移除第 1 筆分錄" }),
+      postingSheet.getByRole("combobox", { name: "帳戶" }),
     );
+    await expectTouchTarget(
+      postingSheet.getByRole("combobox", { name: "方向" }),
+    );
+    await expectTouchTarget(postingSheet.getByLabel("金額", { exact: true }));
+    await expectTouchTarget(
+      postingSheet.getByRole("button", { name: "移除第 1 筆分錄" }),
+    );
+    await postingSheet.getByRole("button", { name: "取消" }).click();
+    await expect(postingSheet).not.toBeVisible();
+
+    await expectTouchTarget(page.getByRole("button", { name: "新增分錄" }));
     const editorScroller = page.locator("[data-entry-editor-scroll]");
     expect(
       await editorScroller.evaluate(
