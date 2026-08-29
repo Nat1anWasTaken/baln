@@ -816,6 +816,13 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    "content",
+    "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover",
+  );
+  await expect(page.locator("html")).toHaveCSS("touch-action", "pan-x pan-y");
+  await expect(page.locator("body")).toHaveCSS("touch-action", "pan-x pan-y");
+
   await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible();
   await expect(
     page.getByText(/TWD\s+50,000/, { exact: true }).first(),
