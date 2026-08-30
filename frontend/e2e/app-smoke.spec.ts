@@ -45,6 +45,7 @@ const entry = {
   description: "全家便利商店 — 藍—成人加長不黏身雨衣",
   note: null,
   dedup_key: null,
+  excluded_from_budgets: false,
   created_at: "2026-07-24T00:00:00Z",
   updated_at: "2026-07-24T00:00:00Z",
   postings: [
@@ -543,6 +544,7 @@ async function mockApi(page: Page) {
         date: string;
         description: string;
         note: string | null;
+        excluded_from_budgets: boolean;
         postings: Array<{
           account_key: string;
           amount_minor: number;
@@ -579,6 +581,7 @@ async function mockApi(page: Page) {
         description: body.description,
         note: body.note,
         dedup_key: null,
+        excluded_from_budgets: body.excluded_from_budgets,
         postings: body.postings.map((posting, index) => {
           const account = accounts.find(
             (candidate) => candidate.key === posting.account_key,
@@ -614,6 +617,7 @@ async function mockApi(page: Page) {
         date: string;
         description: string;
         note: string | null;
+        excluded_from_budgets: boolean;
         postings: Array<{
           account_key: string;
           amount_minor: number;
@@ -625,6 +629,7 @@ async function mockApi(page: Page) {
         date: body.date,
         description: body.description,
         note: body.note,
+        excluded_from_budgets: body.excluded_from_budgets,
         updated_at: "2026-07-25T01:00:00Z",
         postings: body.postings.map((posting, index) => {
           const account = accounts.find(
@@ -1840,8 +1845,13 @@ test("edits through the same route-backed mobile transaction sheet", async ({
   await expect(page.getByLabel("交易說明")).toHaveValue(
     "全家便利商店 — 藍—成人加長不黏身雨衣",
   );
+  const budgetExclusion = page.getByRole("switch", {
+    name: "不將此交易計入任何預算",
+  });
+  await expect(budgetExclusion).not.toBeChecked();
 
   await page.getByLabel("交易說明").fill("更新後的便利商店交易");
+  await budgetExclusion.click();
   await page.evaluate(() => history.back());
 
   const discardDialog = page.getByRole("alertdialog", {
@@ -1857,6 +1867,7 @@ test("edits through the same route-backed mobile transaction sheet", async ({
   );
   await expect(sheet).not.toBeVisible();
   await expect(page.getByText("更新後的便利商店交易")).toBeVisible();
+  await expect(page.getByText("不計入預算")).toBeVisible();
 
   await page.getByRole("button", { name: "切換顯示模式" }).click();
   await page.getByRole("menuitem", { name: "深色" }).click();
@@ -1866,6 +1877,11 @@ test("edits through the same route-backed mobile transaction sheet", async ({
   );
   const directSheet = page.getByRole("dialog", { name: "編輯交易" });
   await expect(directSheet).toBeVisible();
+  await expect(
+    directSheet.getByRole("switch", {
+      name: "不將此交易計入任何預算",
+    }),
+  ).toBeChecked();
   await expect
     .poll(async () => {
       const bounds = await directSheet.boundingBox();
