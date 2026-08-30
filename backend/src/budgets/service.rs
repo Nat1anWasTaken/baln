@@ -470,7 +470,6 @@ pub async fn days(
         requested_limit + 1,
         as_of,
         upcoming,
-        budget.available_minor,
     )
     .await?;
     let has_more = rows.len() > requested_limit as usize;
@@ -483,14 +482,19 @@ pub async fn days(
         .flatten();
     let items = rows
         .into_iter()
-        .map(|row| BudgetDay {
-            date: row.date,
-            spent_minor: row.spent_minor,
-            remaining_minor: row.remaining_minor,
-            entry_count: row.entry_count,
-            is_future: row.is_future,
+        .map(|row| {
+            Ok(BudgetDay {
+                date: row.date,
+                spent_minor: row.spent_minor,
+                remaining_minor: budget_remaining(
+                    budget.available_minor,
+                    row.cumulative_spent_minor,
+                )?,
+                entry_count: row.entry_count,
+                is_future: row.is_future,
+            })
         })
-        .collect();
+        .collect::<ApiResult<Vec<_>>>()?;
     Ok(BudgetDaysPage { items, next_cursor })
 }
 
@@ -1261,21 +1265,29 @@ mod tests {
         )
         .await
         .unwrap();
-        for (date, postings) in [
-            ("2026-01-10", vec![(food, 600_i64), (cash, -600_i64)]),
-            ("2026-01-15", vec![(food, -100_i64), (cash, 100_i64)]),
-            ("2026-01-20", vec![(savings, 500_i64), (cash, -500_i64)]),
-            ("2026-02-03", vec![(food, 200_i64), (cash, -200_i64)]),
-            ("2026-02-20", vec![(food, 300_i64), (cash, -300_i64)]),
+        for (date, excluded_from_budgets, postings) in [
+            ("2026-01-10", false, vec![(food, 600_i64), (cash, -600_i64)]),
+            ("2026-01-15", false, vec![(food, -100_i64), (cash, 100_i64)]),
+            (
+                "2026-01-20",
+                false,
+                vec![(savings, 500_i64), (cash, -500_i64)],
+            ),
+            ("2026-01-25", true, vec![(food, 700_i64), (cash, -700_i64)]),
+            ("2026-02-03", false, vec![(food, 200_i64), (cash, -200_i64)]),
+            ("2026-02-05", true, vec![(food, 400_i64), (cash, -400_i64)]),
+            ("2026-02-20", false, vec![(food, 300_i64), (cash, -300_i64)]),
+            ("2026-02-21", true, vec![(food, 500_i64), (cash, -500_i64)]),
         ] {
             let entry_id = Uuid::now_v7();
             let mut transaction = pool.begin().await.unwrap();
             sqlx::query(
-                "INSERT INTO entries (id,user_id,date,description) VALUES ($1,$2,$3,'detail test')",
+                "INSERT INTO entries (id,user_id,date,description,excluded_from_budgets) VALUES ($1,$2,$3,'detail test',$4)",
             )
             .bind(entry_id)
             .bind(user_id)
             .bind(NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap())
+            .bind(excluded_from_budgets)
             .execute(&mut *transaction)
             .await
             .unwrap();

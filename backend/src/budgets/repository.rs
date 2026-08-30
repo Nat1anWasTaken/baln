@@ -7,11 +7,47 @@ use crate::{
     budgets::{BudgetAccount, model::BudgetRow},
 };
 
+const BUDGET_ENTRY_MEMBERSHIP_SQL: &str = r#"
+NOT e.excluded_from_budgets
+AND EXISTS (
+    SELECT 1
+      FROM postings budget_posting
+      JOIN budget_accounts ba ON ba.account_id = budget_posting.account_id
+     WHERE budget_posting.entry_id = e.id
+       AND budget_posting.user_id = e.user_id
+       AND ba.user_id = e.user_id
+       AND ba.budget_id = {budget_id}
+)"#;
+
+/// The canonical predicate for deciding whether an entry belongs to a budget.
+///
+/// Callers provide a trusted SQL bind placeholder (for example, `$2`). Keeping
+/// the predicate here ensures budget totals and entry filtering cannot drift.
+pub(crate) fn budget_entry_membership_sql(budget_id: &'static str) -> String {
+    BUDGET_ENTRY_MEMBERSHIP_SQL.replace("{budget_id}", budget_id)
+}
+
+fn budget_entry_expenses_cte() -> String {
+    format!(
+        r#"budget_entry_expenses AS (
+            SELECT e.date,
+                   COALESCE(sum(CASE WHEN a.type = 'expense' THEN p.amount_minor ELSE 0 END), 0)::bigint AS spent_minor
+              FROM entries e
+              JOIN postings p ON p.entry_id = e.id AND p.user_id = e.user_id
+              JOIN accounts a ON a.id = p.account_id
+             WHERE e.user_id = $1
+               AND {membership}
+             GROUP BY e.id, e.date
+        )"#,
+        membership = budget_entry_membership_sql("$2"),
+    )
+}
+
 #[derive(Debug, sqlx::FromRow)]
 pub(crate) struct BudgetDayRow {
     pub date: NaiveDate,
     pub spent_minor: i64,
-    pub remaining_minor: i64,
+    pub cumulative_spent_minor: i64,
     pub entry_count: i64,
     pub is_future: bool,
 }
@@ -79,35 +115,21 @@ pub(crate) async fn spent(
     date_from: NaiveDate,
     date_to: NaiveDate,
 ) -> ApiResult<i64> {
-    Ok(sqlx::query_scalar::<_, i64>(
-        r#"
-        SELECT COALESCE(sum(entry_expense), 0)::bigint
-          FROM (
-                SELECT e.id,
-                       COALESCE(sum(CASE WHEN a.type = 'expense' THEN p.amount_minor ELSE 0 END), 0)::bigint AS entry_expense
-                  FROM entries e
-                  JOIN postings p ON p.entry_id = e.id
-                  JOIN accounts a ON a.id = p.account_id
-                 WHERE e.user_id = $1
-                   AND e.date >= $3 AND e.date < $4
-                   AND EXISTS (
-                       SELECT 1
-                         FROM postings matched
-                         JOIN budget_accounts ba ON ba.account_id = matched.account_id
-                        WHERE matched.entry_id = e.id
-                          AND ba.user_id = $1
-                          AND ba.budget_id = $2
-                   )
-                 GROUP BY e.id
-               ) matched_entries
-        "#,
-    ).bind(user_id).bind(budget_id).bind(date_from).bind(date_to).fetch_one(pool).await?)
+    let sql = format!(
+        "WITH {} SELECT COALESCE(sum(spent_minor), 0)::bigint FROM budget_entry_expenses WHERE date >= $3 AND date < $4",
+        budget_entry_expenses_cte(),
+    );
+    Ok(sqlx::query_scalar::<_, i64>(&sql)
+        .bind(user_id)
+        .bind(budget_id)
+        .bind(date_from)
+        .bind(date_to)
+        .fetch_one(pool)
+        .await?)
 }
 
 /// Returns one row for every calendar date in a budget period, including dates
-/// without matching entries. The matching predicate intentionally mirrors
-/// [`spent`]: an entry is included when any posting references a current budget
-/// account, and its signed expense postings are counted once for that entry.
+/// without matching entries.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn days(
     pool: &PgPool,
@@ -119,29 +141,16 @@ pub(crate) async fn days(
     limit: i64,
     as_of: NaiveDate,
     upcoming: bool,
-    available_minor: i64,
 ) -> ApiResult<Vec<BudgetDayRow>> {
-    Ok(sqlx::query_as::<_, BudgetDayRow>(
+    let sql = format!(
         r#"
-        WITH daily_totals AS (
-            SELECT e.date,
-                   COALESCE(sum(CASE WHEN a.type = 'expense' THEN p.amount_minor ELSE 0 END), 0)::bigint AS spent_minor,
-                   count(DISTINCT e.id)::bigint AS entry_count
-              FROM entries e
-              JOIN postings p ON p.entry_id = e.id AND p.user_id = e.user_id
-              JOIN accounts a ON a.id = p.account_id
-             WHERE e.user_id = $1
-               AND e.date >= $3 AND e.date < $4
-               AND EXISTS (
-                   SELECT 1
-                     FROM postings matched
-                     JOIN budget_accounts ba ON ba.account_id = matched.account_id
-                    WHERE matched.entry_id = e.id
-                      AND matched.user_id = $1
-                      AND ba.user_id = $1
-                      AND ba.budget_id = $2
-               )
-             GROUP BY e.date
+        WITH {budget_entry_expenses}, daily_totals AS (
+            SELECT date,
+                   COALESCE(sum(spent_minor), 0)::bigint AS spent_minor,
+                   count(*)::bigint AS entry_count
+              FROM budget_entry_expenses
+             WHERE date >= $3 AND date < $4
+             GROUP BY date
         ), calendar AS (
             SELECT generate_series($3::date, ($4::date - 1), interval '1 day')::date AS date
         ), calendar_values AS (
@@ -150,32 +159,33 @@ pub(crate) async fn days(
                    CASE WHEN $8 THEN 0 ELSE COALESCE(t.entry_count, 0) END::bigint AS entry_count
               FROM calendar c
               LEFT JOIN daily_totals t USING (date)
-        ), with_remaining AS (
+        ), with_cumulative_spend AS (
             SELECT date,
                    spent_minor,
-                   ($9 - COALESCE(sum(spent_minor) OVER (ORDER BY date), 0))::bigint AS remaining_minor,
+                   COALESCE(sum(spent_minor) OVER (ORDER BY date), 0)::bigint AS cumulative_spent_minor,
                    entry_count,
                    (date > $7)::boolean AS is_future
               FROM calendar_values
         )
-        SELECT date, spent_minor, remaining_minor, entry_count, is_future
-          FROM with_remaining
+        SELECT date, spent_minor, cumulative_spent_minor, entry_count, is_future
+          FROM with_cumulative_spend
          WHERE ($5::date IS NULL OR date < $5)
          ORDER BY date DESC
          LIMIT $6
         "#,
-    )
-    .bind(user_id)
-    .bind(budget_id)
-    .bind(date_from)
-    .bind(date_to)
-    .bind(cursor_date)
-    .bind(limit)
-    .bind(as_of)
-    .bind(upcoming)
-    .bind(available_minor)
-    .fetch_all(pool)
-    .await?)
+        budget_entry_expenses = budget_entry_expenses_cte(),
+    );
+    Ok(sqlx::query_as::<_, BudgetDayRow>(&sql)
+        .bind(user_id)
+        .bind(budget_id)
+        .bind(date_from)
+        .bind(date_to)
+        .bind(cursor_date)
+        .bind(limit)
+        .bind(as_of)
+        .bind(upcoming)
+        .fetch_all(pool)
+        .await?)
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -200,30 +210,18 @@ pub(crate) async fn trend(
     }
     let date_from = ranges.iter().map(|(from, _)| *from).collect::<Vec<_>>();
     let date_to = ranges.iter().map(|(_, to)| *to).collect::<Vec<_>>();
-    Ok(sqlx::query_as::<_, BudgetTrendRow>(
+    let sql = format!(
         r#"
-        WITH ranges AS (
+        WITH {budget_entry_expenses}, ranges AS (
             SELECT date_from, date_to
               FROM unnest($3::date[], $4::date[]) AS r(date_from, date_to)
         ), totals AS (
             SELECT r.date_from,
                    r.date_to,
-                   COALESCE(sum(CASE WHEN a.type = 'expense' THEN p.amount_minor ELSE 0 END), 0)::bigint AS spent_minor
+                   COALESCE(sum(e.spent_minor), 0)::bigint AS spent_minor
               FROM ranges r
-              JOIN entries e ON e.user_id = $1
-                            AND e.date >= r.date_from
+              JOIN budget_entry_expenses e ON e.date >= r.date_from
                             AND e.date < r.date_to
-              JOIN postings p ON p.entry_id = e.id AND p.user_id = $1
-              JOIN accounts a ON a.id = p.account_id
-             WHERE EXISTS (
-                   SELECT 1
-                     FROM postings matched
-                     JOIN budget_accounts ba ON ba.account_id = matched.account_id
-                    WHERE matched.entry_id = e.id
-                      AND matched.user_id = $1
-                      AND ba.user_id = $1
-                      AND ba.budget_id = $2
-               )
              GROUP BY r.date_from, r.date_to
         )
         SELECT r.date_from,
@@ -233,14 +231,16 @@ pub(crate) async fn trend(
           LEFT JOIN totals t USING (date_from, date_to)
          ORDER BY r.date_from
         "#,
-    )
-    .bind(user_id)
-    .bind(budget_id)
-    .bind(&date_from)
-    .bind(&date_to)
-    .bind(upcoming)
-    .fetch_all(pool)
-    .await?)
+        budget_entry_expenses = budget_entry_expenses_cte(),
+    );
+    Ok(sqlx::query_as::<_, BudgetTrendRow>(&sql)
+        .bind(user_id)
+        .bind(budget_id)
+        .bind(&date_from)
+        .bind(&date_to)
+        .bind(upcoming)
+        .fetch_all(pool)
+        .await?)
 }
 
 pub(crate) async fn resolve_account_ids(

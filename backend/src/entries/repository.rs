@@ -304,9 +304,10 @@ pub async fn list_rows(
     cursor_id: Option<Uuid>,
     limit: i64,
 ) -> ApiResult<Vec<EntryRow>> {
-    Ok(sqlx::query_as::<_, EntryRow>(
+    let sql = format!(
         r#"
         SELECT e.id, e.user_id, e.date, e.description, e.note, e.dedup_key,
+               e.excluded_from_budgets,
                e.created_at, e.updated_at
           FROM entries e
          WHERE e.user_id = $1
@@ -323,14 +324,8 @@ pub async fn list_rows(
                )
            )
            AND (
-               $5::uuid IS NULL OR EXISTS (
-                   SELECT 1
-                     FROM postings budget_posting
-                     JOIN budget_accounts ba ON ba.account_id = budget_posting.account_id
-                    WHERE budget_posting.entry_id = e.id
-                      AND budget_posting.user_id = e.user_id
-                      AND ba.user_id = e.user_id
-                      AND ba.budget_id = $5
+               $5::uuid IS NULL OR (
+                   {budget_entry_membership}
                )
            )
            AND (
@@ -356,16 +351,18 @@ pub async fn list_rows(
          ORDER BY e.date DESC, e.id DESC
          LIMIT $9
         "#,
-    )
-    .bind(user_id)
-    .bind(date_from)
-    .bind(date_to)
-    .bind(account_key)
-    .bind(budget_id)
-    .bind(query)
-    .bind(cursor_date)
-    .bind(cursor_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?)
+        budget_entry_membership = crate::budgets::repository::budget_entry_membership_sql("$5"),
+    );
+    Ok(sqlx::query_as::<_, EntryRow>(&sql)
+        .bind(user_id)
+        .bind(date_from)
+        .bind(date_to)
+        .bind(account_key)
+        .bind(budget_id)
+        .bind(query)
+        .bind(cursor_date)
+        .bind(cursor_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?)
 }

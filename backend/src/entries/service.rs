@@ -1718,6 +1718,13 @@ mod tests {
         .await
         .unwrap();
         let matching = create_named(&pool, user_id, "Budget dinner", "budget:match", 100).await;
+        let mut excluded_request = request();
+        excluded_request.description = "Budget excluded".to_owned();
+        excluded_request.dedup_key = Some("budget:excluded".to_owned());
+        excluded_request.excluded_from_budgets = true;
+        excluded_request.postings[0].amount_minor = 150;
+        excluded_request.postings[1].amount_minor = -150;
+        let (excluded, _) = create(&pool, user_id, excluded_request).await.unwrap();
         let mut non_matching_request = request();
         non_matching_request.description = "Bank dinner".to_owned();
         non_matching_request.dedup_key = Some("budget:no-match".to_owned());
@@ -1754,6 +1761,24 @@ mod tests {
             page.items.iter().map(|entry| entry.id).collect::<Vec<_>>(),
             vec![matching.id]
         );
+
+        let unfiltered = list(
+            &pool,
+            user_id,
+            ListEntriesQuery {
+                date_from: None,
+                date_to: None,
+                account_key: None,
+                budget_id: None,
+                q: Some("Budget excluded".to_owned()),
+                cursor: None,
+                limit: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(unfiltered.items[0].id, excluded.id);
+        assert!(unfiltered.items[0].excluded_from_budgets);
 
         let other_budget = crate::budgets::service::create(
             &pool,
