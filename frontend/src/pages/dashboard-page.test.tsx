@@ -94,7 +94,7 @@ describe("dashboard insights", () => {
 
     renderPage();
 
-    expect(await screen.findByText("每月 26 日開始")).toBeVisible();
+    expect(await screen.findByLabelText("每月起始日")).toHaveValue("26");
     expect(
       screen.getByText(
         `${formatShortDate(bounds.dateFrom)}–${formatShortDate(

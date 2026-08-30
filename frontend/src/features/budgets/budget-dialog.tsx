@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox } from "@/components/ui/combobox";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogBody,
@@ -251,15 +252,16 @@ export function BudgetDialog({
                 </Field>
                 <Field data-invalid={submitted && !values.start_date}>
                   <FieldLabel htmlFor="budget-start-date">開始日期</FieldLabel>
-                  <Input
+                  <DatePicker
                     id="budget-start-date"
                     aria-invalid={submitted && !values.start_date}
-                    type="date"
                     value={values.start_date}
-                    onChange={(event) =>
+                    required
+                    pickerTitle="選擇預算開始日期"
+                    onValueChange={(startDate) =>
                       setValues((current) => ({
                         ...current,
-                        start_date: event.target.value,
+                        start_date: startDate,
                       }))
                     }
                   />

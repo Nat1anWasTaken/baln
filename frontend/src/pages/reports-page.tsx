@@ -25,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +35,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useComparisonMode } from "@/hooks/use-comparison-mode";
 import { useMonthStartDay } from "@/hooks/use-month-start-day";
@@ -73,6 +73,7 @@ export function ReportsPage() {
   const [customTo, setCustomTo] = useState(
     toInclusiveDate(initialBounds.dateTo),
   );
+  const [customRangeValid, setCustomRangeValid] = useState(true);
   const [applied, setApplied] = useState<{
     preset: ReportPreset;
     bounds: DateBounds;
@@ -81,7 +82,7 @@ export function ReportsPage() {
   const [expanded, setExpanded] = useState(false);
 
   const customIsValid = Boolean(
-    customFrom && customTo && customFrom <= customTo,
+    customRangeValid && customFrom && customTo && customFrom <= customTo,
   );
   const comparisonBounds = comparisonBoundsForPreset(
     applied.preset,
@@ -208,26 +209,17 @@ export function ReportsPage() {
           </div>
 
           {preset === "custom" ? (
-            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-              <Field>
-                <FieldLabel htmlFor="report-from">開始日期</FieldLabel>
-                <Input
-                  id="report-from"
-                  type="date"
-                  value={customFrom}
-                  onChange={(event) => setCustomFrom(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="report-to">結束日期</FieldLabel>
-                <Input
-                  id="report-to"
-                  type="date"
-                  value={customTo}
-                  min={customFrom}
-                  onChange={(event) => setCustomTo(event.target.value)}
-                />
-              </Field>
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+              <DateRangePicker
+                id="report-date-range"
+                value={{ from: customFrom, to: customTo }}
+                pickerTitle="選擇自訂報表期間"
+                onValidityChange={setCustomRangeValid}
+                onValueChange={({ from, to }) => {
+                  setCustomFrom(from);
+                  setCustomTo(to);
+                }}
+              />
               <Button
                 type="button"
                 disabled={!customIsValid}

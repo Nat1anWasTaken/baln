@@ -33,6 +33,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Combobox } from "@/components/ui/combobox";
+import { DatePicker } from "@/components/ui/date-picker";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -488,9 +489,27 @@ export function EntryEditor({
           ) : null}
           <CardContent className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
-              <Field>
+              <Field
+                data-invalid={Boolean(form.formState.errors.date?.message)}
+              >
                 <FieldLabel htmlFor="entry-date">交易日期</FieldLabel>
-                <Input id="entry-date" type="date" {...form.register("date")} />
+                <Controller
+                  control={form.control}
+                  name="date"
+                  rules={{ required: "請選擇交易日期。" }}
+                  render={({ field, fieldState }) => (
+                    <DatePicker
+                      ref={field.ref}
+                      id="entry-date"
+                      value={field.value}
+                      required
+                      pickerTitle="選擇交易日期"
+                      aria-invalid={fieldState.invalid}
+                      onValueChange={field.onChange}
+                    />
+                  )}
+                />
+                <FieldError>{form.formState.errors.date?.message}</FieldError>
               </Field>
               <Field>
                 <FieldLabel htmlFor="entry-description">交易說明</FieldLabel>

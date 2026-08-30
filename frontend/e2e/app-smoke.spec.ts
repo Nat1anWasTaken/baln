@@ -842,8 +842,36 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
     "aria-current",
     "page",
   );
+  const month = page.getByRole("button", { name: "總覽月份" });
+  await expect(month).toContainText(/\d{4} 年 \d{1,2} 月/);
+  await month.click();
+  const monthSheet = page.getByRole("dialog", { name: "總覽月份" });
+  await expect(monthSheet).toBeFocused();
+  await expect(monthSheet.getByLabel("總覽月份手動輸入")).not.toBeFocused();
+  const august = monthSheet.getByRole("button", { name: "8 月" });
+  await expect
+    .poll(async () => {
+      const box = await august.boundingBox();
+      return box ? [box.width >= 44, box.height >= 44] : null;
+    })
+    .toEqual([true, true]);
+  await august.click();
+  await expect(month).toContainText(/\d{4} 年 8 月/);
+
   await page.getByRole("button", { name: "每月起始日" }).click();
-  await page.getByRole("button", { name: "26 日" }).click();
+  const startDaySheet = page.getByRole("dialog", { name: "每月起始日" });
+  await expect(startDaySheet).toBeFocused();
+  await expect(
+    startDaySheet.getByLabel("每月起始日手動輸入"),
+  ).not.toBeFocused();
+  const day26 = startDaySheet.getByRole("button", { name: "26 日" });
+  await expect
+    .poll(async () => {
+      const box = await day26.boundingBox();
+      return box ? [box.width >= 44, box.height >= 44] : null;
+    })
+    .toEqual([true, true]);
+  await day26.click();
   await expect(page.getByRole("button", { name: "每月起始日" })).toContainText(
     "每月 26 日開始",
   );
@@ -861,6 +889,57 @@ test("renders the authenticated dashboard on a mobile viewport", async ({
   await page.getByLabel("新增交易").click();
   await expect(page.getByRole("dialog", { name: "新增交易" })).toBeVisible();
   await expect(page).toHaveURL(/\/entries\/new$/);
+});
+
+test("supports direct desktop entry for overview period controls", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+
+  const month = page.getByRole("textbox", { name: "總覽月份" });
+  await expect(month).toHaveValue(/\d{4}\/\d{2}/);
+  await month.fill("202608");
+  await month.press("Enter");
+  await expect(month).toHaveValue("2026/08");
+
+  const startDay = page.getByRole("textbox", { name: "每月起始日" });
+  await startDay.fill("26");
+  await startDay.press("Enter");
+  await expect(startDay).toHaveValue("26");
+
+  await page.getByRole("button", { name: "開啟總覽月份" }).click();
+  await expect(page.getByRole("button", { name: "8 月" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "開啟每月起始日" }).click();
+  await expect(page.getByRole("button", { name: "26 日" })).toBeVisible();
+});
+
+test("keeps mobile date pickers touch-first and commits ranges once", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/entries");
+
+  await page.getByRole("button", { name: "不限日期" }).click();
+  const sheet = page.getByRole("dialog", { name: "篩選交易日期" });
+  const from = sheet.getByLabel("開始日期");
+  const to = sheet.getByLabel("結束日期");
+  await expect(sheet).toBeFocused();
+  await expect(from).not.toBeFocused();
+  await expect(to).not.toBeFocused();
+
+  const day = sheet.locator("[data-day]").first();
+  const dayBox = await day.boundingBox();
+  expect(dayBox).not.toBeNull();
+  expect(dayBox!.width).toBeGreaterThanOrEqual(44);
+  expect(dayBox!.height).toBeGreaterThanOrEqual(44);
+
+  await from.fill("2026/07/01");
+  await to.fill("2026/07/31");
+  await expect(page).toHaveURL(/\/entries$/);
+  await sheet.getByRole("button", { name: "套用" }).click();
+  await expect(page).toHaveURL(/\/entries\?from=2026-07-01&to=2026-07-31$/);
 });
 
 test("keeps split budget balances on one line across card widths", async ({
@@ -1340,8 +1419,8 @@ test("preserves transaction filters when returning from details", async ({
   await expect(page.getByRole("textbox", { name: "搜尋交易" })).toHaveValue(
     "便利商店",
   );
-  await expect(page.getByLabel("開始日期")).toHaveValue("2026-07-01");
-  await expect(page.getByLabel("結束日期")).toHaveValue("2026-07-31");
+  await expect(page.getByLabel("開始日期")).toHaveValue("2026/07/01");
+  await expect(page.getByLabel("結束日期")).toHaveValue("2026/07/31");
   await expect(page.getByRole("radio", { name: "餐飲" })).toHaveAttribute(
     "aria-checked",
     "true",
@@ -1417,7 +1496,13 @@ test("reviews a possible duplicate from the mobile transaction sheet", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/entries/new");
 
-  await page.getByLabel("交易日期").fill("2026-07-24");
+  await page.getByLabel("交易日期").click();
+  const dateSheet = page.getByRole("dialog", { name: "選擇交易日期" });
+  const manualDate = dateSheet.getByLabel("選擇交易日期手動輸入");
+  await expect(dateSheet).toBeFocused();
+  await expect(manualDate).not.toBeFocused();
+  await manualDate.fill("2026-07-24");
+  await manualDate.press("Enter");
   await page.getByLabel("交易說明").fill("Email receipt");
   await fillBalancedPostings(page, "120");
   await page.getByRole("button", { name: "建立交易" }).click();

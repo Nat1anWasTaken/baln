@@ -5,7 +5,7 @@ import {
   ChevronsUpDown,
   CircleAlert,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -39,11 +39,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { ResponsivePicker } from "@/components/ui/responsive-picker";
 import { budgetsApi } from "@/lib/api-client";
 import {
   formatInteger,
@@ -128,6 +124,7 @@ function PeriodPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const normalizedSearch = search.trim().replaceAll("/", "-");
   const searchDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedSearch)
     ? normalizedSearch
@@ -157,8 +154,20 @@ function PeriodPicker({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+      <ResponsivePicker
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) setSearch("");
+        }}
+        title={label}
+        desktopContentClassName="w-(--radix-popover-trigger-width) p-2"
+        mobileBodyClassName="grid gap-2 pt-0"
+        onDesktopOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchInputRef.current?.focus();
+        }}
+        trigger={
           <Button
             id={id}
             type="button"
@@ -176,81 +185,78 @@ function PeriodPicker({
               aria-hidden="true"
             />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          className="w-(--radix-popover-trigger-width) p-2"
-        >
-          <div className="relative mb-2">
-            <CalendarSearch
-              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              aria-label={`搜尋${label}`}
-              placeholder="輸入日期 YYYY-MM-DD"
-              className="pl-8"
-            />
-          </div>
-          <div className="max-h-64 space-y-1 overflow-y-auto" role="listbox">
-            {searched.isPending && searchDate ? (
-              <p className="p-3 text-center text-sm text-muted-foreground">
-                搜尋中…
-              </p>
-            ) : visibleOptions.length === 0 ? (
-              <p className="p-3 text-center text-sm text-muted-foreground">
-                {search && !searchDate
-                  ? "請輸入完整日期。"
-                  : "找不到符合的期別。"}
-              </p>
-            ) : (
-              visibleOptions.map((period) => (
-                <Button
-                  key={period.period_offset}
-                  type="button"
-                  variant="ghost"
-                  role="option"
-                  aria-selected={period.period_offset === value}
-                  className="w-full justify-start font-normal"
-                  onClick={() => {
-                    onValueChange(period.period_offset);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "size-4",
-                      period.period_offset !== value && "invisible",
-                    )}
-                    aria-hidden="true"
-                  />
-                  <span className="truncate">{periodLabel(period)}</span>
-                  {period.period_offset === 0 ? (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      本期
-                    </span>
-                  ) : null}
-                </Button>
-              ))
-            )}
-          </div>
-          {!search && hasMore ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-2 w-full"
-              loading={isLoadingMore}
-              onClick={onLoadMore}
-            >
-              載入更早期別
-            </Button>
-          ) : null}
-        </PopoverContent>
-      </Popover>
+        }
+      >
+        <div className="relative mb-2">
+          <CalendarSearch
+            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            ref={searchInputRef}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            aria-label={`搜尋${label}`}
+            placeholder="輸入日期 YYYY-MM-DD"
+            className="pl-8"
+          />
+        </div>
+        <div className="max-h-64 space-y-1 overflow-y-auto" role="listbox">
+          {searched.isPending && searchDate ? (
+            <p className="p-3 text-center text-sm text-muted-foreground">
+              搜尋中…
+            </p>
+          ) : visibleOptions.length === 0 ? (
+            <p className="p-3 text-center text-sm text-muted-foreground">
+              {search && !searchDate
+                ? "請輸入完整日期。"
+                : "找不到符合的期別。"}
+            </p>
+          ) : (
+            visibleOptions.map((period) => (
+              <Button
+                key={period.period_offset}
+                type="button"
+                variant="ghost"
+                role="option"
+                aria-selected={period.period_offset === value}
+                className="w-full justify-start font-normal"
+                onClick={() => {
+                  onValueChange(period.period_offset);
+                  setOpen(false);
+                  setSearch("");
+                }}
+              >
+                <Check
+                  className={cn(
+                    "size-4",
+                    period.period_offset !== value && "invisible",
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{periodLabel(period)}</span>
+                {period.period_offset === 0 ? (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    本期
+                  </span>
+                ) : null}
+              </Button>
+            ))
+          )}
+        </div>
+        {!search && hasMore ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full"
+            loading={isLoadingMore}
+            onClick={onLoadMore}
+          >
+            載入更早期別
+          </Button>
+        ) : null}
+      </ResponsivePicker>
     </Field>
   );
 }

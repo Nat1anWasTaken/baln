@@ -12,6 +12,7 @@ import { AccountFilterSelector } from "@/features/entries/account-filter-selecto
 import { BudgetFilterSelector } from "@/features/entries/budget-filter-selector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -95,6 +96,15 @@ export function EntriesPage() {
     setSearchParams(next, { replace: true });
   }
 
+  function setDateRange(from: string, to: string) {
+    const next = new URLSearchParams(searchParams);
+    if (from) next.set("from", from);
+    else next.delete("from");
+    if (to) next.set("to", to);
+    else next.delete("to");
+    setSearchParams(next, { replace: true });
+  }
+
   function clearFilters() {
     setSearch("");
     setSearchParams({}, { replace: true });
@@ -157,25 +167,16 @@ export function EntriesPage() {
                 />
               </div>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="entry-from">開始日期</FieldLabel>
-              <Input
-                id="entry-from"
-                type="date"
-                value={dateFrom}
-                onChange={(event) => setFilter("from", event.target.value)}
+            <div className="md:col-span-2">
+              <DateRangePicker
+                id="entry-date-range"
+                value={{ from: dateFrom, to: dateTo }}
+                allowOpenEnded
+                clearable
+                pickerTitle="篩選交易日期"
+                onValueChange={({ from, to }) => setDateRange(from, to)}
               />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="entry-to">結束日期</FieldLabel>
-              <Input
-                id="entry-to"
-                type="date"
-                min={dateFrom || undefined}
-                value={dateTo}
-                onChange={(event) => setFilter("to", event.target.value)}
-              />
-            </Field>
+            </div>
           </div>
           <div className="flex items-end gap-2 md:justify-end">
             {hasFilters ? (
