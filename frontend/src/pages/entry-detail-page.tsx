@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -132,6 +133,11 @@ export function EntryDetailPage() {
         <CardHeader>
           <CardDescription>{formatLedgerDate(entry.data.date)}</CardDescription>
           <CardTitle className="text-xl">{entry.data.description}</CardTitle>
+          {entry.data.excluded_from_budgets ? (
+            <Badge variant="outline" className="w-fit">
+              不計入預算
+            </Badge>
+          ) : null}
         </CardHeader>
         <CardContent className="grid gap-5">
           {entry.data.note ? (

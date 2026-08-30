@@ -11,6 +11,7 @@ const entry: EntryResponse = {
   description: "午餐",
   note: null,
   dedup_key: null,
+  excluded_from_budgets: false,
   postings: [
     {
       id: "00000000-0000-4000-8000-000000000002",
@@ -51,6 +52,16 @@ describe("EntryCard", () => {
 
     expect(screen.getByText("支出 · 餐飲")).toBeInTheDocument();
     expect(screen.getByText("資產 · 現金")).toBeInTheDocument();
+  });
+
+  it("marks entries excluded from budgets", () => {
+    render(
+      <MemoryRouter>
+        <EntryCard entry={{ ...entry, excluded_from_budgets: true }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("不計入預算")).toBeInTheDocument();
   });
 
   it("uses the whole card as one transaction detail link", () => {

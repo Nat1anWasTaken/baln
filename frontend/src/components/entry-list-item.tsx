@@ -53,6 +53,9 @@ export function EntrySummary({
       </CardHeader>
       <CardContent className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+          {entry.excluded_from_budgets ? (
+            <Badge variant="outline">不計入預算</Badge>
+          ) : null}
           {entry.postings.slice(0, 3).map((posting) => (
             <Badge key={posting.id} variant="secondary">
               {accountTypeLabels[posting.account.type]} · {posting.account.name}
@@ -116,6 +119,9 @@ export function EntryTableRow({
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
+          {entry.excluded_from_budgets ? (
+            <Badge variant="outline">不計入預算</Badge>
+          ) : null}
           {entry.postings.slice(0, 2).map((posting) => (
             <Badge key={posting.id} variant="outline">
               {accountTypeLabels[posting.account.type]} · {posting.account.name}
