@@ -24,18 +24,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+} from "@/components/ui/field";
 import { Combobox } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -480,14 +482,20 @@ export function EntryEditor({
           </Button>
         ) : null}
 
-        <Card>
-          {presentation === "page" ? (
-            <CardHeader>
-              <CardTitle>{entry ? "編輯交易" : "新增交易"}</CardTitle>
-              <CardDescription>輸入交易資料與借貸平衡的分錄。</CardDescription>
-            </CardHeader>
-          ) : null}
-          <CardContent className="grid gap-4">
+        {presentation === "page" ? (
+          <div className="grid gap-1.5">
+            <h2 className="font-heading text-xl font-semibold">
+              {entry ? "編輯交易" : "新增交易"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              輸入交易資料與借貸平衡的分錄。
+            </p>
+          </div>
+        ) : null}
+
+        <FieldGroup className="gap-5">
+          <FieldSet className="gap-4">
+            <FieldLegend>交易資料</FieldLegend>
             <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
               <Field
                 data-invalid={Boolean(form.formState.errors.date?.message)}
@@ -528,17 +536,15 @@ export function EntryEditor({
                 {...form.register("note")}
               />
             </Field>
-          </CardContent>
-        </Card>
+          </FieldSet>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>分錄明細</CardTitle>
-            <CardDescription>
+          <FieldSeparator />
+
+          <FieldSet className="gap-3">
+            <FieldLegend>分錄明細</FieldLegend>
+            <FieldDescription>
               正數借方與負數貸方會由方向自動轉換；借貸合計必須相等。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
+            </FieldDescription>
             {isMobile
               ? fields.map((field, index) => {
                   const posting =
@@ -651,49 +657,50 @@ export function EntryEditor({
               <Plus aria-hidden="true" />
               新增分錄
             </Button>
-          </CardContent>
-          <CardFooter className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-xs">
-                <PostingDirectionText direction="debit" suffix="合計" />
-              </p>
-              <p className="font-medium tabular-nums">
-                {formatMoney(debitTotal)}
-              </p>
+            <FieldSeparator className="my-0" />
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs">
+                  <PostingDirectionText direction="debit" suffix="合計" />
+                </p>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(debitTotal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs">
+                  <PostingDirectionText direction="credit" suffix="合計" />
+                </p>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(creditTotal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">未平衡</p>
+                <p
+                  className={`font-medium tabular-nums ${
+                    imbalance === 0 ? "" : "text-destructive"
+                  }`}
+                >
+                  {formatMoney(imbalance)}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs">
-                <PostingDirectionText direction="credit" suffix="合計" />
-              </p>
-              <p className="font-medium tabular-nums">
-                {formatMoney(creditTotal)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">未平衡</p>
-              <p
-                className={`font-medium tabular-nums ${
-                  imbalance === 0 ? "" : "text-destructive"
-                }`}
-              >
-                {formatMoney(imbalance)}
-              </p>
-            </div>
-          </CardFooter>
-        </Card>
+          </FieldSet>
 
-        {form.formState.errors.root?.message ? (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
-          >
-            <CircleAlert
-              className="mt-0.5 size-4 shrink-0"
-              aria-hidden="true"
-            />
-            <FieldError>{form.formState.errors.root.message}</FieldError>
-          </div>
-        ) : null}
+          {form.formState.errors.root?.message ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+              <CircleAlert
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              <FieldError>{form.formState.errors.root.message}</FieldError>
+            </div>
+          ) : null}
+        </FieldGroup>
       </EditorBody>
 
       <EditorFooter

@@ -1470,6 +1470,14 @@ test("opens the balanced-postings editor without a mode switch", async ({
   await page.goto("/entries/new");
 
   await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
+  const createForm = page.locator('form[data-presentation="page"]');
+  await expect(createForm.locator('[data-slot="card"]')).toHaveCount(0);
+  await expect(
+    createForm.getByRole("group", { name: "交易資料" }),
+  ).toBeVisible();
+  await expect(
+    createForm.getByRole("group", { name: "分錄明細" }),
+  ).toBeVisible();
   await expect(
     page.locator('[data-slot="dialog-content"][data-presentation="sheet"]'),
   ).toHaveCount(0);
