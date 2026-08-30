@@ -49,6 +49,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { SwitchField } from "@/components/ui/switch";
 import {
   PostingDirectionBadge,
   PostingDirectionText,
@@ -87,6 +88,7 @@ type EditorValues = {
   date: string;
   description: string;
   note: string;
+  excludedFromBudgets: boolean;
   postings: EditorPosting[];
 };
 
@@ -118,6 +120,7 @@ function entryDefaults(entry: EntryResponse): EditorValues {
     date: entry.date,
     description: entry.description,
     note: entry.note ?? "",
+    excludedFromBudgets: entry.excluded_from_budgets,
     postings: entry.postings.map((posting) => ({
       accountKey: posting.account.key,
       direction: postingDirectionFromAmount(posting.amount_minor),
@@ -257,6 +260,7 @@ export function EntryEditor({
         date: todayTaipei(),
         description: "",
         note: "",
+        excludedFromBudgets: false,
         postings: [emptyPosting("debit"), emptyPosting("credit")],
       };
 
@@ -427,6 +431,7 @@ export function EntryEditor({
         date: values.date,
         description: values.description.trim(),
         note: values.note.trim() || null,
+        excluded_from_budgets: values.excludedFromBudgets,
         postings,
       },
       confirmedDistinct: false,
@@ -536,6 +541,18 @@ export function EntryEditor({
                 {...form.register("note")}
               />
             </Field>
+            <Controller
+              control={form.control}
+              name="excludedFromBudgets"
+              render={({ field }) => (
+                <SwitchField
+                  id="entry-excluded-from-budgets"
+                  label="不將此交易計入任何預算"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
           </FieldSet>
 
           <FieldSeparator />

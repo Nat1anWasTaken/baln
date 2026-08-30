@@ -39,6 +39,7 @@ const existingEntry: EntryResponse = {
   description: "Apple Pay 午餐",
   note: null,
   dedup_key: "mcp:apple-pay",
+  excluded_from_budgets: false,
   created_at: "2026-07-24T00:00:00Z",
   updated_at: "2026-07-24T00:00:00Z",
   postings: [
@@ -316,6 +317,11 @@ describe("entry duplicate confirmation", () => {
 
     renderEditor();
     await fillEntry(user);
+    await user.click(
+      screen.getByRole("switch", {
+        name: "不將此交易計入任何預算",
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "建立交易" }));
 
     expect(
@@ -323,6 +329,7 @@ describe("entry duplicate confirmation", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Apple Pay 午餐")).toBeInTheDocument();
     expect(requests).toHaveLength(1);
+    expect(requests[0].excluded_from_budgets).toBe(true);
     expect(requests[0].postings).toEqual([
       {
         account_key: "expense.restaurant",
