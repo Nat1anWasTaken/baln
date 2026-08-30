@@ -278,6 +278,7 @@ export function EntryEditorSheet({
     >
       <DialogContent
         closeLabel={isEditing ? "關閉編輯交易" : "關閉新增交易"}
+        initialFocus="content"
         mobileSize="near-full"
       >
         <DialogHeader>

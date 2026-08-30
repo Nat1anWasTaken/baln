@@ -189,6 +189,7 @@ export function BudgetDialog({
         }}
       >
         <DialogContent
+          initialFocus="content"
           mobileSize="near-full"
           className="md:flex md:max-h-[calc(100dvh-2rem)] md:max-w-2xl md:flex-col md:overflow-hidden"
           closeLabel={budget ? "關閉編輯預算" : "關閉新增預算"}

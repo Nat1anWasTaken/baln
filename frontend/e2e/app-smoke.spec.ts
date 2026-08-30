@@ -1553,6 +1553,10 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
 
   const sheet = page.getByRole("dialog", { name: "新增交易" });
   await expect(sheet).toBeVisible();
+  await expect(sheet).toBeFocused();
+  await expect(sheet.locator('form [data-slot="card"]')).toHaveCount(0);
+  await expect(sheet.getByRole("group", { name: "交易資料" })).toBeVisible();
+  await expect(sheet.getByRole("group", { name: "分錄明細" })).toBeVisible();
   await expect(entriesSearch).toBeAttached();
   await expect(sheet).toHaveAttribute("data-size", "near-full");
   await expect(sheet.locator('[data-slot="dialog-header"]')).toBeVisible();
@@ -1820,6 +1824,7 @@ test("edits through the same route-backed mobile transaction sheet", async ({
 
   const sheet = page.getByRole("dialog", { name: "編輯交易" });
   await expect(sheet).toBeVisible();
+  await expect(sheet).toBeFocused();
   await expect
     .poll(async () => {
       const bounds = await sheet.boundingBox();
@@ -2014,6 +2019,15 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
     const sheet = page.getByRole("dialog", { name: "新增預算" });
     await expect(sheet).toHaveAttribute("data-presentation", "sheet");
     await expect(sheet).toHaveAttribute("data-size", "near-full");
+    await expect(sheet).toBeFocused();
+    await expect(sheet.locator('[data-slot="card"]')).toHaveCount(0);
+    await expect(sheet.getByRole("group", { name: "預算資料" })).toBeVisible();
+    await expect(
+      sheet.getByRole("group", { name: "週期與餘額" }),
+    ).toBeVisible();
+    await expect(
+      sheet.getByRole("group", { name: "包含的帳戶" }),
+    ).toBeVisible();
     await expect(sheet.locator('[data-slot="dialog-body"]')).toHaveCSS(
       "overflow-y",
       "auto",
@@ -2058,6 +2072,7 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
 
     await page.getByRole("button", { name: "編輯 旅行基金" }).click();
     const editSheet = page.getByRole("dialog", { name: "編輯預算" });
+    await expect(editSheet).toBeFocused();
     await page.getByLabel("每期額度").fill("6000");
     await page.getByRole("button", { name: "儲存預算" }).click();
     await expect(
@@ -2197,6 +2212,8 @@ test("keeps the budget dialog within the desktop viewport", async ({
     const desktopDialog = page.getByRole("dialog", { name: "新增預算" });
     await expect(desktopDialog).toHaveAttribute("data-presentation", "dialog");
     await expect(desktopDialog).toBeVisible();
+    await expect(desktopDialog).toBeFocused();
+    await expect(desktopDialog.locator('[data-slot="card"]')).toHaveCount(0);
 
     const viewport = page.viewportSize();
     const desktopBounds = await desktopDialog.boundingBox();
