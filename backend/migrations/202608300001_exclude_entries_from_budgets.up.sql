@@ -1,0 +1,2 @@
+ALTER TABLE entries
+    ADD COLUMN excluded_from_budgets BOOLEAN NOT NULL DEFAULT FALSE;
