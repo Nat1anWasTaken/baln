@@ -131,14 +131,37 @@ fn rollover_after_period(
     amount: i64,
     spent: i64,
 ) -> ApiResult<i64> {
-    let remaining = carry
-        .checked_add(amount)
-        .and_then(|value| value.checked_sub(spent))
-        .ok_or_else(|| ApiError::internal("budget carry overflow"))?;
+    let remaining = budget_balance(amount, carry, spent)?.remaining_minor;
     Ok(match mode {
         BudgetRolloverMode::Accumulate => remaining,
         BudgetRolloverMode::SurplusOnly => remaining.max(0),
         BudgetRolloverMode::Reset => 0,
+    })
+}
+
+#[derive(Clone, Copy)]
+struct BudgetBalance {
+    available_minor: i64,
+    remaining_minor: i64,
+}
+
+fn budget_remaining(available_minor: i64, spent_minor: i64) -> ApiResult<i64> {
+    available_minor
+        .checked_sub(spent_minor)
+        .ok_or_else(|| ApiError::internal("budget remaining overflow"))
+}
+
+fn budget_balance(
+    amount_minor: i64,
+    carry_in_minor: i64,
+    spent_minor: i64,
+) -> ApiResult<BudgetBalance> {
+    let available_minor = amount_minor
+        .checked_add(carry_in_minor)
+        .ok_or_else(|| ApiError::internal("budget available overflow"))?;
+    Ok(BudgetBalance {
+        available_minor,
+        remaining_minor: budget_remaining(available_minor, spent_minor)?,
     })
 }
 
@@ -209,13 +232,9 @@ async fn status_at_index(
     } else {
         repository::spent(pool, row.user_id, row.id, period_from, period_to).await?
     };
-    let available_minor = row
-        .amount_minor
-        .checked_add(carry_in_minor)
-        .ok_or_else(|| ApiError::internal("budget available overflow"))?;
-    let remaining_minor = available_minor
-        .checked_sub(spent_minor)
-        .ok_or_else(|| ApiError::internal("budget remaining overflow"))?;
+    let balance = budget_balance(row.amount_minor, carry_in_minor, spent_minor)?;
+    let available_minor = balance.available_minor;
+    let remaining_minor = balance.remaining_minor;
     let kind = if upcoming {
         BudgetStatusKind::Upcoming
     } else if remaining_minor < 0 {
@@ -380,10 +399,7 @@ pub async fn details(
         cumulative = cumulative
             .checked_add(row.spent_minor)
             .ok_or_else(|| ApiError::internal("budget trend spend overflow"))?;
-        let remaining_minor = budget
-            .available_minor
-            .checked_sub(cumulative)
-            .ok_or_else(|| ApiError::internal("budget trend remaining overflow"))?;
+        let remaining_minor = budget_remaining(budget.available_minor, cumulative)?;
         points.push(BudgetTrendBucket {
             date_from: row.date_from,
             date_to: row.date_to,
@@ -673,10 +689,6 @@ pub async fn statistics(
         let elapsed_days = (spec.cutoff - spec.period_from)
             .num_days()
             .clamp(0, total_days);
-        let available = row
-            .amount_minor
-            .checked_add(carry)
-            .ok_or_else(|| ApiError::internal("budget available overflow"))?;
         let mut actual = 0_i64;
         let mut scheduled = 0_i64;
         let mut points = vec![BudgetStatisticsPoint {
@@ -716,9 +728,9 @@ pub async fn statistics(
         let committed = actual
             .checked_add(scheduled)
             .ok_or_else(|| ApiError::internal("budget statistics spend overflow"))?;
-        let remaining = available
-            .checked_sub(committed)
-            .ok_or_else(|| ApiError::internal("budget remaining overflow"))?;
+        let balance = budget_balance(row.amount_minor, carry, committed)?;
+        let available = balance.available_minor;
+        let remaining = balance.remaining_minor;
         let utilization_bps = if available > 0 {
             Some(
                 committed
