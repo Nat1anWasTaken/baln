@@ -722,6 +722,7 @@ impl BalnMcp {
                     entry_index,
                 )),
                 confirmed_distinct: draft.confirmed_distinct,
+                excluded_from_budgets: draft.excluded_from_budgets,
                 postings: postings_from_movements(&draft.movements),
             })
             .collect();
@@ -743,6 +744,7 @@ impl BalnMcp {
                     "id": entry.id,
                     "date": entry.date,
                     "description": entry.description,
+                    "excluded_from_budgets": entry.excluded_from_budgets,
                     "movements": draft.movements,
                     "replayed": replayed
                 })
@@ -844,6 +846,7 @@ impl BalnMcp {
                 date: input.date,
                 description: input.description.clone(),
                 note: input.note.clone(),
+                excluded_from_budgets: input.excluded_from_budgets.unwrap_or(false),
                 movements: input.movements.clone(),
                 confirmed_distinct: false,
             };
@@ -879,6 +882,7 @@ impl BalnMcp {
                         date: input.date.unwrap_or(default_date),
                         description: input.description.trim().to_owned(),
                         note: input.note.clone(),
+                        excluded_from_budgets: input.excluded_from_budgets,
                         postings: postings_from_movements(&input.movements),
                     },
                 )
@@ -894,6 +898,7 @@ impl BalnMcp {
                             "id": entry.id,
                             "date": entry.date,
                             "description": entry.description,
+                            "excluded_from_budgets": entry.excluded_from_budgets,
                             "movements": input.movements
                         })
                     })
@@ -1040,6 +1045,9 @@ struct EntryDraft {
     /// original amount and currency, exchange rate, rate date, source, and rounding here or in the
     /// movement memo.
     note: Option<String>,
+    /// Exclude this entry from every budget while keeping it in the ledger and reports.
+    #[serde(default)]
+    excluded_from_budgets: bool,
     /// One or more positive money movements. Use multiple movements for splits.
     movements: Vec<MovementInput>,
     /// Set this to true only after Baln reports a possible duplicate for this exact draft and the
@@ -1072,6 +1080,8 @@ struct UpdateEntryInput {
     description: String,
     /// Replacement note, or null to remove it.
     note: Option<String>,
+    /// Set the budget-exclusion state. Omit to preserve the current state.
+    excluded_from_budgets: Option<bool>,
     /// Complete replacement list of positive money movements.
     movements: Vec<MovementInput>,
 }
