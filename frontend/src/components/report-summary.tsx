@@ -1,10 +1,4 @@
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  ChevronDown,
-  Landmark,
-  Scale,
-} from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Landmark, Scale } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { AppLink } from "@/components/navigation-transition";
@@ -23,14 +17,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Combobox } from "@/components/ui/combobox";
 import { Progress } from "@/components/ui/progress";
 import type { ComparisonMode } from "@/lib/format";
 import { formatMoney, toInclusiveDate } from "@/lib/format";
@@ -114,33 +101,19 @@ export function ComparisonModeSelector({
   className?: string;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className={cn("justify-between", className)}
-          aria-label={`比較基準：${comparisonLabels[value]}`}
-        >
-          <span className="truncate">比較：{comparisonLabels[value]}</span>
-          <ChevronDown aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuLabel>比較基準</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={value}
-          onValueChange={(next) => onValueChange(next as ComparisonMode)}
-        >
-          <DropdownMenuRadioItem value="same-progress">
-            同期進度
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="full-previous">
-            完整前期
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Combobox
+      value={value}
+      onValueChange={(next) => onValueChange(next as ComparisonMode)}
+      options={Object.entries(comparisonLabels).map(([optionValue, label]) => ({
+        value: optionValue,
+        label,
+      }))}
+      sheetTitle="比較基準"
+      searchPlaceholder="搜尋比較基準…"
+      emptyText="找不到比較基準。"
+      aria-label={`比較基準：${comparisonLabels[value]}`}
+      className={className}
+    />
   );
 }
 

@@ -50,6 +50,7 @@ type ComboboxProps = {
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  "aria-label"?: string;
   "aria-invalid"?: boolean;
 };
 
@@ -65,6 +66,7 @@ function Combobox({
   emptyText = "找不到項目。",
   disabled = false,
   className,
+  "aria-label": ariaLabel,
   "aria-invalid": ariaInvalid,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
@@ -97,6 +99,7 @@ function Combobox({
         type="button"
         variant="outline"
         role="combobox"
+        aria-label={ariaLabel}
         aria-expanded={open}
         aria-invalid={ariaInvalid}
         disabled={disabled}

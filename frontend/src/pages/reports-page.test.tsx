@@ -78,7 +78,7 @@ describe("reports accounting periods", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("button", { name: "報表期間：本期" }),
+      await screen.findByRole("combobox", { name: "報表期間：本期" }),
     ).toBeVisible();
     expect(
       screen.getByText(
@@ -107,9 +107,9 @@ describe("reports accounting periods", () => {
     renderPage();
 
     await user.click(
-      await screen.findByRole("button", { name: "報表期間：本期" }),
+      await screen.findByRole("combobox", { name: "報表期間：本期" }),
     );
-    await user.click(screen.getByRole("menuitemradio", { name: "自訂" }));
+    await user.click(screen.getByRole("option", { name: "自訂" }));
 
     const dateFrom = screen.getByLabelText("開始日期");
     const dateTo = screen.getByLabelText("結束日期");

@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { useOfflineReadOnly } from "@/auth/auth-context";
@@ -25,15 +24,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import { DateRangePicker } from "@/components/ui/date-picker";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useComparisonMode } from "@/hooks/use-comparison-mode";
@@ -168,35 +160,17 @@ export function ReportsPage() {
         <CardContent className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field>
-              <FieldLabel>期間</FieldLabel>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-between"
-                    aria-label={`報表期間：${presetLabels[preset]}`}
-                  >
-                    {presetLabels[preset]}
-                    <ChevronDown aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuLabel>選擇期間</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={preset}
-                    onValueChange={(value) =>
-                      choosePreset(value as ReportPreset)
-                    }
-                  >
-                    {presets.map(([value, label]) => (
-                      <DropdownMenuRadioItem key={value} value={value}>
-                        {label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <FieldLabel htmlFor="report-period">期間</FieldLabel>
+              <Combobox
+                id="report-period"
+                value={preset}
+                onValueChange={(value) => choosePreset(value as ReportPreset)}
+                options={presets.map(([value, label]) => ({ value, label }))}
+                sheetTitle="選擇期間"
+                searchPlaceholder="搜尋期間…"
+                emptyText="找不到期間。"
+                aria-label={`報表期間：${presetLabels[preset]}`}
+              />
             </Field>
             <Field>
               <FieldLabel>比較基準</FieldLabel>
