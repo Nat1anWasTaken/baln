@@ -168,6 +168,7 @@ type DialogContentProps = MotionSafeProps<
   React.ComponentProps<typeof DialogPrimitive.Content>
 > & {
   closeLabel?: string;
+  initialFocus?: "auto" | "content";
   mobileSize?: "content" | "near-full";
   showCloseButton?: boolean;
   showHandle?: boolean;
@@ -177,13 +178,25 @@ function DialogContent({
   className,
   children,
   closeLabel = "Close",
+  initialFocus = "auto",
   mobileSize = "content",
+  onOpenAutoFocus,
   showCloseButton = true,
   showHandle,
   ...props
 }: DialogContentProps) {
   const { dismissible, isMobile, open } = React.useContext(DialogContext);
   const instant = useInstantMotion();
+  const handleOpenAutoFocus = React.useCallback(
+    (event: Event) => {
+      onOpenAutoFocus?.(event);
+      if (event.defaultPrevented || initialFocus !== "content") return;
+      event.preventDefault();
+      const content = event.currentTarget as HTMLElement | null;
+      content?.focus({ preventScroll: true });
+    },
+    [initialFocus, onOpenAutoFocus],
+  );
 
   if (isMobile) {
     return (
@@ -197,6 +210,8 @@ function DialogContent({
         showCloseButton={showCloseButton}
         showHandle={showHandle}
         size={mobileSize}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        tabIndex={initialFocus === "content" ? -1 : undefined}
         {...props}
       >
         {children}
@@ -226,6 +241,8 @@ function DialogContent({
                     }
               }
               transition={instant ? { duration: 0 } : modalMotion.transition}
+              onOpenAutoFocus={handleOpenAutoFocus}
+              tabIndex={initialFocus === "content" ? -1 : undefined}
               className={cn(
                 "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none sm:max-w-md dark:ring-foreground/10",
                 className,

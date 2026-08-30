@@ -24,6 +24,20 @@ function setMobileViewport() {
   );
 }
 
+function setDesktopViewport() {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      addEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: false,
+      media: query,
+      onchange: null,
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
+
 function MobileDialog({ children }: { children: React.ReactNode }) {
   return (
     <Dialog open onOpenChange={() => undefined}>
@@ -106,5 +120,31 @@ describe("floating content in a mobile dialog", () => {
       '[data-slot="dropdown-menu-content"]',
     );
     expect(sheet).toContainElement(content);
+  });
+});
+
+describe("dialog initial focus", () => {
+  it.each([
+    ["desktop dialog", setDesktopViewport],
+    ["mobile sheet", setMobileViewport],
+  ])("can keep form fields idle in a %s", async (_, setViewport) => {
+    setViewport();
+
+    render(
+      <Dialog open onOpenChange={() => undefined}>
+        <DialogContent initialFocus="content">
+          <DialogTitle>編輯項目</DialogTitle>
+          <label>
+            名稱
+            <input />
+          </label>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "編輯項目" });
+    const input = screen.getByRole("textbox", { name: "名稱" });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    expect(input).not.toHaveFocus();
   });
 });
