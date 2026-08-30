@@ -8,7 +8,7 @@ import { createStore, del, get, set } from "idb-keyval";
 import type { User } from "@/lib/schemas";
 
 export const OFFLINE_MAX_AGE = 24 * 60 * 60 * 1000;
-export const OFFLINE_CACHE_BUSTER = "baln-offline-v2";
+export const OFFLINE_CACHE_BUSTER = "baln-offline-v3";
 
 const store = createStore("baln-offline", "state");
 const queryCacheKey = "query-cache";

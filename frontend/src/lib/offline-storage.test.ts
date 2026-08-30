@@ -29,6 +29,6 @@ describe("offline query persistence policy", () => {
 
   it("uses an explicit 24-hour lifetime and schema buster", () => {
     expect(OFFLINE_MAX_AGE).toBe(24 * 60 * 60 * 1000);
-    expect(OFFLINE_CACHE_BUSTER).toBe("baln-offline-v2");
+    expect(OFFLINE_CACHE_BUSTER).toBe("baln-offline-v3");
   });
 });

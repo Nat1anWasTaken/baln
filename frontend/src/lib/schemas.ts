@@ -313,6 +313,7 @@ export const entryResponseSchema = z.object({
   description: z.string(),
   note: z.string().nullable(),
   dedup_key: z.string().nullable(),
+  excluded_from_budgets: z.boolean(),
   postings: z.array(postingResponseSchema),
   created_at: z.string(),
   updated_at: z.string(),
@@ -409,6 +410,7 @@ export type EntryWriteRequest = {
   date: string;
   description: string;
   note: string | null;
+  excluded_from_budgets: boolean;
   postings: PostingInput[];
 };
 
