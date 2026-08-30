@@ -16,7 +16,8 @@ use crate::{
 pub async fn get(pool: &PgPool, user_id: Uuid, entry_id: Uuid) -> ApiResult<Option<EntryResponse>> {
     let row = sqlx::query_as::<_, EntryRow>(
         r#"
-        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+        SELECT id, user_id, date, description, note, dedup_key, excluded_from_budgets,
+               created_at, updated_at
           FROM entries
          WHERE id = $1 AND user_id = $2
         "#,
@@ -38,7 +39,8 @@ pub(crate) async fn get_by_dedup_in_transaction(
 ) -> ApiResult<Option<EntryResponse>> {
     let row = sqlx::query_as::<_, EntryRow>(
         r#"
-        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+        SELECT id, user_id, date, description, note, dedup_key, excluded_from_budgets,
+               created_at, updated_at
           FROM entries
          WHERE user_id = $1 AND dedup_key = $2
          FOR SHARE
@@ -61,7 +63,8 @@ pub(crate) async fn list_on_date_in_transaction(
 ) -> ApiResult<Vec<EntryResponse>> {
     let rows = sqlx::query_as::<_, EntryRow>(
         r#"
-        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+        SELECT id, user_id, date, description, note, dedup_key, excluded_from_budgets,
+               created_at, updated_at
           FROM entries
          WHERE user_id = $1 AND date = $2
          ORDER BY id DESC
@@ -114,6 +117,7 @@ pub async fn hydrate(pool: &PgPool, row: EntryRow) -> ApiResult<EntryResponse> {
         description: row.description,
         note: row.note,
         dedup_key: row.dedup_key,
+        excluded_from_budgets: row.excluded_from_budgets,
         postings,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -175,6 +179,7 @@ pub async fn hydrate_many(
                 description: row.description,
                 note: row.note,
                 dedup_key: row.dedup_key,
+                excluded_from_budgets: row.excluded_from_budgets,
                 postings,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
@@ -221,6 +226,7 @@ pub(crate) async fn hydrate_in_transaction(
         description: row.description,
         note: row.note,
         dedup_key: row.dedup_key,
+        excluded_from_budgets: row.excluded_from_budgets,
         postings,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -253,7 +259,8 @@ pub async fn lock_entry(
 ) -> ApiResult<Option<EntryRow>> {
     Ok(sqlx::query_as::<_, EntryRow>(
         r#"
-        SELECT id, user_id, date, description, note, dedup_key, created_at, updated_at
+        SELECT id, user_id, date, description, note, dedup_key, excluded_from_budgets,
+               created_at, updated_at
           FROM entries
          WHERE id = $1 AND user_id = $2
          FOR UPDATE

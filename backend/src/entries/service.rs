@@ -164,8 +164,9 @@ pub async fn create_batch(
         let entry_id = Uuid::now_v7();
         sqlx::query(
             r#"
-            INSERT INTO entries (id, user_id, date, description, note, dedup_key)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO entries
+                        (id, user_id, date, description, note, dedup_key, excluded_from_budgets)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
         )
         .bind(entry_id)
@@ -174,6 +175,7 @@ pub async fn create_batch(
         .bind(&request.description)
         .bind(&request.note)
         .bind(&request.dedup_key)
+        .bind(request.excluded_from_budgets)
         .execute(&mut *transaction)
         .await?;
         insert_postings(
@@ -291,7 +293,10 @@ pub async fn update_batch(
         sqlx::query(
             r#"
             UPDATE entries
-               SET date = $3, description = $4, note = $5
+               SET date = $3,
+                   description = $4,
+                   note = $5,
+                   excluded_from_budgets = COALESCE($6, excluded_from_budgets)
              WHERE id = $1 AND user_id = $2
             "#,
         )
@@ -300,6 +305,7 @@ pub async fn update_batch(
         .bind(request.date)
         .bind(&request.description)
         .bind(&request.note)
+        .bind(request.excluded_from_budgets)
         .execute(&mut *transaction)
         .await?;
     }
@@ -587,6 +593,7 @@ fn compare_idempotent(
     let same = existing.date == request.date
         && existing.description == request.description
         && existing.note == request.note
+        && existing.excluded_from_budgets == request.excluded_from_budgets
         && existing_postings == requested_postings;
     if same {
         Ok((existing, true))
@@ -683,6 +690,7 @@ mod tests {
             note: None,
             dedup_key: Some("manual-message:test".to_owned()),
             confirmed_distinct: false,
+            excluded_from_budgets: false,
             postings: vec![
                 PostingInput {
                     account_key: "expense.restaurant".to_owned(),
@@ -723,6 +731,7 @@ mod tests {
             date: entry.date,
             description: description.to_owned(),
             note: Some(format!("replacement for {}", entry.id)),
+            excluded_from_budgets: None,
             postings: vec![
                 PostingInput {
                     account_key: "expense.restaurant".to_owned(),
@@ -838,6 +847,23 @@ mod tests {
         create(&pool, user_id, request()).await.unwrap();
         let mut changed = request();
         changed.description = "Unrelated later transaction".to_owned();
+
+        let error = create(&pool, user_id, changed).await.unwrap_err();
+        assert!(matches!(
+            error,
+            ApiError::Problem {
+                code: "dedup_key_conflict",
+                ..
+            }
+        ));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn explicit_key_with_different_budget_exclusion_is_a_conflict(pool: PgPool) {
+        let user_id = seed(&pool).await;
+        create(&pool, user_id, request()).await.unwrap();
+        let mut changed = request();
+        changed.excluded_from_budgets = true;
 
         let error = create(&pool, user_id, changed).await.unwrap_err();
         assert!(matches!(
@@ -1226,6 +1252,7 @@ mod tests {
                 date: entry.date,
                 description: "麥當勞 午餐".to_owned(),
                 note: Some("朋友聚餐".to_owned()),
+                excluded_from_budgets: Some(true),
                 postings: vec![
                     PostingInput {
                         account_key: "expense.restaurant".to_owned(),
@@ -1243,6 +1270,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(updated.description, "麥當勞 午餐");
+        assert!(updated.excluded_from_budgets);
         assert_eq!(updated.postings.len(), 2);
         assert_eq!(
             updated
@@ -1252,6 +1280,30 @@ mod tests {
                 .sum::<i64>(),
             0
         );
+
+        let preserved = update(
+            &pool,
+            user_id,
+            entry.id,
+            UpdateEntryRequest {
+                date: updated.date,
+                description: "麥當勞 晚餐".to_owned(),
+                note: updated.note.clone(),
+                excluded_from_budgets: None,
+                postings: updated
+                    .postings
+                    .iter()
+                    .map(|posting| PostingInput {
+                        account_key: posting.account.key.clone(),
+                        amount_minor: posting.amount_minor,
+                        memo: posting.memo.clone(),
+                    })
+                    .collect(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(preserved.excluded_from_budgets);
     }
 
     #[sqlx::test(migrations = "./migrations")]

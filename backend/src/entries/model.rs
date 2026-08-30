@@ -21,6 +21,8 @@ pub struct CreateEntryRequest {
     pub dedup_key: Option<String>,
     #[serde(default)]
     pub confirmed_distinct: bool,
+    #[serde(default)]
+    pub excluded_from_budgets: bool,
     pub postings: Vec<PostingInput>,
 }
 
@@ -29,6 +31,8 @@ pub struct UpdateEntryRequest {
     pub date: NaiveDate,
     pub description: String,
     pub note: Option<String>,
+    /// Omit to preserve the entry's current budget-exclusion state.
+    pub excluded_from_budgets: Option<bool>,
     pub postings: Vec<PostingInput>,
 }
 
@@ -56,6 +60,7 @@ pub struct EntryResponse {
     pub description: String,
     pub note: Option<String>,
     pub dedup_key: Option<String>,
+    pub excluded_from_budgets: bool,
     pub postings: Vec<PostingResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -93,6 +98,7 @@ pub(crate) struct EntryRow {
     pub description: String,
     pub note: Option<String>,
     pub dedup_key: Option<String>,
+    pub excluded_from_budgets: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
