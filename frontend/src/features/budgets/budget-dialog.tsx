@@ -30,7 +30,11 @@ import {
   Field,
   FieldDescription,
   FieldError,
+  FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { SwitchField } from "@/components/ui/switch";
@@ -196,268 +200,285 @@ export function BudgetDialog({
                 設定週期、額度與用來篩選交易的帳戶。
               </DialogDescription>
             </DialogHeader>
-            <DialogBody className="min-h-0 flex-1 overflow-y-auto grid gap-5">
-              <Field data-invalid={submitted && !values.name.trim()}>
-                <FieldLabel htmlFor="budget-name">預算名稱</FieldLabel>
-                <Input
-                  id="budget-name"
-                  aria-invalid={submitted && !values.name.trim()}
-                  value={values.name}
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="例如：日常開銷"
-                />
-                {submitted && !values.name.trim() ? (
-                  <FieldError>請輸入預算名稱。</FieldError>
-                ) : null}
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  data-invalid={
-                    submitted &&
-                    (!Number.isSafeInteger(values.amount_minor) ||
-                      values.amount_minor <= 0)
-                  }
-                >
-                  <FieldLabel htmlFor="budget-amount">每期額度</FieldLabel>
-                  <Input
-                    id="budget-amount"
-                    aria-invalid={
-                      submitted &&
+            <DialogBody className="min-h-0 flex-1 overflow-y-auto">
+              <FieldGroup className="gap-5">
+                <FieldSet className="gap-4">
+                  <FieldLegend>預算資料</FieldLegend>
+                  <Field data-invalid={submitted && !values.name.trim()}>
+                    <FieldLabel htmlFor="budget-name">預算名稱</FieldLabel>
+                    <Input
+                      id="budget-name"
+                      aria-invalid={submitted && !values.name.trim()}
+                      value={values.name}
+                      onChange={(event) =>
+                        setValues((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="例如：日常開銷"
+                    />
+                    {submitted && !values.name.trim() ? (
+                      <FieldError>請輸入預算名稱。</FieldError>
+                    ) : null}
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      data-invalid={
+                        submitted &&
+                        (!Number.isSafeInteger(values.amount_minor) ||
+                          values.amount_minor <= 0)
+                      }
+                    >
+                      <FieldLabel htmlFor="budget-amount">每期額度</FieldLabel>
+                      <Input
+                        id="budget-amount"
+                        aria-invalid={
+                          submitted &&
+                          (!Number.isSafeInteger(values.amount_minor) ||
+                            values.amount_minor <= 0)
+                        }
+                        type="number"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        value={values.amount_minor || ""}
+                        onChange={(event) =>
+                          setValues((current) => ({
+                            ...current,
+                            amount_minor: Number(event.target.value),
+                          }))
+                        }
+                      />
+                      <FieldDescription>以 TWD 整數金額計算。</FieldDescription>
+                      {submitted &&
                       (!Number.isSafeInteger(values.amount_minor) ||
-                        values.amount_minor <= 0)
-                    }
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    value={values.amount_minor || ""}
-                    onChange={(event) =>
+                        values.amount_minor <= 0) ? (
+                        <FieldError>請輸入大於零的整數額度。</FieldError>
+                      ) : null}
+                    </Field>
+                    <Field data-invalid={submitted && !values.start_date}>
+                      <FieldLabel htmlFor="budget-start-date">
+                        開始日期
+                      </FieldLabel>
+                      <DatePicker
+                        id="budget-start-date"
+                        aria-invalid={submitted && !values.start_date}
+                        value={values.start_date}
+                        required
+                        pickerTitle="選擇預算開始日期"
+                        onValueChange={(startDate) =>
+                          setValues((current) => ({
+                            ...current,
+                            start_date: startDate,
+                          }))
+                        }
+                      />
+                      {submitted && !values.start_date ? (
+                        <FieldError>請選擇開始日期。</FieldError>
+                      ) : null}
+                    </Field>
+                  </div>
+                  <SwitchField
+                    id="budget-overview"
+                    label="顯示在總覽"
+                    checked={values.show_on_overview}
+                    onCheckedChange={(checked) =>
                       setValues((current) => ({
                         ...current,
-                        amount_minor: Number(event.target.value),
+                        show_on_overview: checked,
                       }))
                     }
                   />
-                  <FieldDescription>以 TWD 整數金額計算。</FieldDescription>
-                  {submitted &&
-                  (!Number.isSafeInteger(values.amount_minor) ||
-                    values.amount_minor <= 0) ? (
-                    <FieldError>請輸入大於零的整數額度。</FieldError>
-                  ) : null}
-                </Field>
-                <Field data-invalid={submitted && !values.start_date}>
-                  <FieldLabel htmlFor="budget-start-date">開始日期</FieldLabel>
-                  <DatePicker
-                    id="budget-start-date"
-                    aria-invalid={submitted && !values.start_date}
-                    value={values.start_date}
-                    required
-                    pickerTitle="選擇預算開始日期"
-                    onValueChange={(startDate) =>
-                      setValues((current) => ({
-                        ...current,
-                        start_date: startDate,
-                      }))
-                    }
-                  />
-                  {submitted && !values.start_date ? (
-                    <FieldError>請選擇開始日期。</FieldError>
-                  ) : null}
-                </Field>
-              </div>
-              <div className="grid grid-cols-[1fr_1fr] gap-4">
-                <Field
-                  data-invalid={
-                    submitted &&
-                    (!Number.isSafeInteger(values.period_count) ||
-                      values.period_count <= 0)
-                  }
-                >
-                  <FieldLabel htmlFor="budget-period-count">
-                    週期長度
-                  </FieldLabel>
-                  <Input
-                    id="budget-period-count"
-                    aria-invalid={
-                      submitted &&
+                </FieldSet>
+                <FieldSeparator />
+                <FieldSet className="gap-4">
+                  <FieldLegend>週期與餘額</FieldLegend>
+                  <div className="grid grid-cols-[1fr_1fr] gap-4">
+                    <Field
+                      data-invalid={
+                        submitted &&
+                        (!Number.isSafeInteger(values.period_count) ||
+                          values.period_count <= 0)
+                      }
+                    >
+                      <FieldLabel htmlFor="budget-period-count">
+                        週期長度
+                      </FieldLabel>
+                      <Input
+                        id="budget-period-count"
+                        aria-invalid={
+                          submitted &&
+                          (!Number.isSafeInteger(values.period_count) ||
+                            values.period_count <= 0)
+                        }
+                        type="number"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        value={values.period_count}
+                        onChange={(event) =>
+                          setValues((current) => ({
+                            ...current,
+                            period_count: Number(event.target.value),
+                          }))
+                        }
+                      />
+                      {submitted &&
                       (!Number.isSafeInteger(values.period_count) ||
-                        values.period_count <= 0)
-                    }
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    value={values.period_count}
-                    onChange={(event) =>
-                      setValues((current) => ({
-                        ...current,
-                        period_count: Number(event.target.value),
-                      }))
-                    }
-                  />
-                  {submitted &&
-                  (!Number.isSafeInteger(values.period_count) ||
-                    values.period_count <= 0) ? (
-                    <FieldError>請輸入大於零的整數週期。</FieldError>
-                  ) : null}
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="budget-period-unit">單位</FieldLabel>
-                  <Combobox
-                    id="budget-period-unit"
-                    sheetTitle="單位"
-                    value={values.period_unit}
-                    onValueChange={(value) =>
-                      setValues((current) => ({
-                        ...current,
-                        period_unit: value as BudgetPeriodUnit,
-                      }))
-                    }
-                    options={[
-                      { value: "day", label: "天" },
-                      { value: "week", label: "週" },
-                      { value: "month", label: "月" },
-                      { value: "year", label: "年" },
-                    ]}
-                  />
-                </Field>
-              </div>
-              <Field>
-                <FieldLabel htmlFor="budget-rollover-mode">
-                  餘額沿襲方式
-                </FieldLabel>
-                <Combobox
-                  id="budget-rollover-mode"
-                  sheetTitle="餘額沿襲方式"
-                  value={values.rollover_mode}
-                  onValueChange={(value) =>
-                    setValues((current) => ({
-                      ...current,
-                      rollover_mode: value as BudgetRolloverMode,
-                    }))
-                  }
-                  options={[
-                    { value: "accumulate", label: "累加餘額" },
-                    { value: "surplus_only", label: "只沿襲剩餘" },
-                    { value: "reset", label: "每期重設" },
-                  ]}
-                />
-                <FieldDescription>
-                  {values.rollover_mode === "accumulate"
-                    ? "每期剩餘或超支都會帶入下一期。"
-                    : values.rollover_mode === "surplus_only"
-                      ? "只把未使用的餘額帶入下一期；超支不會延續。"
-                      : "每一期都只使用當期額度，不沿襲剩餘或超支。"}
-                </FieldDescription>
-              </Field>
-              <Field
-                data-invalid={submitted && values.account_keys.length === 0}
-              >
-                <FieldLabel>包含的帳戶</FieldLabel>
-                <FieldDescription>
-                  符合任一所選帳戶的交易，其支出分錄只計算一次；轉帳不會消耗預算。
-                </FieldDescription>
-                <div className="relative">
-                  <Search
-                    className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <Input
-                    id="budget-account-search"
-                    aria-label="搜尋預算帳戶"
-                    aria-invalid={submitted && values.account_keys.length === 0}
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="依名稱、代碼或類型搜尋"
-                    className="pl-8"
-                  />
-                </div>
-                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                  {accountTypes.map((type) => {
-                    const options = accounts.filter((account) => {
-                      if (account.type !== type) return false;
-                      const selected = values.account_keys.includes(
-                        account.key,
-                      );
-                      if (account.archived && !selected) return false;
-                      return (
-                        !normalizedSearch ||
-                        [
-                          account.name,
+                        values.period_count <= 0) ? (
+                        <FieldError>請輸入大於零的整數週期。</FieldError>
+                      ) : null}
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="budget-period-unit">單位</FieldLabel>
+                      <Combobox
+                        id="budget-period-unit"
+                        sheetTitle="單位"
+                        value={values.period_unit}
+                        onValueChange={(value) =>
+                          setValues((current) => ({
+                            ...current,
+                            period_unit: value as BudgetPeriodUnit,
+                          }))
+                        }
+                        options={[
+                          { value: "day", label: "天" },
+                          { value: "week", label: "週" },
+                          { value: "month", label: "月" },
+                          { value: "year", label: "年" },
+                        ]}
+                      />
+                    </Field>
+                  </div>
+                  <Field>
+                    <FieldLabel htmlFor="budget-rollover-mode">
+                      餘額沿襲方式
+                    </FieldLabel>
+                    <Combobox
+                      id="budget-rollover-mode"
+                      sheetTitle="餘額沿襲方式"
+                      value={values.rollover_mode}
+                      onValueChange={(value) =>
+                        setValues((current) => ({
+                          ...current,
+                          rollover_mode: value as BudgetRolloverMode,
+                        }))
+                      }
+                      options={[
+                        { value: "accumulate", label: "累加餘額" },
+                        { value: "surplus_only", label: "只沿襲剩餘" },
+                        { value: "reset", label: "每期重設" },
+                      ]}
+                    />
+                    <FieldDescription>
+                      {values.rollover_mode === "accumulate"
+                        ? "每期剩餘或超支都會帶入下一期。"
+                        : values.rollover_mode === "surplus_only"
+                          ? "只把未使用的餘額帶入下一期；超支不會延續。"
+                          : "每一期都只使用當期額度，不沿襲剩餘或超支。"}
+                    </FieldDescription>
+                  </Field>
+                </FieldSet>
+                <FieldSeparator />
+                <FieldSet className="gap-4">
+                  <FieldLegend>包含的帳戶</FieldLegend>
+                  <FieldDescription>
+                    符合任一所選帳戶的交易，其支出分錄只計算一次；轉帳不會消耗預算。
+                  </FieldDescription>
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <Input
+                      id="budget-account-search"
+                      aria-label="搜尋預算帳戶"
+                      aria-invalid={
+                        submitted && values.account_keys.length === 0
+                      }
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="依名稱、代碼或類型搜尋"
+                      className="pl-8"
+                    />
+                  </div>
+                  <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                    {accountTypes.map((type) => {
+                      const options = accounts.filter((account) => {
+                        if (account.type !== type) return false;
+                        const selected = values.account_keys.includes(
                           account.key,
-                          accountTypeLabels[type],
-                        ].some((value) =>
-                          value.toLocaleLowerCase().includes(normalizedSearch),
-                        )
+                        );
+                        if (account.archived && !selected) return false;
+                        return (
+                          !normalizedSearch ||
+                          [
+                            account.name,
+                            account.key,
+                            accountTypeLabels[type],
+                          ].some((value) =>
+                            value
+                              .toLocaleLowerCase()
+                              .includes(normalizedSearch),
+                          )
+                        );
+                      });
+                      if (!options.length) return null;
+                      return (
+                        <fieldset
+                          key={type}
+                          className="grid min-w-0 content-start gap-2"
+                        >
+                          <legend className="text-xs font-medium text-muted-foreground">
+                            {accountTypeLabels[type]}
+                          </legend>
+                          <div className="grid gap-1">
+                            {options.map((account) => {
+                              const checked = values.account_keys.includes(
+                                account.key,
+                              );
+                              return (
+                                <label
+                                  key={account.id}
+                                  className="flex min-h-11 min-w-0 items-center gap-3 rounded-2xl px-3 text-sm"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(next) =>
+                                      setValues((current) => ({
+                                        ...current,
+                                        account_keys: next
+                                          ? [
+                                              ...current.account_keys,
+                                              account.key,
+                                            ]
+                                          : current.account_keys.filter(
+                                              (key) => key !== account.key,
+                                            ),
+                                      }))
+                                    }
+                                  />
+                                  <span className="min-w-0 flex-1 truncate">
+                                    {account.name}
+                                    {account.archived ? "（已封存）" : ""}
+                                  </span>
+                                  <span className="min-w-0 max-w-[45%] shrink truncate text-xs text-muted-foreground">
+                                    {account.key}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </fieldset>
                       );
-                    });
-                    if (!options.length) return null;
-                    return (
-                      <fieldset
-                        key={type}
-                        className="grid min-w-0 content-start gap-2"
-                      >
-                        <legend className="text-xs font-medium text-muted-foreground">
-                          {accountTypeLabels[type]}
-                        </legend>
-                        <div className="grid gap-1">
-                          {options.map((account) => {
-                            const checked = values.account_keys.includes(
-                              account.key,
-                            );
-                            return (
-                              <label
-                                key={account.id}
-                                className="flex min-h-11 min-w-0 items-center gap-3 rounded-2xl px-3 text-sm"
-                              >
-                                <Checkbox
-                                  checked={checked}
-                                  onCheckedChange={(next) =>
-                                    setValues((current) => ({
-                                      ...current,
-                                      account_keys: next
-                                        ? [...current.account_keys, account.key]
-                                        : current.account_keys.filter(
-                                            (key) => key !== account.key,
-                                          ),
-                                    }))
-                                  }
-                                />
-                                <span className="min-w-0 flex-1 truncate">
-                                  {account.name}
-                                  {account.archived ? "（已封存）" : ""}
-                                </span>
-                                <span className="min-w-0 max-w-[45%] shrink truncate text-xs text-muted-foreground">
-                                  {account.key}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </fieldset>
-                    );
-                  })}
-                </div>
-                {submitted && values.account_keys.length === 0 ? (
-                  <FieldError>請至少選擇一個帳戶。</FieldError>
-                ) : null}
-              </Field>
-              <SwitchField
-                id="budget-overview"
-                label="顯示在總覽"
-                checked={values.show_on_overview}
-                onCheckedChange={(checked) =>
-                  setValues((current) => ({
-                    ...current,
-                    show_on_overview: checked,
-                  }))
-                }
-              />
+                    })}
+                  </div>
+                  {submitted && values.account_keys.length === 0 ? (
+                    <FieldError>請至少選擇一個帳戶。</FieldError>
+                  ) : null}
+                </FieldSet>
+              </FieldGroup>
             </DialogBody>
             <DialogFooter>
               <Button
