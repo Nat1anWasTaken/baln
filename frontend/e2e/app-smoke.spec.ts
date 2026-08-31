@@ -1116,7 +1116,7 @@ test("presents spending insights responsively on overview and reports", async ({
 
   await page.goto("/reports");
   await expect(
-    page.getByRole("button", { name: "報表期間：本期" }),
+    page.getByRole("combobox", { name: "報表期間：本期" }),
   ).toBeVisible();
   await expectEqualSummaryIconSizes(page);
   await expect(page.getByText("分類分析", { exact: true })).toBeVisible();
@@ -1954,6 +1954,14 @@ test("deletes an account after responsive destructive confirmation", async ({
   await expect(page.getByRole("button", { name: "刪除 現金" })).toBeVisible();
 
   await page.getByRole("button", { name: "刪除 現金" }).click();
+  await expect
+    .poll(() =>
+      deleteSheet.evaluate(
+        (element) =>
+          new DOMMatrixReadOnly(getComputedStyle(element).transform).m42,
+      ),
+    )
+    .toBe(0);
   await dragMouse(
     page,
     deleteSheet.locator('[data-slot="dialog-handle"]'),
