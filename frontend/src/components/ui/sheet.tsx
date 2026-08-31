@@ -528,6 +528,7 @@ function useSheetDrag(
 type SheetContentProps = MotionSafeProps<
   React.ComponentProps<typeof DialogPrimitive.Content>
 > & {
+  animateSize?: boolean;
   closeLabel?: string;
   handleProps?: React.ComponentProps<"div"> & { "data-slot"?: string };
   overlayProps?: MotionSafeProps<
@@ -539,6 +540,7 @@ type SheetContentProps = MotionSafeProps<
 };
 
 function SheetContent({
+  animateSize = false,
   className,
   children,
   closeLabel = "Close",
@@ -586,6 +588,7 @@ function SheetContent({
               data-presentation="sheet"
               data-size={size}
               initial={instant ? false : { y: "100%" }}
+              layout={animateSize ? "size" : false}
               animate={{ y: 0 }}
               exit={
                 instant
