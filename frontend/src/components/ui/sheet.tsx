@@ -179,6 +179,7 @@ function useSheetDrag(
   enabled: boolean,
   dismissible: boolean,
   requestClose: () => void,
+  onDragDismiss?: () => void,
 ) {
   const contentRef = React.useRef<HTMLDivElement>(null);
   const [contentElement, setContentElement] =
@@ -215,11 +216,11 @@ function useSheetDrag(
       if (!content || !drag) return;
 
       content.dataset.dragging = "false";
-      if (dismiss) requestClose();
+      if (dismiss) (onDragDismiss ?? requestClose)();
       void animate(y, 0, motionSpring.sheet);
       dragRef.current = null;
     },
-    [requestClose, y],
+    [onDragDismiss, requestClose, y],
   );
 
   const startScrollInertia = React.useCallback(
@@ -534,6 +535,7 @@ type SheetContentProps = MotionSafeProps<
   overlayProps?: MotionSafeProps<
     React.ComponentProps<typeof DialogPrimitive.Overlay>
   > & { "data-slot"?: string };
+  onDragDismiss?: () => void;
   showCloseButton?: boolean;
   showHandle?: boolean;
   size?: "content" | "near-full";
@@ -546,6 +548,7 @@ function SheetContent({
   closeLabel = "Close",
   handleProps,
   overlayProps,
+  onDragDismiss,
   showCloseButton = true,
   showHandle,
   size = "content",
@@ -568,6 +571,7 @@ function SheetContent({
     dismissible,
     dismissible,
     requestClose,
+    onDragDismiss,
   );
   const [renderedSize, setRenderedSize] = React.useState(size);
   const sizeAnimationFromHeightRef = React.useRef<number | null>(null);
@@ -663,9 +667,10 @@ function SheetContent({
               transition={instant ? { duration: 0 } : motionSpring.sheet}
               style={{ y }}
               className={cn(
-                "group/sheet-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-4xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none will-change-transform dark:ring-foreground/10 [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden",
+                "group/sheet-content fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-4xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none will-change-transform dark:ring-foreground/10 [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden",
+                renderedSize === "content" && "max-h-[80dvh]",
                 renderedSize === "near-full" &&
-                  "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)]",
+                  "h-[calc(100dvh-max(env(safe-area-inset-top),6dvh)-0.75rem)] max-h-[calc(100dvh-max(env(safe-area-inset-top),6dvh)-0.75rem)]",
                 className,
               )}
               onAnimationEnd={onAnimationEnd}

@@ -93,6 +93,39 @@ describe("Combobox", () => {
     expect(picker).toHaveAttribute("data-size", "content");
   });
 
+  it("collapses instead of dismissing when dragged while mobile search is focused", async () => {
+    setViewport(true);
+    const user = userEvent.setup();
+
+    render(
+      <Combobox
+        sheetTitle="帳戶類型"
+        value=""
+        onValueChange={() => undefined}
+        options={options}
+      />,
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    const picker = await screen.findByRole("dialog", { name: "帳戶類型" });
+    const search = screen.getByPlaceholderText("搜尋…");
+    await user.click(search);
+
+    fireEvent.touchStart(picker, {
+      changedTouches: [{ clientX: 100, clientY: 100 }],
+      touches: [{ clientX: 100, clientY: 100 }],
+    });
+    fireEvent.touchMove(picker, {
+      changedTouches: [{ clientX: 100, clientY: 220 }],
+      touches: [{ clientX: 100, clientY: 220 }],
+    });
+    fireEvent.touchEnd(picker);
+
+    expect(picker).toBeVisible();
+    expect(search).not.toHaveFocus();
+    expect(picker).toHaveAttribute("data-size", "content");
+  });
+
   it("resets mobile search after closing and restores the trigger", async () => {
     setViewport(true);
     const user = userEvent.setup();

@@ -1321,7 +1321,11 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
       );
       if (!picker || !option) throw new Error("Combobox picker is incomplete");
 
-      const frames: Array<{ optionHeight: number; pickerHeight: number }> = [];
+      const frames: Array<{
+        optionHeight: number;
+        pickerHeight: number;
+        pickerTop: number;
+      }> = [];
       const initialOptionHeight = option.getBoundingClientRect().height;
       element.focus();
       for (let index = 0; index < 20; index += 1) {
@@ -1329,6 +1333,7 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
         frames.push({
           optionHeight: option.getBoundingClientRect().height,
           pickerHeight: picker.getBoundingClientRect().height,
+          pickerTop: picker.getBoundingClientRect().top,
         });
       }
       return { frames, initialOptionHeight };
@@ -1344,6 +1349,7 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
         expansionFrames.initialOptionHeight,
         0,
       );
+      expect(frame.pickerTop).toBeGreaterThanOrEqual(12);
     }
     const collapseOptionHeights = await search.evaluate(async (element) => {
       const option = document.querySelector<HTMLElement>(
@@ -1363,13 +1369,19 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
     await expect(picker).toHaveAttribute("data-size", "content");
     await search.click();
     await expect(picker).toHaveAttribute("data-size", "near-full");
+    await dragTouch(page, picker.locator('[data-slot="sheet-handle"]'), 300);
+    await expect(picker).toBeVisible();
+    await expect(search).not.toBeFocused();
+    await expect(picker).toHaveAttribute("data-size", "content");
+    await search.click();
+    await expect(picker).toHaveAttribute("data-size", "near-full");
     await search.fill("不存在");
     await expect(picker.getByText("找不到帳戶類型。")).toBeVisible();
     await expect(search).toBeInViewport();
     await expect(picker).toHaveAttribute("data-size", "near-full");
     await search.evaluate((element) => element.blur());
     await expect(picker).toHaveAttribute("data-size", "content");
-    await picker.getByRole("button", { name: "關閉" }).click();
+    await dragTouch(page, picker.locator('[data-slot="sheet-handle"]'), 300);
     await expect(picker).not.toBeVisible();
     await expect(sheet).toBeVisible();
     await expect(trigger).toBeFocused();

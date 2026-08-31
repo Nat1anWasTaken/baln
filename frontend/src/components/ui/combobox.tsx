@@ -71,6 +71,7 @@ function Combobox({
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [mobileSearchFocused, setMobileSearchFocused] = React.useState(false);
+  const mobileSearchInputRef = React.useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const allOptions = [...options, ...groups.flatMap((group) => group.options)];
   const selectedOption = allOptions.find((option) => option.value === value);
@@ -127,6 +128,7 @@ function Combobox({
         )}
       >
         <CommandInput
+          ref={mobile ? mobileSearchInputRef : undefined}
           placeholder={searchPlaceholder}
           onFocus={mobile ? () => setMobileSearchFocused(true) : undefined}
           onBlur={mobile ? () => setMobileSearchFocused(false) : undefined}
@@ -164,6 +166,13 @@ function Combobox({
           animateSize
           closeLabel="關閉"
           size={mobileSearchFocused ? "near-full" : "content"}
+          onDragDismiss={() => {
+            if (mobileSearchFocused) {
+              mobileSearchInputRef.current?.blur();
+              return;
+            }
+            setOpen(false);
+          }}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             const content = event.currentTarget as HTMLElement | null;
