@@ -1312,8 +1312,56 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
       .poll(() => list.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
 
-    await search.click();
+    const expansionFrames = await search.evaluate(async (element) => {
+      const picker = document.querySelector<HTMLElement>(
+        '[data-slot="sheet-content"][data-size="content"]',
+      );
+      const option = picker?.querySelector<HTMLElement>(
+        '[data-slot="command-item"]',
+      );
+      if (!picker || !option) throw new Error("Combobox picker is incomplete");
+
+      const frames: Array<{ optionHeight: number; pickerHeight: number }> = [];
+      const initialOptionHeight = option.getBoundingClientRect().height;
+      element.focus();
+      for (let index = 0; index < 20; index += 1) {
+        await new Promise(requestAnimationFrame);
+        frames.push({
+          optionHeight: option.getBoundingClientRect().height,
+          pickerHeight: picker.getBoundingClientRect().height,
+        });
+      }
+      return { frames, initialOptionHeight };
+    });
     await expect(search).toBeFocused();
+    await expect(picker).toHaveAttribute("data-size", "near-full");
+    expect(
+      Math.max(...expansionFrames.frames.map((frame) => frame.pickerHeight)) -
+        Math.min(...expansionFrames.frames.map((frame) => frame.pickerHeight)),
+    ).toBeGreaterThan(100);
+    for (const frame of expansionFrames.frames) {
+      expect(frame.optionHeight).toBeCloseTo(
+        expansionFrames.initialOptionHeight,
+        0,
+      );
+    }
+    const collapseOptionHeights = await search.evaluate(async (element) => {
+      const option = document.querySelector<HTMLElement>(
+        '[data-slot="sheet-content"] [data-slot="command-item"]',
+      );
+      const heights: number[] = [];
+      element.blur();
+      for (let index = 0; index < 20; index += 1) {
+        await new Promise(requestAnimationFrame);
+        if (option) heights.push(option.getBoundingClientRect().height);
+      }
+      return heights;
+    });
+    for (const height of collapseOptionHeights) {
+      expect(height).toBeCloseTo(expansionFrames.initialOptionHeight, 0);
+    }
+    await expect(picker).toHaveAttribute("data-size", "content");
+    await search.click();
     await expect(picker).toHaveAttribute("data-size", "near-full");
     await search.fill("不存在");
     await expect(picker.getByText("找不到帳戶類型。")).toBeVisible();

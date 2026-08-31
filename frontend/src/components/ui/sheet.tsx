@@ -569,6 +569,66 @@ function SheetContent({
     dismissible,
     requestClose,
   );
+  const [renderedSize, setRenderedSize] = React.useState(size);
+  const sizeAnimationFromHeightRef = React.useRef<number | null>(null);
+  const sizeAnimationRef = React.useRef<{ stop: () => void } | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!animateSize) {
+      if (renderedSize !== size) setRenderedSize(size);
+      return;
+    }
+    if (!contentElement || renderedSize === size) return;
+
+    sizeAnimationRef.current?.stop();
+    sizeAnimationRef.current = null;
+    sizeAnimationFromHeightRef.current =
+      contentElement.getBoundingClientRect().height;
+    setRenderedSize(size);
+  }, [animateSize, contentElement, renderedSize, size]);
+
+  React.useLayoutEffect(() => {
+    if (
+      !animateSize ||
+      !contentElement ||
+      renderedSize !== size ||
+      sizeAnimationFromHeightRef.current === null
+    ) {
+      return;
+    }
+
+    const fromHeight = sizeAnimationFromHeightRef.current;
+    sizeAnimationFromHeightRef.current = null;
+    contentElement.style.height = "";
+    const targetHeight = contentElement.getBoundingClientRect().height;
+
+    if (instant || Math.abs(targetHeight - fromHeight) < 1) {
+      contentElement.style.height = "";
+      return;
+    }
+
+    contentElement.style.height = `${fromHeight}px`;
+    const animation = animate(
+      contentElement,
+      { height: targetHeight },
+      motionSpring.sheet,
+    );
+    sizeAnimationRef.current = animation;
+    void animation.then(() => {
+      if (sizeAnimationRef.current !== animation) return;
+      sizeAnimationRef.current = null;
+      contentElement.style.height = "";
+    });
+  }, [animateSize, contentElement, instant, renderedSize, size]);
+
+  React.useEffect(
+    () => () => {
+      sizeAnimationRef.current?.stop();
+      sizeAnimationRef.current = null;
+      if (contentElement) contentElement.style.height = "";
+    },
+    [contentElement],
+  );
 
   return (
     <SheetPortal forceMount>
@@ -588,7 +648,6 @@ function SheetContent({
               data-presentation="sheet"
               data-size={size}
               initial={instant ? false : { y: "100%" }}
-              layout={animateSize ? "size" : false}
               animate={{ y: 0 }}
               exit={
                 instant
@@ -605,7 +664,7 @@ function SheetContent({
               style={{ y }}
               className={cn(
                 "group/sheet-content fixed inset-x-0 bottom-0 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-t-4xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none will-change-transform dark:ring-foreground/10 [&>form]:flex [&>form]:min-h-0 [&>form]:flex-1 [&>form]:flex-col [&>form]:overflow-hidden",
-                size === "near-full" &&
+                renderedSize === "near-full" &&
                   "h-[94dvh] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)]",
                 className,
               )}
