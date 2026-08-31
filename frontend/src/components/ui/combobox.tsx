@@ -70,6 +70,7 @@ function Combobox({
   "aria-invalid": ariaInvalid,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const [mobileSearchFocused, setMobileSearchFocused] = React.useState(false);
   const isMobile = useIsMobile();
   const allOptions = [...options, ...groups.flatMap((group) => group.options)];
   const selectedOption = allOptions.find((option) => option.value === value);
@@ -125,7 +126,11 @@ function Combobox({
             "min-h-0 flex-1 rounded-none pb-[max(env(safe-area-inset-bottom),0.5rem)]",
         )}
       >
-        <CommandInput placeholder={searchPlaceholder} />
+        <CommandInput
+          placeholder={searchPlaceholder}
+          onFocus={mobile ? () => setMobileSearchFocused(true) : undefined}
+          onBlur={mobile ? () => setMobileSearchFocused(false) : undefined}
+        />
         <CommandList
           className={cn(mobile && "min-h-0 max-h-none flex-1 touch-pan-y")}
         >
@@ -147,10 +152,18 @@ function Combobox({
 
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) setMobileSearchFocused(false);
+        }}
+      >
         <SheetTrigger asChild>{renderTrigger()}</SheetTrigger>
         <SheetContent
+          animateSize
           closeLabel="關閉"
+          size={mobileSearchFocused ? "near-full" : "content"}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             const content = event.currentTarget as HTMLElement | null;
