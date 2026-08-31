@@ -614,7 +614,7 @@ function SheetContent({
     contentElement.style.height = `${fromHeight}px`;
     const animation = animate(
       contentElement,
-      { height: targetHeight },
+      { height: [fromHeight, targetHeight] },
       motionSpring.sheet,
     );
     sizeAnimationRef.current = animation;

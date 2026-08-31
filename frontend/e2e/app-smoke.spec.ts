@@ -1344,6 +1344,9 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
       Math.max(...expansionFrames.frames.map((frame) => frame.pickerHeight)) -
         Math.min(...expansionFrames.frames.map((frame) => frame.pickerHeight)),
     ).toBeGreaterThan(100);
+    expect(expansionFrames.frames[0].pickerHeight).toBeLessThan(
+      expansionFrames.frames.at(-1)!.pickerHeight,
+    );
     for (const frame of expansionFrames.frames) {
       expect(frame.optionHeight).toBeCloseTo(
         expansionFrames.initialOptionHeight,
