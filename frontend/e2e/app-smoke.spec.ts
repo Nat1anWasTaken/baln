@@ -1314,6 +1314,13 @@ test("opens and scrolls a mobile combobox picker without focusing search", async
 
     await search.click();
     await expect(search).toBeFocused();
+    await expect(picker).toHaveAttribute("data-size", "near-full");
+    await search.fill("不存在");
+    await expect(picker.getByText("找不到帳戶類型。")).toBeVisible();
+    await expect(search).toBeInViewport();
+    await expect(picker).toHaveAttribute("data-size", "near-full");
+    await search.evaluate((element) => element.blur());
+    await expect(picker).toHaveAttribute("data-size", "content");
     await picker.getByRole("button", { name: "關閉" }).click();
     await expect(picker).not.toBeVisible();
     await expect(sheet).toBeVisible();

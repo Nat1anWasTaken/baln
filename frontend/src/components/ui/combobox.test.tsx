@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,11 +52,45 @@ describe("Combobox", () => {
 
     await user.click(search);
     expect(search).toHaveFocus();
+    expect(picker).toHaveAttribute("data-size", "near-full");
     await user.type(search, "支票");
     expect(screen.getByRole("option", { name: "支票帳戶" })).toBeVisible();
     expect(
       screen.queryByRole("option", { name: "儲蓄帳戶" }),
     ).not.toBeInTheDocument();
+
+    fireEvent.blur(search);
+    expect(picker).toHaveAttribute("data-size", "content");
+  });
+
+  it("keeps the mobile sheet near-full while IME input has no matches", async () => {
+    setViewport(true);
+    const user = userEvent.setup();
+
+    render(
+      <Combobox
+        sheetTitle="帳戶類型"
+        value=""
+        onValueChange={() => undefined}
+        options={options}
+      />,
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    const picker = await screen.findByRole("dialog", { name: "帳戶類型" });
+    const search = screen.getByPlaceholderText("搜尋…");
+
+    await user.click(search);
+    fireEvent.compositionStart(search);
+    await user.type(search, "不存在");
+
+    expect(screen.getByText("找不到項目。")).toBeVisible();
+    expect(search).toHaveFocus();
+    expect(picker).toHaveAttribute("data-size", "near-full");
+
+    fireEvent.compositionEnd(search);
+    fireEvent.blur(search);
+    expect(picker).toHaveAttribute("data-size", "content");
   });
 
   it("resets mobile search after closing and restores the trigger", async () => {
