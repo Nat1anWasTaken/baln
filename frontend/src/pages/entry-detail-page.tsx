@@ -19,32 +19,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  PostingDirectionBadge,
-  PostingDirectionText,
-  postingDirectionFromAmount,
-} from "@/features/entries/posting-direction";
-import { accountTypeLabels } from "@/lib/account";
+import { TransactionDisplay } from "@/components/transaction-display";
 import { entriesApi } from "@/lib/api-client";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
-import { formatLedgerDate, formatMoney, formatTimestamp } from "@/lib/format";
 import { invalidateAfterEntryWrite } from "@/lib/query-invalidation";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -129,116 +106,7 @@ export function EntryDetailPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardDescription>{formatLedgerDate(entry.data.date)}</CardDescription>
-          <CardTitle className="text-xl">{entry.data.description}</CardTitle>
-          {entry.data.excluded_from_budgets ? (
-            <Badge variant="outline" className="w-fit">
-              不計入預算
-            </Badge>
-          ) : null}
-        </CardHeader>
-        <CardContent className="grid gap-5">
-          {entry.data.note ? (
-            <div>
-              <p className="mb-1 text-sm font-medium">交易備註</p>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {entry.data.note}
-              </p>
-            </div>
-          ) : null}
-          <Separator />
-          <div>
-            <h2 className="mb-3 font-medium">分錄</h2>
-            <div className="grid gap-2 md:hidden">
-              {entry.data.postings.map((posting) => (
-                <div key={posting.id} className="rounded-2xl bg-input/30 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium">{posting.account.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {posting.account.key}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <PostingDirectionBadge
-                        direction={postingDirectionFromAmount(
-                          posting.amount_minor,
-                        )}
-                      />
-                      <p className="mt-1 font-medium tabular-nums">
-                        {formatMoney(Math.abs(posting.amount_minor))}
-                      </p>
-                    </div>
-                  </div>
-                  {posting.memo ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {posting.memo}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>帳戶</TableHead>
-                    <TableHead>類型</TableHead>
-                    <TableHead>備註</TableHead>
-                    <TableHead className="text-right">
-                      <PostingDirectionText direction="debit" />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <PostingDirectionText direction="credit" />
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entry.data.postings.map((posting) => (
-                    <TableRow key={posting.id}>
-                      <TableCell>
-                        <p className="font-medium">{posting.account.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {posting.account.key}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        {accountTypeLabels[posting.account.type]}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {posting.memo ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {posting.amount_minor > 0
-                          ? formatMoney(posting.amount_minor)
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {posting.amount_minor < 0
-                          ? formatMoney(-posting.amount_minor)
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-          <Separator />
-          <dl className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-            <div>
-              <dt>建立時間</dt>
-              <dd>{formatTimestamp(entry.data.created_at)}</dd>
-            </div>
-            <div>
-              <dt>最後更新</dt>
-              <dd>{formatTimestamp(entry.data.updated_at)}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+      <TransactionDisplay entry={entry.data} />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

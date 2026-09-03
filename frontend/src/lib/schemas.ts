@@ -321,6 +321,58 @@ export const entryResponseSchema = z.object({
 
 export type EntryResponse = z.infer<typeof entryResponseSchema>;
 
+export const transactionDisplayPostingSchema = z.object({
+  id: z.string().uuid().optional(),
+  account: accountSummarySchema,
+  amount_minor: z
+    .number()
+    .int()
+    .refine((amount) => amount !== 0),
+  memo: z.string().nullable(),
+});
+
+export const transactionDisplayEntrySchema = z.object({
+  id: z.string().uuid().optional(),
+  date: z.string(),
+  description: z.string(),
+  note: z.string().nullable(),
+  excluded_from_budgets: z.boolean(),
+  postings: z.array(transactionDisplayPostingSchema).min(1),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+});
+
+export type TransactionDisplayEntry = z.infer<
+  typeof transactionDisplayEntrySchema
+>;
+
+export const transactionViewItemStateSchema = z.enum([
+  "existing",
+  "created",
+  "replayed",
+  "updated",
+  "proposed",
+]);
+
+export type TransactionViewItemState = z.infer<
+  typeof transactionViewItemStateSchema
+>;
+
+export const transactionViewSchema = z.object({
+  version: z.literal(1),
+  operation: z.enum(["read", "create", "update", "draft"]),
+  items: z
+    .array(
+      z.object({
+        state: transactionViewItemStateSchema,
+        entry: transactionDisplayEntrySchema,
+      }),
+    )
+    .min(1),
+});
+
+export type TransactionView = z.infer<typeof transactionViewSchema>;
+
 export const possibleDuplicateMatchSchema = z.object({
   pending_entry_number: z.number().int().positive(),
   existing_entries: z.array(entryResponseSchema),
