@@ -39,7 +39,7 @@ use crate::{
 
 const MAX_BATCH_ENTRIES: usize = entry_service::MAX_BATCH_ENTRIES;
 const MAX_MOVEMENTS_PER_ENTRY: usize = 50;
-const TRANSACTION_APP_URI: &str = "ui://baln/transaction/v2.html";
+const TRANSACTION_APP_URI: &str = "ui://baln/transaction/v3.html";
 const TRANSACTION_APP_MIME_TYPE: &str = "text/html;profile=mcp-app";
 const TRANSACTION_APP_HTML: &str = include_str!("../assets/mcp-apps/mcp-transaction.html");
 const FOREIGN_CURRENCY_POLICY: &str = "When the user gives a non-TWD amount, automatically \
@@ -1574,6 +1574,10 @@ impl TransactionAppToolExt for Tool {
                 "visibility": ["model", "app"]
             }),
         );
+        // Match the official ext-apps server helper's normalized metadata for
+        // hosts that still resolve the original flat MCP Apps resource key.
+        meta.0
+            .insert("ui/resourceUri".to_owned(), json!(TRANSACTION_APP_URI));
         // ChatGPT supports the MCP Apps resource URI directly, but still uses this
         // compatibility alias while ingesting some connector-hosted HTML assets.
         meta.0.insert(
@@ -2137,6 +2141,7 @@ mod tests {
             let meta = &tool.meta.as_ref().unwrap().0;
             assert_eq!(meta["ui"]["resourceUri"], TRANSACTION_APP_URI);
             assert_eq!(meta["ui"]["visibility"], json!(["model", "app"]));
+            assert_eq!(meta["ui/resourceUri"], TRANSACTION_APP_URI);
             assert_eq!(meta["openai/outputTemplate"], TRANSACTION_APP_URI);
             assert!(meta["securitySchemes"].is_array());
         }

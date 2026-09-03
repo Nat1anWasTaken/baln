@@ -232,7 +232,7 @@ OAuth consent flow, and verify:
    schemes.
 2. `get_entry_creation_context` returns the current date and active account
    keys.
-3. `resources/read` for `ui://baln/transaction/v2.html` returns the embedded
+3. `resources/read` for `ui://baln/transaction/v3.html` returns the embedded
    MCP App, and supported hosts render it after `get_entry` or
    `display_entry_draft` without adding any interactive controls.
 4. `create_entries` creates one balanced entry when passed a one-item `entries`
