@@ -133,6 +133,24 @@ The available scopes are:
 ledger:read ledger:write ledger:delete offline_access
 ```
 
+Clients that support MCP Apps can render Baln's passive transaction display
+for `get_entry`, `create_entries`, `update_entries`, and the read-only
+`display_entry_draft` tool. The same natural-language tool content and
+structured transaction data remain available to text-only clients. The app has
+no controls and never performs ledger operations: the model remains responsible
+for every read and write. Its single-file HTML resource is embedded into the
+backend binary from `assets/mcp-apps/mcp-transaction.html`.
+
+After changing the shared transaction components or MCP app source, regenerate
+the embedded asset from `frontend/`:
+
+```bash
+pnpm build:mcp-app
+```
+
+Use `pnpm check:mcp-app` in verification to catch an out-of-date committed
+asset.
+
 `create_entries` accepts positive semantic movements inside an `entries` array:
 
 ```json
@@ -214,20 +232,23 @@ OAuth consent flow, and verify:
    schemes.
 2. `get_entry_creation_context` returns the current date and active account
    keys.
-3. `create_entries` creates one balanced entry when passed a one-item `entries`
+3. `resources/read` for `ui://baln/transaction/v1.html` returns the embedded
+   MCP App, and supported hosts render it after `get_entry` or
+   `display_entry_draft` without adding any interactive controls.
+4. `create_entries` creates one balanced entry when passed a one-item `entries`
    array.
-4. Retrying with the same `operation_key` and identical content returns the
+5. Retrying with the same `operation_key` and identical content returns the
    existing entry with `replayed: true`.
-5. Creating another operation with the same date and economic amount returns
+6. Creating another operation with the same date and economic amount returns
    `possible_duplicate`; retry only after explicit user confirmation with
    `confirmed_distinct: true`.
-6. A batch containing an invalid account creates zero entries and explains the
+7. A batch containing an invalid account creates zero entries and explains the
    required correction.
-7. `update_entries` updates multiple entries together; an invalid or missing
+8. `update_entries` updates multiple entries together; an invalid or missing
    target leaves every entry unchanged.
-8. `delete_entries` deletes multiple exact IDs together; an invalid or missing
+9. `delete_entries` deletes multiple exact IDs together; an invalid or missing
    target leaves every entry intact.
-9. Revoking the connection under **已連接的應用程式** makes the access and
+10. Revoking the connection under **已連接的應用程式** makes the access and
    refresh tokens unusable.
 
 ### ChatGPT web
