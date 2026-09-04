@@ -3,7 +3,6 @@ FROM rust:1.91-bookworm AS builder
 WORKDIR /app
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY migrations ./migrations
-COPY assets ./assets
 COPY src ./src
 RUN cargo build --locked --release --bins
 

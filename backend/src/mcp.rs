@@ -8,9 +8,8 @@ use rmcp::{
     handler::server::tool::schema_for_type,
     model::{
         CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, JsonObject,
-        ListResourcesResult, ListToolsResult, MetaObject, PaginatedRequestParams,
-        ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
-        ResourceContents, ServerCapabilities, ServerInfo, Tool, ToolAnnotations,
+        ListToolsResult, MetaObject, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+        ToolAnnotations,
     },
     service::RequestContext,
     transport::streamable_http_server::{
@@ -30,7 +29,7 @@ use crate::{
         repository as account_repository, service as account_service,
     },
     entries::{
-        CreateEntryRequest, EntryResponse, ListEntriesQuery, PostingInput, UpdateEntryRequest,
+        CreateEntryRequest, ListEntriesQuery, PostingInput, UpdateEntryRequest,
         repository as entry_repository, service as entry_service,
     },
     oauth::OAuthPrincipal,
@@ -39,9 +38,6 @@ use crate::{
 
 const MAX_BATCH_ENTRIES: usize = entry_service::MAX_BATCH_ENTRIES;
 const MAX_MOVEMENTS_PER_ENTRY: usize = 50;
-const TRANSACTION_APP_URI: &str = "ui://baln/transaction/v3.html";
-const TRANSACTION_APP_MIME_TYPE: &str = "text/html;profile=mcp-app";
-const TRANSACTION_APP_HTML: &str = include_str!("../assets/mcp-apps/mcp-transaction.html");
 const FOREIGN_CURRENCY_POLICY: &str = "When the user gives a non-TWD amount, automatically \
 convert it to whole TWD before calling an entry creation or update tool. Prefer the actual \
 settled TWD amount from a receipt, card, or bank statement. Otherwise use a reliable exchange \
@@ -63,10 +59,7 @@ When it reports a possible duplicate, ask whether the pending entry is separate 
 confirmed_distinct only after explicit user confirmation. Updates and deletions are available only \
 through the plural update_entries and delete_entries tools, including for one entry. Retrieve and \
 identify every exact target first. Both tools are atomic: if any batch item is invalid or missing, \
-no entries in that batch are changed. When presenting or discussing one specific saved transaction, \
-call get_entry so compatible clients can display its authoritative details. To present a specific \
-unsaved proposal without creating it, call display_entry_draft. This display call is optional and \
-must never be treated as a required review step before create_entries.";
+no entries in that batch are changed.";
 
 fn foreign_currency_policy() -> Value {
     json!({
@@ -273,26 +266,10 @@ impl BalnMcp {
                             entry.date,
                             entry.postings.len()
                         ),
-                        json!({
-                            "entry": &entry,
-                            "transaction_view": transaction_view(
-                                "read",
-                                vec![transaction_view_item("existing", &entry)]
-                            )
-                        }),
+                        json!({"entry": entry}),
                     ))
                 })
                 .await
-            }
-            "display_entry_draft" => {
-                if let Err(result) = self.require(&principal, "ledger:read") {
-                    result
-                } else {
-                    match parse_input::<DisplayEntryDraftInput>(arguments) {
-                        Ok(input) => self.display_entry_draft(principal, input.entry).await,
-                        Err(result) => result,
-                    }
-                }
             }
             "get_period_summary" => {
                 self.read_tool::<PeriodSummaryInput, _, _>(
@@ -658,71 +635,6 @@ impl BalnMcp {
         )
     }
 
-    async fn display_entry_draft(
-        &self,
-        principal: OAuthPrincipal,
-        input: DisplayEntryDraft,
-    ) -> CallToolResult {
-        let default_date = bookkeeping_date(Utc::now(), self.state.config.bookkeeping_timezone);
-        let accounts =
-            match account_repository::list(&self.state.pool, principal.user.id, true, None).await {
-                Ok(accounts) => accounts,
-                Err(error) => return api_error(error),
-            };
-        let account_map: HashMap<_, _> = accounts
-            .iter()
-            .map(|account| (account.key.as_str(), account))
-            .collect();
-        let draft = EntryDraft {
-            date: input.date,
-            description: input.description,
-            note: input.note,
-            excluded_from_budgets: input.excluded_from_budgets,
-            movements: input.movements,
-            confirmed_distinct: false,
-        };
-        let mut errors = Vec::new();
-        validate_draft(0, &draft, &account_map, &accounts, &mut errors);
-        if !errors.is_empty() {
-            return action_error(
-                "needs_agent_action",
-                format!(
-                    "The proposed transaction could not be displayed: {}",
-                    errors[0].message
-                ),
-                "Correct the proposed transaction or call get_entry_creation_context for current account keys, then retry the display call.",
-                errors
-                    .iter()
-                    .filter_map(|error| error.question_for_user.clone())
-                    .collect(),
-                json!({"code": "draft_validation_failed", "errors": errors}),
-            );
-        }
-
-        let date = draft.date.unwrap_or(default_date);
-        let total = draft
-            .movements
-            .iter()
-            .map(|movement| movement.amount_minor)
-            .sum::<i64>();
-        let entry = draft_transaction_display(&draft, date, &account_map);
-        success(
-            format!(
-                "Showing the proposed transaction “{}” for TWD {} on {}. Nothing was saved or changed.",
-                draft.description.trim(),
-                total,
-                date
-            ),
-            json!({
-                "transaction_view": {
-                    "version": 1,
-                    "operation": "draft",
-                    "items": [{"state": "proposed", "entry": entry}]
-                }
-            }),
-        )
-    }
-
     async fn create_entries(
         &self,
         principal: OAuthPrincipal,
@@ -838,12 +750,6 @@ impl BalnMcp {
                 })
             })
             .collect::<Vec<_>>();
-        let transaction_items = results
-            .iter()
-            .map(|(entry, replayed)| {
-                transaction_view_item(if *replayed { "replayed" } else { "created" }, entry)
-            })
-            .collect::<Vec<_>>();
         let created_count = results.iter().filter(|(_, replayed)| !replayed).count();
         let replayed_count = results.len() - created_count;
         let summary = if results.len() == 1 {
@@ -880,8 +786,7 @@ impl BalnMcp {
                 "default_date": default_date,
                 "created_count": created_count,
                 "replayed_count": replayed_count,
-                "entries": items,
-                "transaction_view": transaction_view("create", transaction_items)
+                "entries": items
             }),
         )
     }
@@ -985,22 +890,18 @@ impl BalnMcp {
             .collect();
         match entry_service::update_batch(&self.state.pool, principal.user.id, requests).await {
             Ok(entries) => {
-                let paired = entries.into_iter().zip(inputs).collect::<Vec<_>>();
-                let items = paired
-                    .iter()
+                let items = entries
+                    .into_iter()
+                    .zip(inputs)
                     .map(|(entry, input)| {
                         json!({
                             "id": entry.id,
                             "date": entry.date,
                             "description": entry.description,
                             "excluded_from_budgets": entry.excluded_from_budgets,
-                            "movements": &input.movements
+                            "movements": input.movements
                         })
                     })
-                    .collect::<Vec<_>>();
-                let transaction_items = paired
-                    .iter()
-                    .map(|(entry, _)| transaction_view_item("updated", entry))
                     .collect::<Vec<_>>();
                 success(
                     format!(
@@ -1011,8 +912,7 @@ impl BalnMcp {
                         "atomic": true,
                         "default_date": default_date,
                         "updated_count": items.len(),
-                        "entries": items,
-                        "transaction_view": transaction_view("update", transaction_items)
+                        "entries": items
                     }),
                 )
             }
@@ -1023,42 +923,8 @@ impl BalnMcp {
 
 impl ServerHandler for BalnMcp {
     fn get_info(&self) -> ServerInfo {
-        let mut capabilities = ServerCapabilities::builder()
-            .enable_resources()
-            .enable_tools()
-            .build();
-        capabilities.extensions.get_or_insert_default().insert(
-            "io.modelcontextprotocol/ui".to_owned(),
-            serde_json::from_value(json!({
-                "mimeTypes": [TRANSACTION_APP_MIME_TYPE]
-            }))
-            .expect("static MCP Apps capability is an object"),
-        );
-        ServerInfo::new(capabilities).with_instructions(SERVER_INSTRUCTIONS)
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListResourcesResult, ErrorData> {
-        Ok(ListResourcesResult::with_all_items(vec![
-            transaction_app_resource(),
-        ]))
-    }
-
-    async fn read_resource(
-        &self,
-        request: ReadResourceRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResponse, ErrorData> {
-        if request.uri != TRANSACTION_APP_URI {
-            return Err(ErrorData::resource_not_found(
-                format!("Baln does not provide a resource at {}.", request.uri),
-                None,
-            ));
-        }
-        Ok(ReadResourceResult::new(vec![transaction_app_resource_contents()]).into())
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_instructions(SERVER_INSTRUCTIONS)
     }
 
     async fn list_tools(
@@ -1192,29 +1058,6 @@ struct EntryDraft {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct DisplayEntryDraft {
-    /// Bookkeeping date in YYYY-MM-DD. Omit to display today in Baln's configured timezone.
-    date: Option<NaiveDate>,
-    /// Short user-facing description, such as “Lunch” or “July salary”.
-    description: String,
-    /// Optional note applying to the whole proposed entry.
-    note: Option<String>,
-    /// Show that this proposed entry should be excluded from every budget.
-    #[serde(default)]
-    excluded_from_budgets: bool,
-    /// One or more positive whole-TWD money movements. Use multiple movements for splits.
-    movements: Vec<MovementInput>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-struct DisplayEntryDraftInput {
-    /// One complete unsaved transaction to display without creating or changing ledger data.
-    entry: DisplayEntryDraft,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
 struct CreateEntriesInput {
     /// Stable caller-generated UUID for this complete atomic batch. Generate a new UUID v4 or v7
     /// for every distinct batch, even when its content is identical; for example,
@@ -1302,101 +1145,6 @@ where
     Option::<T>::deserialize(deserializer).map(Some)
 }
 
-fn transaction_view(operation: &str, items: Vec<Value>) -> Value {
-    json!({
-        "version": 1,
-        "operation": operation,
-        "items": items
-    })
-}
-
-fn transaction_view_item(state: &str, entry: &EntryResponse) -> Value {
-    json!({"state": state, "entry": persisted_transaction_display(entry)})
-}
-
-fn persisted_transaction_display(entry: &EntryResponse) -> Value {
-    json!({
-        "id": entry.id,
-        "date": entry.date,
-        "description": entry.description,
-        "note": entry.note,
-        "excluded_from_budgets": entry.excluded_from_budgets,
-        "postings": entry.postings.iter().map(|posting| json!({
-            "id": posting.id,
-            "account": posting.account,
-            "amount_minor": posting.amount_minor,
-            "memo": posting.memo
-        })).collect::<Vec<_>>(),
-        "created_at": entry.created_at,
-        "updated_at": entry.updated_at
-    })
-}
-
-fn draft_transaction_display(
-    draft: &EntryDraft,
-    date: NaiveDate,
-    account_map: &HashMap<&str, &Account>,
-) -> Value {
-    let postings = draft
-        .movements
-        .iter()
-        .flat_map(|movement| {
-            [
-                (movement.from_account_key.as_str(), -movement.amount_minor),
-                (movement.to_account_key.as_str(), movement.amount_minor),
-            ]
-            .map(|(key, amount_minor)| {
-                let account = account_map
-                    .get(key)
-                    .expect("validated draft account must exist");
-                json!({
-                    "account": {
-                        "id": account.id,
-                        "key": account.key,
-                        "name": account.name,
-                        "type": account.r#type
-                    },
-                    "amount_minor": amount_minor,
-                    "memo": movement.memo
-                })
-            })
-        })
-        .collect::<Vec<_>>();
-    json!({
-        "date": date,
-        "description": draft.description.trim(),
-        "note": draft.note,
-        "excluded_from_budgets": draft.excluded_from_budgets,
-        "postings": postings
-    })
-}
-
-fn transaction_app_meta() -> MetaObject {
-    MetaObject(
-        serde_json::from_value(json!({
-            "ui": {
-                "prefersBorder": false
-            }
-        }))
-        .expect("static MCP Apps metadata is an object"),
-    )
-}
-
-fn transaction_app_resource() -> Resource {
-    Resource::new(TRANSACTION_APP_URI, "baln-transaction-display")
-        .with_title("Baln Transaction Display")
-        .with_description("Passive, responsive display for one or more Baln transactions.")
-        .with_mime_type(TRANSACTION_APP_MIME_TYPE)
-        .with_size(TRANSACTION_APP_HTML.len() as u64)
-        .with_meta(transaction_app_meta())
-}
-
-fn transaction_app_resource_contents() -> ResourceContents {
-    ResourceContents::text(TRANSACTION_APP_HTML, TRANSACTION_APP_URI)
-        .with_mime_type(TRANSACTION_APP_MIME_TYPE)
-        .with_meta(transaction_app_meta())
-}
-
 #[derive(Debug, Serialize)]
 struct EntryValidationError {
     entry_number: usize,
@@ -1442,14 +1190,7 @@ fn build_tools() -> Vec<Tool> {
             "get_entry",
             "Get Ledger Entry",
             "Get one complete ledger entry by an exact UUID previously returned by Baln.",
-        )
-        .with_transaction_app(),
-        read_tool::<DisplayEntryDraftInput>(
-            "display_entry_draft",
-            "Display Transaction Draft",
-            "Display one specific unsaved transaction proposal without creating or changing ledger data. Use this only when presenting a concrete proposed transaction to the user. It is optional and is not a required review step before create_entries.",
-        )
-        .with_transaction_app(),
+        ),
         read_tool::<PeriodSummaryInput>(
             "get_period_summary",
             "Get Period Summary",
@@ -1465,15 +1206,13 @@ fn build_tools() -> Vec<Tool> {
             "Create Ledger Entries",
             "Create 1–100 balanced entries atomically, including a one-item batch for a single entry. Use descriptions and positive semantic movements from source accounts to destination accounts; dates default to today. Generate one new UUID v4 or v7 operation_key for each distinct complete batch and reuse it only to retry that same batch, including after reconnects; the same UUID with changed content is a conflict. Baln checks dates and economic amounts against existing entries. If it reports a possible duplicate, ask the user whether each flagged item is a separate transaction; retry the complete batch with the same operation_key and confirmed_distinct=true only on entries the user explicitly confirms. Convert non-TWD source amounts automatically under the foreign-currency policy from get_entry_creation_context before calling this tool, and preserve the disclosed conversion details in the note or memo. Do not send signed postings, totals, IDs, or database deduplication keys. Every item is validated before insertion; if any item is invalid or conflicts, none are created and the response explains how to repair the complete batch. If an account key is unknown, call get_entry_creation_context first; if user intent remains ambiguous, ask the user before calling this tool.",
             false,
-        )
-        .with_transaction_app(),
+        ),
         write_tool::<UpdateEntriesInput>(
             "update_entries",
             "Update Ledger Entries",
             "Atomically replace 1–100 existing entries using exact distinct entry UUIDs and complete descriptions, dates, notes, and semantic movement lists. The whole batch is validated before writing; if any item is invalid or missing, no entries are updated. Apply the same foreign-currency automatic-conversion and disclosure policy as create_entries. Retrieve entries first when the user has not supplied their exact IDs or current meaning.",
             false,
-        )
-        .with_transaction_app(),
+        ),
         write_tool::<CreateAccountInput>(
             "create_account",
             "Create Account",
@@ -1556,36 +1295,6 @@ fn tool<I: JsonSchema + 'static>(
     Tool::new(name, description, schema_for_type::<I>())
         .with_title(title)
         .with_meta(MetaObject(meta))
-}
-
-trait TransactionAppToolExt {
-    fn with_transaction_app(self) -> Self;
-}
-
-impl TransactionAppToolExt for Tool {
-    fn with_transaction_app(mut self) -> Self {
-        let meta = self
-            .meta
-            .get_or_insert_with(|| MetaObject(JsonObject::new()));
-        meta.0.insert(
-            "ui".to_owned(),
-            json!({
-                "resourceUri": TRANSACTION_APP_URI,
-                "visibility": ["model", "app"]
-            }),
-        );
-        // Match the official ext-apps server helper's normalized metadata for
-        // hosts that still resolve the original flat MCP Apps resource key.
-        meta.0
-            .insert("ui/resourceUri".to_owned(), json!(TRANSACTION_APP_URI));
-        // ChatGPT supports the MCP Apps resource URI directly, but still uses this
-        // compatibility alias while ingesting some connector-hosted HTML assets.
-        meta.0.insert(
-            "openai/outputTemplate".to_owned(),
-            json!(TRANSACTION_APP_URI),
-        );
-        self
-    }
 }
 
 fn principal(context: &RequestContext<RoleServer>) -> Option<OAuthPrincipal> {
@@ -2072,136 +1781,11 @@ fn bookkeeping_date(now: DateTime<Utc>, timezone: Tz) -> NaiveDate {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     use chrono::TimeZone;
 
     use super::*;
-
-    #[test]
-    fn transaction_app_resource_is_self_contained_and_borderless() {
-        let resource = transaction_app_resource();
-        assert_eq!(resource.uri, TRANSACTION_APP_URI);
-        assert_eq!(
-            resource.mime_type.as_deref(),
-            Some(TRANSACTION_APP_MIME_TYPE)
-        );
-        assert_eq!(
-            resource.meta.as_ref().unwrap().0["ui"]["prefersBorder"],
-            false
-        );
-        assert!(TRANSACTION_APP_HTML.contains("ui/initialize"));
-        assert!(TRANSACTION_APP_HTML.contains("data-transaction-display"));
-
-        match transaction_app_resource_contents() {
-            ResourceContents::TextResourceContents {
-                uri,
-                mime_type,
-                text,
-                meta,
-            } => {
-                assert_eq!(uri, TRANSACTION_APP_URI);
-                assert_eq!(mime_type.as_deref(), Some(TRANSACTION_APP_MIME_TYPE));
-                assert_eq!(text, TRANSACTION_APP_HTML);
-                assert_eq!(meta.unwrap().0["ui"]["prefersBorder"], false);
-            }
-            ResourceContents::BlobResourceContents { .. } => {
-                panic!("transaction app must be served as text")
-            }
-            _ => panic!("transaction app must use a supported text resource variant"),
-        }
-    }
-
-    #[test]
-    fn only_specific_transaction_tools_render_the_app() {
-        let tools = build_tools();
-        let app_tools = tools
-            .iter()
-            .filter(|tool| {
-                tool.meta
-                    .as_ref()
-                    .and_then(|meta| meta.0.get("ui"))
-                    .is_some()
-            })
-            .map(|tool| tool.name.as_ref())
-            .collect::<HashSet<_>>();
-        assert_eq!(
-            app_tools,
-            HashSet::from([
-                "get_entry",
-                "display_entry_draft",
-                "create_entries",
-                "update_entries"
-            ])
-        );
-        for tool in tools
-            .iter()
-            .filter(|tool| app_tools.contains(tool.name.as_ref()))
-        {
-            let meta = &tool.meta.as_ref().unwrap().0;
-            assert_eq!(meta["ui"]["resourceUri"], TRANSACTION_APP_URI);
-            assert_eq!(meta["ui"]["visibility"], json!(["model", "app"]));
-            assert_eq!(meta["ui/resourceUri"], TRANSACTION_APP_URI);
-            assert_eq!(meta["openai/outputTemplate"], TRANSACTION_APP_URI);
-            assert!(meta["securitySchemes"].is_array());
-        }
-    }
-
-    #[test]
-    fn draft_transaction_display_resolves_accounts_and_balances_postings() {
-        let now = Utc::now();
-        let user_id = Uuid::now_v7();
-        let cash = Account {
-            id: Uuid::now_v7(),
-            user_id,
-            key: "asset.cash".to_owned(),
-            name: "Cash".to_owned(),
-            note: None,
-            r#type: AccountType::Asset,
-            archived: false,
-            created_at: now,
-            updated_at: now,
-        };
-        let restaurant = Account {
-            id: Uuid::now_v7(),
-            user_id,
-            key: "expense.restaurant".to_owned(),
-            name: "Restaurant".to_owned(),
-            note: None,
-            r#type: AccountType::Expense,
-            archived: false,
-            created_at: now,
-            updated_at: now,
-        };
-        let accounts = [&cash, &restaurant];
-        let account_map = accounts
-            .iter()
-            .map(|account| (account.key.as_str(), *account))
-            .collect::<HashMap<_, _>>();
-        let draft = EntryDraft {
-            date: None,
-            description: " Lunch ".to_owned(),
-            note: Some("Team meal".to_owned()),
-            excluded_from_budgets: true,
-            movements: vec![MovementInput {
-                from_account_key: cash.key.clone(),
-                to_account_key: restaurant.key.clone(),
-                amount_minor: 320,
-                memo: Some("meal".to_owned()),
-            }],
-            confirmed_distinct: false,
-        };
-        let date = NaiveDate::from_ymd_opt(2026, 9, 2).unwrap();
-        let display = draft_transaction_display(&draft, date, &account_map);
-
-        assert_eq!(display["description"], "Lunch");
-        assert_eq!(display["date"], "2026-09-02");
-        assert_eq!(display["excluded_from_budgets"], true);
-        assert_eq!(display["postings"][0]["account"]["name"], "Cash");
-        assert_eq!(display["postings"][0]["amount_minor"], -320);
-        assert_eq!(display["postings"][1]["account"]["name"], "Restaurant");
-        assert_eq!(display["postings"][1]["amount_minor"], 320);
-    }
 
     #[test]
     fn semantic_movements_generate_balanced_postings() {
