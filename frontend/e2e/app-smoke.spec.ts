@@ -2632,6 +2632,39 @@ test("uses Motion for finite interaction feedback across interaction families", 
   ).toEqual({ animationName: "none", transitionDuration: "0s" });
 });
 
+test("releases sidebar press feedback across rapid consecutive navigation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/reports");
+
+  const sidebar = page.locator('[data-slot="sidebar"]');
+  const reports = sidebar.getByRole("link", { name: "報表", exact: true });
+  const budgets = sidebar.getByRole("link", { name: "預算", exact: true });
+  const accounts = sidebar.getByRole("link", { name: "帳戶", exact: true });
+  await expect(reports).toHaveAttribute("aria-current", "page");
+  // Let startup work settle so the presses below land on an idle shell.
+  await page.waitForTimeout(800);
+
+  for (const [first, second] of [
+    [reports, budgets],
+    [budgets, reports],
+    [accounts, reports],
+  ] as const) {
+    for (const link of [first, second]) {
+      const bounds = (await link.boundingBox())!;
+      await page.mouse.move(bounds.x + 40, bounds.y + bounds.height / 2);
+      await page.mouse.down();
+      await page.mouse.up();
+    }
+  }
+
+  await expect(page).toHaveURL(/\/reports$/);
+  for (const link of [reports, budgets, accounts]) {
+    await expectPressReleased(link);
+  }
+});
+
 test("releases composed press feedback after navigation and opening overlays", async ({
   page,
 }) => {

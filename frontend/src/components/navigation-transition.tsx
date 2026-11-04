@@ -33,6 +33,7 @@ import {
   useTransform,
 } from "motion/react";
 
+import { useCoalescedRef } from "@/hooks/use-coalesced-ref";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   getNavigationDirection,
@@ -51,8 +52,21 @@ import {
 } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-const MotionLink = m.create(Link);
-const MotionNavLink = m.create(NavLink);
+// React Router re-creates its anchor ref every render; coalesce it so Motion
+// keeps one mounted visual element (and its press gesture) per link.
+const StableRefLink = forwardRef<HTMLAnchorElement, LinkProps>(
+  function StableRefLink(props, ref) {
+    return <Link {...props} ref={useCoalescedRef(ref)} />;
+  },
+);
+const StableRefNavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
+  function StableRefNavLink(props, ref) {
+    return <NavLink {...props} ref={useCoalescedRef(ref)} />;
+  },
+);
+
+const MotionLink = m.create(StableRefLink);
+const MotionNavLink = m.create(StableRefNavLink);
 
 type TransitionMode = "idle" | "entry";
 
