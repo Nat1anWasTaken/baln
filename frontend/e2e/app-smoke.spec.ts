@@ -688,8 +688,25 @@ async function fillBalancedPostings(page: Page, amount: string) {
   }
 }
 
+// Sheets resize and slide with spring animations; read a drag target's position
+// only after it has held still for a few frames so the gesture starts on it.
+async function settledBoundingBox(target: Locator) {
+  await target.evaluate(async (element) => {
+    let previous = "";
+    let stableFrames = 0;
+    for (let frame = 0; frame < 120 && stableFrames < 3; frame += 1) {
+      await new Promise(requestAnimationFrame);
+      const { x, y, width, height } = element.getBoundingClientRect();
+      const current = [x, y, width, height].map(Math.round).join(",");
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      previous = current;
+    }
+  });
+  return target.boundingBox();
+}
+
 async function dragMouse(page: Page, target: Locator, distance: number) {
-  const bounds = await target.boundingBox();
+  const bounds = await settledBoundingBox(target);
   expect(bounds).not.toBeNull();
   const x = Math.round(bounds!.x + bounds!.width / 2);
   const y = Math.round(bounds!.y + bounds!.height / 2);
@@ -704,7 +721,7 @@ async function dragMouse(page: Page, target: Locator, distance: number) {
 }
 
 async function dragTouch(page: Page, target: Locator, distance: number) {
-  const bounds = await target.boundingBox();
+  const bounds = await settledBoundingBox(target);
   expect(bounds).not.toBeNull();
   const x = Math.round(bounds!.x + bounds!.width / 2);
   const y = Math.round(bounds!.y + bounds!.height / 2);
