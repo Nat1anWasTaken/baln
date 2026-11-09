@@ -66,7 +66,9 @@ export function isBlankQuickEntryValues(values: QuickEntryValues) {
  * editor. Unfilled fields stay blank so the full editor can finish them.
  */
 export function quickToEditorValues(values: QuickEntryValues): EditorValues {
-  const amount = normalizedAmount(values.amount);
+  // Keep the typed value (even an invalid negative one) so the full editor's
+  // own validation reports it; switching modes skips submit validation.
+  const amount = Number.isFinite(values.amount) ? values.amount : 0;
   const category: EditorPosting = {
     accountKey: values.categoryKey,
     direction: values.kind === "expense" ? "debit" : "credit",

@@ -130,6 +130,15 @@ describe("quick entry conversion", () => {
     ).toEqual(unfinishedIncome);
   });
 
+  it("carries an invalid negative quick amount over without flipping it", () => {
+    const negative = { ...expense, amount: -50 };
+    const editorDraft = quickToEditorValues(negative);
+    expect(editorDraft.postings.map((posting) => posting.amount)).toEqual([
+      -50, -50,
+    ]);
+    expect(editorToQuickValues(editorDraft, accounts)).toBeNull();
+  });
+
   it("maps a blank full draft and treats unparsed amounts as zero", () => {
     const blank = blankEditorValues();
     blank.postings[0].amount = Number.NaN;
