@@ -1,5 +1,5 @@
 import { Suspense, useState } from "react";
-import { AnimatePresence, m, type Variants } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   ChevronUp,
   CircleUserRound,
@@ -42,8 +42,7 @@ import {
   type PrimaryNavigationItem,
 } from "@/lib/app-navigation";
 import { entryEditorRouteState } from "@/lib/entry-navigation";
-import { motionSpring } from "@/lib/motion";
-import type { NavigationDirection } from "@/lib/navigation-transition";
+import { directionalSwapVariants, motionSpring } from "@/lib/motion";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,18 +89,6 @@ const mobileNavigation: MobileNavigationItem[] = [
     more: true,
   },
 ];
-
-const pageTitleVariants = {
-  initial: (direction: NavigationDirection) => ({
-    opacity: 0,
-    x: direction === "back" ? -12 : 12,
-  }),
-  animate: { opacity: 1, x: 0 },
-  exit: (direction: NavigationDirection) => ({
-    opacity: 0,
-    x: direction === "back" ? 8 : -8,
-  }),
-} satisfies Variants;
 
 function UserMenu({ compact = false }: { compact?: boolean }) {
   const auth = useAuth();
@@ -292,7 +279,7 @@ export function AppShell() {
                 key={pageName}
                 data-navigation-direction={visualTransition.direction}
                 custom={visualTransition.direction}
-                variants={pageTitleVariants}
+                variants={directionalSwapVariants}
                 initial="initial"
                 animate="animate"
                 exit="exit"

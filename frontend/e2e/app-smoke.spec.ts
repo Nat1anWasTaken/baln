@@ -672,6 +672,13 @@ async function mockApi(page: Page) {
   });
 }
 
+async function openFullEntryEditor(page: Page) {
+  const fullMode = page.getByRole("tab", { name: "完整" });
+  await fullMode.click();
+  await expect(fullMode).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('[data-entry-create-mode="quick"]')).toHaveCount(0);
+}
+
 async function fillBalancedPostings(page: Page, amount: string) {
   for (const [index, accountName] of ["餐飲", "現金"].entries()) {
     await page
@@ -1556,12 +1563,28 @@ test("revalidates fresh cached data when returning to a page", async ({
   ).toBeVisible();
 });
 
-test("opens the balanced-postings editor without a mode switch", async ({
+test("offers quick and full create modes while editing stays full", async ({
   page,
 }) => {
   await page.goto("/entries/new");
 
   await expect(page.getByRole("heading", { name: "新增交易" })).toBeVisible();
+  await expect(
+    page.locator('[data-slot="dialog-content"][data-presentation="sheet"]'),
+  ).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "簡易" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const quickForm = page.locator('form[data-presentation="page"]');
+  await expect(quickForm.locator('[data-slot="card"]')).toHaveCount(0);
+  await expect(
+    quickForm.getByRole("group", { name: "交易資料" }),
+  ).toBeVisible();
+  await expect(quickForm.getByRole("radio", { name: "支出" })).toBeVisible();
+  await expect(quickForm.getByText("分錄明細", { exact: true })).toHaveCount(0);
+
+  await openFullEntryEditor(page);
   const createForm = page.locator('form[data-presentation="page"]');
   await expect(createForm.locator('[data-slot="card"]')).toHaveCount(0);
   await expect(
@@ -1570,23 +1593,151 @@ test("opens the balanced-postings editor without a mode switch", async ({
   await expect(
     createForm.getByRole("group", { name: "分錄明細" }),
   ).toBeVisible();
-  await expect(
-    page.locator('[data-slot="dialog-content"][data-presentation="sheet"]'),
-  ).toHaveCount(0);
-  await expect(
-    page.locator('form[data-presentation="page"]').getByRole("tab"),
-  ).toHaveCount(0);
+  await expect(createForm.getByRole("tab")).toHaveCount(0);
   await expect(page.getByText("分錄明細", { exact: true })).toBeVisible();
   await expect(page.getByText("借方合計")).toBeVisible();
   await expect(page.getByRole("button", { name: "新增分錄" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("tab", { name: "完整" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   await page.goto("/entries/01980000-0000-7000-8000-000000000010/edit");
   await expect(page.getByRole("heading", { name: "編輯交易" })).toBeVisible();
   await expect(
     page.locator('[data-slot="dialog-content"][data-presentation="sheet"]'),
   ).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "簡易" })).toHaveCount(0);
   await expect(page.getByLabel("交易說明")).toHaveValue(
     "全家便利商店 — 藍—成人加長不黏身雨衣",
+  );
+});
+
+test("records a quick expense and carries the draft between modes", async ({
+  page,
+}) => {
+  const createdBodies: unknown[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v1/entries")
+    ) {
+      createdBodies.push(request.postDataJSON());
+    }
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/entries");
+  await page.getByLabel("新增交易").click();
+
+  const sheet = page.getByRole("dialog", { name: "新增交易" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toHaveAttribute("data-size", "near-full");
+  await expect(sheet.getByRole("tab", { name: "簡易" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(sheet.getByRole("radio", { name: "支出" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(sheet.getByRole("radio", { name: "薪資" })).toHaveCount(0);
+
+  await sheet.getByLabel("金額").fill("120");
+  await sheet.getByRole("radio", { name: "餐飲" }).click();
+  await sheet.getByRole("radio", { name: "現金" }).click();
+  await sheet.getByLabel("交易說明").fill("午餐便當");
+
+  await openFullEntryEditor(page);
+  await expect(sheet).toHaveAttribute("data-size", "near-full");
+  await expect(sheet.getByLabel("交易說明")).toHaveValue("午餐便當");
+  const firstPosting = sheet.getByRole("button", { name: "編輯第 1 筆分錄" });
+  const secondPosting = sheet.getByRole("button", {
+    name: "編輯第 2 筆分錄",
+  });
+  await expect(firstPosting).toContainText("借方");
+  await expect(firstPosting).toContainText("餐飲");
+  await expect(firstPosting).toContainText("120");
+  await expect(secondPosting).toContainText("貸方");
+  await expect(secondPosting).toContainText("現金");
+  await expect(secondPosting).toContainText("120");
+
+  await sheet.getByRole("tab", { name: "簡易" }).click();
+  await expect(sheet.locator('[data-entry-create-mode="full"]')).toHaveCount(0);
+  await expect(sheet).toHaveAttribute("data-size", "near-full");
+  await expect(sheet.getByLabel("金額")).toHaveValue("120");
+  await expect(sheet.getByRole("radio", { name: "餐飲" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(sheet.getByRole("radio", { name: "現金" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+
+  await page.getByRole("button", { name: "關閉新增交易" }).click();
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "捨棄這筆交易草稿？",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
+
+  await sheet.getByRole("button", { name: "建立交易" }).click();
+  await page
+    .getByRole("alertdialog", { name: "可能重複的交易" })
+    .getByRole("button", { name: "仍要建立" })
+    .click();
+  await expect(page).toHaveURL(
+    /\/entries\/01980000-0000-7000-8000-000000000020$/,
+  );
+  expect(createdBodies.at(-1)).toMatchObject({
+    description: "午餐便當",
+    confirmed_distinct: true,
+    postings: [
+      { account_key: "expense.restaurant", amount_minor: 120, memo: null },
+      { account_key: "asset.cash", amount_minor: -120, memo: null },
+    ],
+  });
+});
+
+test("keeps quick mode unavailable for drafts it cannot represent", async ({
+  page,
+}) => {
+  await page.goto("/entries/new");
+  await page.getByRole("radio", { name: "收入" }).click();
+  await expect(page.getByRole("radio", { name: "薪資" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "餐飲" })).toHaveCount(0);
+  await expect(page.getByText("入帳帳戶", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "建立交易" }).click();
+  await expect(page.getByText("請輸入大於零的整數金額。")).toBeVisible();
+  await expect(page.getByText("請選擇分類。")).toBeVisible();
+  await page.getByLabel("金額").fill("5000");
+  await expect(page.getByText("請輸入大於零的整數金額。")).toHaveCount(0);
+  await page.getByRole("radio", { name: "薪資" }).click();
+
+  await openFullEntryEditor(page);
+  const postingAccounts = page.getByRole("combobox", { name: "帳戶" });
+  await expect(page.getByLabel("金額", { exact: true }).first()).toHaveValue(
+    "5000",
+  );
+  await page.getByRole("button", { name: "新增分錄" }).click();
+  const quickMode = page.getByRole("tab", { name: "簡易" });
+  await expect(quickMode).toBeDisabled();
+  await expect(
+    page.getByText("目前的分錄無法以簡易模式表示，請在完整模式中完成。"),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "移除第 3 筆分錄" }).click();
+  await expect(quickMode).toBeEnabled();
+  await postingAccounts.first().click();
+  await page.getByRole("option", { name: "餐飲" }).click();
+  await expect(quickMode).toBeDisabled();
+  await quickMode.click({ force: true });
+  await expect(page.getByRole("tab", { name: "完整" })).toHaveAttribute(
+    "aria-selected",
+    "true",
   );
 });
 
@@ -1595,6 +1746,7 @@ test("reviews a possible duplicate from the mobile transaction sheet", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/entries/new");
+  await openFullEntryEditor(page);
 
   await page.getByLabel("交易日期").click();
   const dateSheet = page.getByRole("dialog", { name: "選擇交易日期" });
@@ -1646,6 +1798,8 @@ test("opens create as a route-backed mobile sheet and protects dirty drafts", as
   const sheet = page.getByRole("dialog", { name: "新增交易" });
   await expect(sheet).toBeVisible();
   await expect(sheet).toBeFocused();
+  await expect(sheet).toHaveAttribute("data-size", "near-full");
+  await openFullEntryEditor(page);
   await expect(sheet.locator('form [data-slot="card"]')).toHaveCount(0);
   await expect(sheet.getByRole("group", { name: "交易資料" })).toBeVisible();
   await expect(sheet.getByRole("group", { name: "分錄明細" })).toBeVisible();
@@ -1876,6 +2030,7 @@ test("keeps a pending mobile transaction sheet fixed", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 667 });
   await page.goto("/entries/new");
   const sheet = page.getByRole("dialog", { name: "新增交易" });
+  await openFullEntryEditor(page);
   await page.getByLabel("交易說明").fill("等待儲存");
   await fillBalancedPostings(page, "120");
   await page.getByRole("button", { name: "建立交易" }).click();
@@ -2477,9 +2632,14 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await expectTouchTarget(page.getByRole("radio", { name: "現金" }));
 
     await page.goto("/entries/new");
-    await expect(
-      page.getByRole("dialog", { name: "新增交易" }).getByRole("tab"),
-    ).toHaveCount(0);
+    const createSheet = page.getByRole("dialog", { name: "新增交易" });
+    await expectContainedTab(createSheet.getByRole("tab", { name: "簡易" }));
+    await expectContainedTab(createSheet.getByRole("tab", { name: "完整" }));
+    await expectTouchTarget(createSheet.getByRole("radio", { name: "支出" }));
+    await expectTouchTarget(createSheet.getByRole("radio", { name: "餐飲" }));
+    await expectTouchTarget(createSheet.getByLabel("金額"));
+    await openFullEntryEditor(page);
+    await expect(createSheet.locator("form").getByRole("tab")).toHaveCount(0);
     await page.setViewportSize({ width: 320, height: 844 });
     const firstPosting = page.getByRole("button", {
       name: "編輯第 1 筆分錄",
