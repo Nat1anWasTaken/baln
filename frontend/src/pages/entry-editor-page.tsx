@@ -6,7 +6,14 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { AnimatePresence, m } from "motion/react";
 
 import { EmptyState, ErrorState, PageLoading } from "@/components/page-state";
 import {
@@ -33,16 +40,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EntryEditor } from "@/features/entries/entry-editor";
+import { FieldDescription } from "@/components/ui/field";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  type EditorValues,
+  isBlankEditorValues,
+} from "@/features/entries/entry-draft";
+import {
+  EntryEditor,
+  EntryEditorPageHeader,
+  type EntryEditorPresentation,
+} from "@/features/entries/entry-editor";
+import { QuickEntryEditor } from "@/features/entries/quick-entry-editor";
+import {
+  editorToQuickValues,
+  isBlankQuickEntryValues,
+  quickToEditorValues,
+  type QuickEntryKind,
+  type QuickEntryValues,
+} from "@/features/entries/quick-entry";
+import {
+  type EntryCreateMode,
+  useEntryCreateMode,
+} from "@/hooks/use-entry-create-mode";
 import { accountsApi, entriesApi } from "@/lib/api-client";
 import { getEntryEditorBackground } from "@/lib/entry-navigation";
+import { directionalSwapVariants, motionSpring } from "@/lib/motion";
+import type { NavigationDirection } from "@/lib/navigation-transition";
 import { queryKeys } from "@/lib/query-keys";
-import type { EntryResponse } from "@/lib/schemas";
+import type { Account, EntryResponse } from "@/lib/schemas";
+import { cn } from "@/lib/utils";
 
-type EditorPresentation = "page" | "sheet";
-
-type EntryEditorSurfaceProps = {
-  presentation: EditorPresentation;
+type EditorCallbacks = {
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onNavigate?: (to: To) => void;
@@ -50,8 +79,217 @@ type EntryEditorSurfaceProps = {
   onSaved?: (entry: EntryResponse) => void;
 };
 
+type EntryEditorSurfaceProps = EditorCallbacks & {
+  presentation: EntryEditorPresentation;
+  createMode: EntryCreateMode;
+  onCreateModeChange: (mode: EntryCreateMode) => void;
+};
+
+const createModeDescriptions: Record<EntryCreateMode, string> = {
+  quick: "記錄支出或收入，分錄會自動產生。",
+  full: "輸入交易資料與借貸平衡的分錄。",
+};
+
+export function entryEditorDescription(
+  isEditing: boolean,
+  mode: EntryCreateMode,
+) {
+  return isEditing ? createModeDescriptions.full : createModeDescriptions[mode];
+}
+
+/**
+ * Swaps editors in place: the previous mode leaves immediately so only one
+ * form (and one footer) exists, and the next mode slides in from its side.
+ */
+function CreateModePanel({
+  mode,
+  direction,
+  presentation,
+  children,
+}: {
+  mode: EntryCreateMode;
+  direction: NavigationDirection;
+  presentation: EntryEditorPresentation;
+  children: ReactNode;
+}) {
+  return (
+    <m.div
+      data-entry-create-mode={mode}
+      custom={direction}
+      variants={directionalSwapVariants}
+      initial="initial"
+      animate="animate"
+      transition={motionSpring.navigation}
+      className={cn(presentation === "sheet" && "flex min-h-0 flex-1 flex-col")}
+    >
+      {children}
+    </m.div>
+  );
+}
+
+type CarriedDraft =
+  | { mode: "quick"; values: QuickEntryValues }
+  | { mode: "full"; values: EditorValues };
+
+function EntryCreateModes({
+  accounts,
+  presentation,
+  mode,
+  onModeChange,
+  onCancel,
+  onDirtyChange,
+  onNavigate,
+  onPendingChange,
+  onSaved,
+}: EditorCallbacks & {
+  accounts: Account[];
+  presentation: EntryEditorPresentation;
+  mode: EntryCreateMode;
+  onModeChange: (mode: EntryCreateMode) => void;
+}) {
+  const [carried, setCarried] = useState<CarriedDraft | null>(null);
+  const [direction, setDirection] = useState<NavigationDirection>("none");
+  const [quickAvailable, setQuickAvailable] = useState(true);
+  const [isPending, setIsPending] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const valuesRef = useRef<CarriedDraft | null>(null);
+  const lastQuickKind = useRef<QuickEntryKind>("expense");
+
+  // Dirty state follows the draft itself rather than each editor's own
+  // baseline, so values carried between modes still count as unsaved.
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const handleQuickValues = useCallback((values: QuickEntryValues) => {
+    valuesRef.current = { mode: "quick", values };
+    lastQuickKind.current = values.kind;
+    setIsDirty(!isBlankQuickEntryValues(values));
+    setQuickAvailable(true);
+  }, []);
+  const handleFullValues = useCallback(
+    (values: EditorValues) => {
+      valuesRef.current = { mode: "full", values };
+      setIsDirty(!isBlankEditorValues(values));
+      setQuickAvailable(
+        editorToQuickValues(values, accounts, lastQuickKind.current) !== null,
+      );
+    },
+    [accounts],
+  );
+  const handlePendingChange = useCallback(
+    (pending: boolean) => {
+      setIsPending(pending);
+      onPendingChange?.(pending);
+    },
+    [onPendingChange],
+  );
+
+  function changeMode(nextMode: EntryCreateMode) {
+    if (nextMode === mode || isPending) return;
+    const current = valuesRef.current;
+    if (nextMode === "full") {
+      setCarried(
+        current?.mode === "quick"
+          ? { mode: "full", values: quickToEditorValues(current.values) }
+          : null,
+      );
+    } else {
+      const quickValues =
+        current?.mode === "full"
+          ? editorToQuickValues(current.values, accounts, lastQuickKind.current)
+          : null;
+      if (current?.mode === "full" && !quickValues) return;
+      setCarried(quickValues ? { mode: "quick", values: quickValues } : null);
+    }
+    setDirection(nextMode === "full" ? "forward" : "back");
+    onModeChange(nextMode);
+  }
+
+  const callbacks = {
+    onCancel,
+    onPendingChange: handlePendingChange,
+    onSaved,
+  };
+  const editor =
+    mode === "quick" ? (
+      <QuickEntryEditor
+        accounts={accounts}
+        draft={carried?.mode === "quick" ? carried.values : undefined}
+        presentation={presentation}
+        onNavigate={onNavigate}
+        onValuesChange={handleQuickValues}
+        {...callbacks}
+      />
+    ) : (
+      <EntryEditor
+        accounts={accounts}
+        draft={carried?.mode === "full" ? carried.values : undefined}
+        presentation={presentation}
+        showPageHeader={false}
+        onValuesChange={handleFullValues}
+        {...callbacks}
+      />
+    );
+
+  return (
+    <div
+      className={cn(
+        presentation === "page" ? "grid gap-5" : "flex min-h-0 flex-1 flex-col",
+      )}
+    >
+      {presentation === "page" ? (
+        <EntryEditorPageHeader description={createModeDescriptions[mode]} />
+      ) : null}
+      <div
+        className={cn(
+          "grid gap-2",
+          presentation === "sheet" && "shrink-0 px-6 pb-1",
+        )}
+      >
+        <Tabs
+          value={mode}
+          onValueChange={(nextMode) => changeMode(nextMode as EntryCreateMode)}
+        >
+          <TabsList
+            aria-label="新增方式"
+            className="grid w-full grid-cols-2 sm:w-64"
+          >
+            <TabsTrigger
+              value="quick"
+              disabled={isPending || (mode === "full" && !quickAvailable)}
+            >
+              簡易
+            </TabsTrigger>
+            <TabsTrigger value="full" disabled={isPending}>
+              完整
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {mode === "full" && !quickAvailable ? (
+          <FieldDescription>
+            目前的分錄無法以簡易模式表示，請在完整模式中完成。
+          </FieldDescription>
+        ) : null}
+      </div>
+      <AnimatePresence initial={false}>
+        <CreateModePanel
+          key={mode}
+          mode={mode}
+          direction={direction}
+          presentation={presentation}
+        >
+          {editor}
+        </CreateModePanel>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function EntryEditorSurface({
   presentation,
+  createMode,
+  onCreateModeChange,
   onCancel,
   onDirtyChange,
   onNavigate,
@@ -137,6 +375,22 @@ function EntryEditorSurface({
     );
   }
 
+  if (!isEditing) {
+    return (
+      <EntryCreateModes
+        accounts={accounts.data}
+        presentation={presentation}
+        mode={createMode}
+        onModeChange={onCreateModeChange}
+        onCancel={onCancel}
+        onDirtyChange={onDirtyChange}
+        onNavigate={onNavigate}
+        onPendingChange={onPendingChange}
+        onSaved={onSaved}
+      />
+    );
+  }
+
   return (
     <EntryEditor
       accounts={accounts.data}
@@ -151,7 +405,14 @@ function EntryEditorSurface({
 }
 
 export function EntryEditorPage() {
-  return <EntryEditorSurface presentation="page" />;
+  const { entryCreateMode, setEntryCreateMode } = useEntryCreateMode();
+  return (
+    <EntryEditorSurface
+      presentation="page"
+      createMode={entryCreateMode}
+      onCreateModeChange={setEntryCreateMode}
+    />
+  );
 }
 
 function prefersReducedMotion() {
@@ -172,6 +433,7 @@ export function EntryEditorSheet({
   const suppressNextNavigationTransition =
     useSuppressNextNavigationTransition();
   const isEditing = Boolean(entryId);
+  const { entryCreateMode, setEntryCreateMode } = useEntryCreateMode();
   const [open, setOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [isPending, setIsPending] = useState(false);
@@ -247,6 +509,20 @@ export function EntryEditorSheet({
     [closeSheet],
   );
 
+  // Leaving from inside the editor (not after a save) must not drop a draft.
+  const requestLeave = useCallback(
+    (to: To) => {
+      if (isPending) return;
+      pendingDestination.current = to;
+      if (isDirty) {
+        setDiscardOpen(true);
+        return;
+      }
+      closeSheet();
+    },
+    [closeSheet, isDirty, isPending],
+  );
+
   useEffect(() => {
     if (blocker.state !== "blocked") return;
     const timeout = window.setTimeout(() => {
@@ -283,13 +559,17 @@ export function EntryEditorSheet({
       >
         <DialogHeader>
           <DialogTitle>{isEditing ? "編輯交易" : "新增交易"}</DialogTitle>
-          <DialogDescription>輸入交易資料與借貸平衡的分錄。</DialogDescription>
+          <DialogDescription>
+            {entryEditorDescription(isEditing, entryCreateMode)}
+          </DialogDescription>
         </DialogHeader>
         <EntryEditorSurface
           presentation="sheet"
+          createMode={entryCreateMode}
+          onCreateModeChange={setEntryCreateMode}
           onCancel={requestDismiss}
           onDirtyChange={setIsDirty}
-          onNavigate={requestNavigate}
+          onNavigate={requestLeave}
           onPendingChange={setIsPending}
           onSaved={(saved) =>
             requestNavigate({
@@ -303,6 +583,7 @@ export function EntryEditorSheet({
         open={discardOpen}
         onOpenChange={(nextOpen) => {
           setDiscardOpen(nextOpen);
+          if (!nextOpen) pendingDestination.current = null;
           if (!nextOpen && blocker.state === "blocked") {
             blocker.reset();
           }

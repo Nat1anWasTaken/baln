@@ -2,6 +2,7 @@ import {
   useReducedMotion,
   type TargetAndTransition,
   type Transition,
+  type Variants,
 } from "motion/react";
 import {
   createContext,
@@ -9,6 +10,8 @@ import {
   useContext,
   type ReactNode,
 } from "react";
+
+import type { NavigationDirection } from "@/lib/navigation-transition";
 
 export type PressFeedback =
   "control" | "icon" | "prominent" | "surface" | "navigation" | "none";
@@ -57,6 +60,22 @@ export const motionSpring = {
     mass: 0.8,
   },
 } satisfies Record<string, Transition>;
+
+/**
+ * Horizontal swap for content that replaces a sibling view, such as page
+ * titles or editor modes. Pass the navigation direction as `custom`.
+ */
+export const directionalSwapVariants = {
+  initial: (direction: NavigationDirection) => ({
+    opacity: 0,
+    x: direction === "back" ? -12 : 12,
+  }),
+  animate: { opacity: 1, x: 0 },
+  exit: (direction: NavigationDirection) => ({
+    opacity: 0,
+    x: direction === "back" ? 8 : -8,
+  }),
+} satisfies Variants;
 
 const pressTargets = {
   control: { opacity: 0.82, scale: 0.97, y: 1 },

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { AccountPills } from "@/features/entries/account-pills";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { motionSpring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -41,42 +42,6 @@ function firstPopulatedType(accounts: Account[]) {
     accountTypes.find((type) =>
       accounts.some((account) => !account.archived && account.type === type),
     ) ?? accountTypes[0]
-  );
-}
-
-function AccountPills({
-  accounts,
-  value,
-  label,
-  onValueChange,
-}: {
-  accounts: Account[];
-  value: string;
-  label: string;
-  onValueChange: (value: string) => void;
-}) {
-  return (
-    <ToggleGroup
-      type="single"
-      variant="pill"
-      value={value}
-      onValueChange={(nextValue) => {
-        if (nextValue) onValueChange(nextValue);
-      }}
-      aria-label={label}
-      className="flex w-full flex-wrap justify-start gap-2"
-    >
-      {accounts.map((account) => (
-        <ToggleGroupItem
-          key={account.id}
-          value={account.key}
-          title={account.key}
-          className="max-w-full overflow-hidden"
-        >
-          <span className="truncate">{account.name}</span>
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
   );
 }
 

@@ -1,4 +1,11 @@
-import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
+import {
+  Controller,
+  type FieldValues,
+  useFieldArray,
+  useForm,
+  type UseFormReturn,
+  useWatch,
+} from "react-hook-form";
 import {
   ArrowLeft,
   ChevronRight,
@@ -6,25 +13,11 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 
-import { EntrySummary } from "@/components/entry-list-item";
-import { AppLink, useAppNavigate } from "@/components/navigation-transition";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AppLink } from "@/components/navigation-transition";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   Field,
   FieldDescription,
@@ -51,6 +44,17 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { SwitchField } from "@/components/ui/switch";
 import {
+  blankEditorValues,
+  type EditorPosting,
+  type EditorValues,
+  emptyPosting,
+  signedPosting,
+} from "@/features/entries/entry-draft";
+import {
+  DuplicateEntryDialog,
+  useEntrySubmission,
+} from "@/features/entries/entry-submission";
+import {
   PostingDirectionBadge,
   PostingDirectionText,
   postingDirectionFromAmount,
@@ -59,38 +63,11 @@ import {
 } from "@/features/entries/posting-direction";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
-import { ApiError, entriesApi } from "@/lib/api-client";
-import { formatMoney, todayTaipei } from "@/lib/format";
-import { possibleDuplicateFieldsSchema } from "@/lib/schemas";
+import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { invalidateAfterEntryWrite } from "@/lib/query-invalidation";
-import type {
-  Account,
-  EntryWriteRequest,
-  EntryResponse,
-  PossibleDuplicateFields,
-  PostingInput,
-} from "@/lib/schemas";
+import type { Account, AccountType, EntryResponse } from "@/lib/schemas";
 
-type EntrySubmission = {
-  body: EntryWriteRequest;
-  confirmedDistinct: boolean;
-};
-
-type EditorPosting = {
-  accountKey: string;
-  direction: PostingDirection;
-  amount: number;
-  memo: string;
-};
-
-type EditorValues = {
-  date: string;
-  description: string;
-  note: string;
-  excludedFromBudgets: boolean;
-  postings: EditorPosting[];
-};
+export type EntryEditorPresentation = "page" | "sheet";
 
 type PostingEditorState =
   | { kind: "existing"; index: number; draft: EditorPosting }
@@ -100,20 +77,6 @@ type PostingEditorErrors = {
   accountKey?: string;
   amount?: string;
 };
-
-function emptyPosting(direction: PostingDirection): EditorPosting {
-  return { accountKey: "", direction, amount: 0, memo: "" };
-}
-
-function signedPosting(posting: EditorPosting): PostingInput {
-  const numericAmount = Number(posting.amount);
-  const absolute = Number.isFinite(numericAmount) ? Math.abs(numericAmount) : 0;
-  return {
-    account_key: posting.accountKey,
-    amount_minor: posting.direction === "debit" ? absolute : -absolute,
-    memo: posting.memo.trim() || null,
-  };
-}
 
 function entryDefaults(entry: EntryResponse): EditorValues {
   return {
@@ -130,13 +93,14 @@ function entryDefaults(entry: EntryResponse): EditorValues {
   };
 }
 
-function AccountCombobox({
+export function AccountCombobox({
   value,
   onValueChange,
   accounts,
   id,
   placeholder = "選擇帳戶",
   ariaInvalid,
+  types = accountTypes,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -144,6 +108,7 @@ function AccountCombobox({
   id?: string;
   placeholder?: string;
   ariaInvalid?: boolean;
+  types?: AccountType[];
 }) {
   return (
     <Combobox
@@ -155,7 +120,7 @@ function AccountCombobox({
       aria-invalid={ariaInvalid}
       searchPlaceholder="搜尋帳戶…"
       emptyText="找不到帳戶。"
-      groups={accountTypes.map((type) => ({
+      groups={types.map((type) => ({
         label: accountTypeLabels[type],
         options: accounts
           .filter((account) => account.type === type)
@@ -167,6 +132,70 @@ function AccountCombobox({
       }))}
     />
   );
+}
+
+export const entryEditorPageFooterClassName =
+  "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex shrink-0 justify-end gap-2 rounded-4xl bg-popover/95 p-4 shadow-xl ring-1 ring-foreground/5 backdrop-blur md:bottom-4 dark:ring-foreground/10";
+
+export function EntryEditorRootError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+    >
+      <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <FieldError>{message}</FieldError>
+    </div>
+  );
+}
+
+export function EntryEditorPageHeader({
+  entry,
+  description,
+}: {
+  entry?: EntryResponse;
+  description: ReactNode;
+}) {
+  const { search } = useLocation();
+  return (
+    <>
+      <Button asChild variant="ghost" className="w-fit">
+        <AppLink
+          to={{
+            pathname: entry ? `/entries/${entry.id}` : "/entries",
+            search,
+          }}
+          transitionIntent="back"
+        >
+          <ArrowLeft aria-hidden="true" />
+          {entry ? "返回交易明細" : "返回交易"}
+        </AppLink>
+      </Button>
+      <div className="grid gap-1.5">
+        <h2 className="font-heading text-xl font-semibold">
+          {entry ? "編輯交易" : "新增交易"}
+        </h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+    </>
+  );
+}
+
+/** Reports the current form values whenever any field changes. */
+export function useEditorValuesSync<Values extends FieldValues>({
+  form,
+  onValuesChange,
+}: {
+  form: UseFormReturn<Values>;
+  onValuesChange?: (values: Values) => void;
+}) {
+  useEffect(() => {
+    if (!onValuesChange) return;
+    onValuesChange(form.getValues());
+    const subscription = form.watch(() => onValuesChange(form.getValues()));
+    return () => subscription.unsubscribe();
+  }, [form, onValuesChange]);
 }
 
 function MobilePostingRow({
@@ -220,23 +249,28 @@ function MobilePostingRow({
 export function EntryEditor({
   accounts,
   entry,
+  draft,
   presentation = "page",
+  showPageHeader = true,
   onCancel,
   onDirtyChange,
   onPendingChange,
   onSaved,
+  onValuesChange,
 }: {
   accounts: Account[];
   entry?: EntryResponse;
-  presentation?: "page" | "sheet";
+  /** Initial values carried over from another editor. */
+  draft?: EditorValues;
+  presentation?: EntryEditorPresentation;
+  showPageHeader?: boolean;
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onPendingChange?: (pending: boolean) => void;
   onSaved?: (entry: EntryResponse) => void;
+  onValuesChange?: (values: EditorValues) => void;
 }) {
   const { search } = useLocation();
-  const navigate = useAppNavigate();
-  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [postingEditor, setPostingEditor] = useState<PostingEditorState | null>(
     null,
@@ -244,85 +278,34 @@ export function EntryEditor({
   const [postingEditorOpen, setPostingEditorOpen] = useState(false);
   const [postingEditorErrors, setPostingEditorErrors] =
     useState<PostingEditorErrors>({});
-  const [duplicateReview, setDuplicateReview] = useState<{
-    submission: EntrySubmission;
-    fields: PossibleDuplicateFields;
-  } | null>(null);
   const originalKeys = new Set(
     entry?.postings.map((posting) => posting.account.key) ?? [],
   );
   const selectableAccounts = accounts.filter(
     (account) => !account.archived || originalKeys.has(account.key),
   );
-  const defaults = entry
-    ? entryDefaults(entry)
-    : {
-        date: todayTaipei(),
-        description: "",
-        note: "",
-        excludedFromBudgets: false,
-        postings: [emptyPosting("debit"), emptyPosting("credit")],
-      };
+  const [defaults] = useState(() =>
+    entry ? entryDefaults(entry) : (draft ?? blankEditorValues()),
+  );
 
   const form = useForm<EditorValues>({ defaultValues: defaults });
+  useEditorValuesSync({ form, onValuesChange });
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "postings",
   });
   const watchedPostings = useWatch({ control: form.control, name: "postings" });
 
-  const mutation = useMutation({
-    mutationFn: ({ body, confirmedDistinct }: EntrySubmission) => {
-      return entry
-        ? entriesApi.update(entry.id, body)
-        : entriesApi.create({
-            ...body,
-            dedup_key: null,
-            confirmed_distinct: confirmedDistinct,
-          });
-    },
-    onSuccess: async (saved) => {
-      await invalidateAfterEntryWrite(queryClient);
-      toast.success(entry ? "交易已更新" : "交易已建立");
-      if (onSaved) {
-        onSaved(saved);
-      } else {
-        navigate(
-          { pathname: `/entries/${saved.id}`, search },
-          {
-            replace: true,
-            transitionIntent: entry ? "back" : "forward",
-          },
-        );
-      }
-    },
-    onError: (error, submission) => {
-      if (
-        !entry &&
-        !submission.confirmedDistinct &&
-        error instanceof ApiError &&
-        error.problem.code === "possible_duplicate"
-      ) {
-        const fields = possibleDuplicateFieldsSchema.safeParse(
-          error.problem.fields,
-        );
-        if (fields.success) {
-          setDuplicateReview({ submission, fields: fields.data });
-          return;
-        }
-      }
-      form.setError("root", { message: error.message });
-      toast.error(error.message);
-    },
+  const submission = useEntrySubmission({
+    entry,
+    onError: (message) => form.setError("root", { message }),
+    onPendingChange,
+    onSaved,
   });
 
   useEffect(() => {
     onDirtyChange?.(form.formState.isDirty);
   }, [form.formState.isDirty, onDirtyChange]);
-
-  useEffect(() => {
-    onPendingChange?.(mutation.isPending);
-  }, [mutation.isPending, onPendingChange]);
 
   function openPostingEditor(index: number) {
     const posting = form.getValues(`postings.${index}`);
@@ -426,15 +409,12 @@ export function EntryEditor({
       form.setError("root", { message: "借方與貸方金額必須完全相等。" });
       return;
     }
-    mutation.mutate({
-      body: {
-        date: values.date,
-        description: values.description.trim(),
-        note: values.note.trim() || null,
-        excluded_from_budgets: values.excludedFromBudgets,
-        postings,
-      },
-      confirmedDistinct: false,
+    submission.submit({
+      date: values.date,
+      description: values.description.trim(),
+      note: values.note.trim() || null,
+      excluded_from_budgets: values.excludedFromBudgets,
+      postings,
     });
   }
 
@@ -446,13 +426,6 @@ export function EntryEditor({
     .filter((posting) => posting.amount_minor < 0)
     .reduce((sum, posting) => sum - posting.amount_minor, 0);
   const imbalance = debitTotal - creditTotal;
-  const duplicateEntries =
-    duplicateReview?.fields.matches
-      .flatMap((match) => match.existing_entries)
-      .filter(
-        (candidate, index, candidates) =>
-          candidates.findIndex((entry) => entry.id === candidate.id) === index,
-      ) ?? [];
   const EditorBody = presentation === "sheet" ? DialogBody : "div";
   const EditorFooter = presentation === "sheet" ? DialogFooter : "div";
 
@@ -472,30 +445,11 @@ export function EntryEditor({
             : "grid auto-rows-max content-start gap-5",
         )}
       >
-        {presentation === "page" ? (
-          <Button asChild variant="ghost" className="w-fit">
-            <AppLink
-              to={{
-                pathname: entry ? `/entries/${entry.id}` : "/entries",
-                search,
-              }}
-              transitionIntent="back"
-            >
-              <ArrowLeft aria-hidden="true" />
-              {entry ? "返回交易明細" : "返回交易"}
-            </AppLink>
-          </Button>
-        ) : null}
-
-        {presentation === "page" ? (
-          <div className="grid gap-1.5">
-            <h2 className="font-heading text-xl font-semibold">
-              {entry ? "編輯交易" : "新增交易"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              輸入交易資料與借貸平衡的分錄。
-            </p>
-          </div>
+        {presentation === "page" && showPageHeader ? (
+          <EntryEditorPageHeader
+            entry={entry}
+            description="輸入交易資料與借貸平衡的分錄。"
+          />
         ) : null}
 
         <FieldGroup className="gap-5">
@@ -705,26 +659,13 @@ export function EntryEditor({
             </div>
           </FieldSet>
 
-          {form.formState.errors.root?.message ? (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
-            >
-              <CircleAlert
-                className="mt-0.5 size-4 shrink-0"
-                aria-hidden="true"
-              />
-              <FieldError>{form.formState.errors.root.message}</FieldError>
-            </div>
-          ) : null}
+          <EntryEditorRootError message={form.formState.errors.root?.message} />
         </FieldGroup>
       </EditorBody>
 
       <EditorFooter
         className={cn(
-          presentation === "page"
-            ? "sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 flex shrink-0 justify-end gap-2 rounded-4xl bg-popover/95 p-4 shadow-xl ring-1 ring-foreground/5 backdrop-blur md:bottom-4 dark:ring-foreground/10"
-            : undefined,
+          presentation === "page" ? entryEditorPageFooterClassName : undefined,
         )}
       >
         {presentation === "page" ? (
@@ -743,13 +684,13 @@ export function EntryEditor({
           <Button
             type="button"
             variant="outline"
-            disabled={mutation.isPending}
+            disabled={submission.isPending}
             onClick={onCancel}
           >
             取消
           </Button>
         )}
-        <Button type="submit" loading={mutation.isPending}>
+        <Button type="submit" loading={submission.isPending}>
           {entry ? "儲存變更" : "建立交易"}
         </Button>
       </EditorFooter>
@@ -876,50 +817,10 @@ export function EntryEditor({
         </Sheet>
       ) : null}
 
-      <AlertDialog
-        open={duplicateReview !== null}
-        onOpenChange={(open) => {
-          if (!open && !mutation.isPending) setDuplicateReview(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>可能重複的交易</AlertDialogTitle>
-            <AlertDialogDescription>
-              已找到日期、帳戶與金額相同的交易。請確認這是否為另一筆交易。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="grid max-h-72 gap-2 overflow-y-auto">
-            {duplicateEntries.map((candidate) => (
-              <Card key={candidate.id}>
-                <EntrySummary entry={candidate} />
-              </Card>
-            ))}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button" disabled={mutation.isPending}>
-              取消
-            </AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              disabled={!duplicateReview}
-              loading={mutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                if (duplicateReview) {
-                  form.clearErrors("root");
-                  mutation.mutate({
-                    ...duplicateReview.submission,
-                    confirmedDistinct: true,
-                  });
-                }
-              }}
-            >
-              仍要建立
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DuplicateEntryDialog
+        {...submission.duplicateDialogProps}
+        onBeforeConfirm={() => form.clearErrors("root")}
+      />
     </form>
   );
 }
