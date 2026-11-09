@@ -39,6 +39,7 @@ const accounts = [
   account("expense.food", "expense"),
   account("income.salary", "income"),
   account("equity.opening", "equity"),
+  { ...account("expense.retired", "expense"), archived: true },
 ];
 
 const expense: QuickEntryValues = {
@@ -238,6 +239,18 @@ describe("quick entry conversion", () => {
           accountKey: "expense.food",
           direction: "debit",
           amount: -50,
+          memo: "",
+        },
+        { accountKey: "asset.cash", direction: "credit", amount: 50, memo: "" },
+      ],
+    ],
+    [
+      "an archived account",
+      [
+        {
+          accountKey: "expense.retired",
+          direction: "debit",
+          amount: 50,
           memo: "",
         },
         { accountKey: "asset.cash", direction: "credit", amount: 50, memo: "" },

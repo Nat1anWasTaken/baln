@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import type { ComponentProps } from "react";
 import { describe, expect, it } from "vitest";
 
 import { QuickEntryEditor } from "@/features/entries/quick-entry-editor";
@@ -31,7 +32,10 @@ const accounts: Account[] = [
   { ...account(5, "expense.old", "舊分類", "expense"), archived: true },
 ];
 
-function renderQuickEditor(editorAccounts = accounts) {
+function renderQuickEditor(
+  editorAccounts = accounts,
+  draft?: ComponentProps<typeof QuickEntryEditor>["draft"],
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -41,7 +45,9 @@ function renderQuickEditor(editorAccounts = accounts) {
         <Routes>
           <Route
             path="/entries/new"
-            element={<QuickEntryEditor accounts={editorAccounts} />}
+            element={
+              <QuickEntryEditor accounts={editorAccounts} draft={draft} />
+            }
           />
           <Route path="/entries/:entryId" element={<p>交易已儲存</p>} />
           <Route path="/accounts" element={<p>帳戶管理</p>} />
@@ -160,6 +166,31 @@ describe("quick entry editor", () => {
     expect(
       screen.queryByText("請輸入大於零的整數金額。"),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not submit a carried-over account the form cannot show", async () => {
+    const user = userEvent.setup();
+    const requests = captureCreatedEntries();
+    renderQuickEditor(accounts, {
+      kind: "expense",
+      date: "2026-07-24",
+      description: "舊分類午餐",
+      note: "",
+      excludedFromBudgets: false,
+      amount: 80,
+      categoryKey: "expense.old",
+      fundingKey: "asset.cash",
+    });
+
+    expect(screen.queryByRole("radio", { name: "舊分類" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+    expect(await screen.findByText("請選擇分類。")).toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+
+    await user.click(screen.getByRole("radio", { name: "餐飲" }));
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+    await screen.findByText("交易已儲存");
+    expect(requests[0].postings[0].account_key).toBe("expense.restaurant");
   });
 
   it("points to account management when a needed account type is missing", async () => {

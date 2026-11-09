@@ -127,8 +127,13 @@ export function editorToQuickValues(
   const creditAmount = normalizedAmount(credit.amount);
   if (debitAmount !== creditAmount) return null;
 
+  // Archived accounts are hidden from the quick form, so treat them like
+  // unknown keys and keep such drafts in the full editor.
   const accountType = (key: string) =>
-    key ? accounts.find((account) => account.key === key)?.type : undefined;
+    key
+      ? accounts.find((account) => account.key === key && !account.archived)
+          ?.type
+      : undefined;
   if (
     (debit.accountKey && !accountType(debit.accountKey)) ||
     (credit.accountKey && !accountType(credit.accountKey))

@@ -165,14 +165,18 @@ export function QuickEntryEditor({
 
   function submit(values: QuickEntryValues) {
     form.clearErrors("root");
-    // An account field without eligible accounts is not mounted, so its
-    // required rule never runs; block the empty key here instead.
+    // Only keys the pills can show count as selected: an unmounted field
+    // (no eligible accounts) or a carried-over key that is no longer
+    // eligible, such as an archived account, must not reach the API.
     const missingAccounts = (
       [
-        ["categoryKey", "請選擇分類。"],
-        ["fundingKey", "請選擇帳戶。"],
+        ["categoryKey", "請選擇分類。", categoryAccounts],
+        ["fundingKey", "請選擇帳戶。", fundingAccounts],
       ] as const
-    ).filter(([name]) => !values[name]);
+    ).filter(
+      ([name, , eligible]) =>
+        !eligible.some((account) => account.key === values[name]),
+    );
     if (missingAccounts.length > 0) {
       for (const [name, message] of missingAccounts) {
         form.setError(name, { message });
