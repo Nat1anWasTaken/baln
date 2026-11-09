@@ -114,6 +114,15 @@ export function editorToQuickValues(
   );
   if (!debit || !credit) return null;
 
+  // Negative amounts are invalid input; keep them in the full editor rather
+  // than silently flipping their sign.
+  if (
+    values.postings.some(
+      (posting) => Number.isFinite(posting.amount) && posting.amount < 0,
+    )
+  ) {
+    return null;
+  }
   const debitAmount = normalizedAmount(debit.amount);
   const creditAmount = normalizedAmount(credit.amount);
   if (debitAmount !== creditAmount) return null;

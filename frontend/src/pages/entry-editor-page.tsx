@@ -509,6 +509,20 @@ export function EntryEditorSheet({
     [closeSheet],
   );
 
+  // Leaving from inside the editor (not after a save) must not drop a draft.
+  const requestLeave = useCallback(
+    (to: To) => {
+      if (isPending) return;
+      pendingDestination.current = to;
+      if (isDirty) {
+        setDiscardOpen(true);
+        return;
+      }
+      closeSheet();
+    },
+    [closeSheet, isDirty, isPending],
+  );
+
   useEffect(() => {
     if (blocker.state !== "blocked") return;
     const timeout = window.setTimeout(() => {
@@ -555,7 +569,7 @@ export function EntryEditorSheet({
           onCreateModeChange={setEntryCreateMode}
           onCancel={requestDismiss}
           onDirtyChange={setIsDirty}
-          onNavigate={requestNavigate}
+          onNavigate={requestLeave}
           onPendingChange={setIsPending}
           onSaved={(saved) =>
             requestNavigate({
@@ -569,6 +583,7 @@ export function EntryEditorSheet({
         open={discardOpen}
         onOpenChange={(nextOpen) => {
           setDiscardOpen(nextOpen);
+          if (!nextOpen) pendingDestination.current = null;
           if (!nextOpen && blocker.state === "blocked") {
             blocker.reset();
           }

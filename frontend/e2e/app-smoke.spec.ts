@@ -1701,6 +1701,35 @@ test("records a quick expense and carries the draft between modes", async ({
   });
 });
 
+test("confirms before leaving a quick draft for account management", async ({
+  page,
+}) => {
+  await page.route(/\/api\/v1\/accounts(\?|$)/, (route) =>
+    route.fulfill({
+      json: accounts.filter((account) => account.type !== "expense"),
+    }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/entries");
+  await page.getByLabel("新增交易").click();
+
+  const sheet = page.getByRole("dialog", { name: "新增交易" });
+  await sheet.getByLabel("金額").fill("120");
+  await sheet.getByRole("button", { name: "前往帳戶管理" }).click();
+
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "捨棄這筆交易草稿？",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
+  await expect(sheet.getByLabel("金額")).toHaveValue("120");
+  await expect(page).toHaveURL(/\/entries\/new$/);
+
+  await sheet.getByRole("button", { name: "前往帳戶管理" }).click();
+  await discardDialog.getByRole("button", { name: "捨棄變更" }).click();
+  await expect(page).toHaveURL(/\/accounts$/);
+});
+
 test("keeps quick mode unavailable for drafts it cannot represent", async ({
   page,
 }) => {

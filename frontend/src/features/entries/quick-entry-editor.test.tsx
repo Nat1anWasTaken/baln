@@ -121,6 +121,8 @@ describe("quick entry editor", () => {
     await user.click(screen.getByRole("radio", { name: "收入" }));
     expect(screen.getByText("入帳帳戶")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "薪資" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+    expect(await screen.findByText("請選擇分類。")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("金額"), "50000");
     await user.click(screen.getByRole("radio", { name: "薪資" }));
@@ -161,7 +163,16 @@ describe("quick entry editor", () => {
   });
 
   it("points to account management when a needed account type is missing", async () => {
+    const user = userEvent.setup();
+    const requests = captureCreatedEntries();
     renderQuickEditor(accounts.filter((item) => item.type !== "expense"));
+
+    await user.type(screen.getByLabelText("金額"), "120");
+    await user.click(screen.getByRole("radio", { name: "現金" }));
+    await user.type(screen.getByLabelText("交易說明"), "午餐");
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+    expect(await screen.findByText("請選擇分類。")).toBeInTheDocument();
+    expect(requests).toHaveLength(0);
 
     expect(
       screen.getByText("尚未建立可用的支出帳戶，請先新增帳戶或改用完整模式。"),

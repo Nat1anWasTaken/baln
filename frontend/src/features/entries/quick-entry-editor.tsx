@@ -165,6 +165,20 @@ export function QuickEntryEditor({
 
   function submit(values: QuickEntryValues) {
     form.clearErrors("root");
+    // An account field without eligible accounts is not mounted, so its
+    // required rule never runs; block the empty key here instead.
+    const missingAccounts = (
+      [
+        ["categoryKey", "請選擇分類。"],
+        ["fundingKey", "請選擇帳戶。"],
+      ] as const
+    ).filter(([name]) => !values[name]);
+    if (missingAccounts.length > 0) {
+      for (const [name, message] of missingAccounts) {
+        form.setError(name, { message });
+      }
+      return;
+    }
     const editorValues = quickToEditorValues(values);
     submission.submit({
       date: values.date,

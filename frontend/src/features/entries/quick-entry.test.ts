@@ -232,6 +232,18 @@ describe("quick entry conversion", () => {
       ],
     ],
     [
+      "negative amounts",
+      [
+        {
+          accountKey: "expense.food",
+          direction: "debit",
+          amount: -50,
+          memo: "",
+        },
+        { accountKey: "asset.cash", direction: "credit", amount: 50, memo: "" },
+      ],
+    ],
+    [
       "an unknown account",
       [
         {
@@ -277,6 +289,22 @@ describe("entry create mode preference", () => {
     expect(writeEntryCreateMode("user-a", "full")).toBe("full");
     expect(readEntryCreateMode("user-a")).toBe("full");
     expect(readEntryCreateMode("user-b")).toBe("quick");
+  });
+
+  it("falls back when reading browser storage itself throws", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get: () => {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+    try {
+      expect(readEntryCreateMode("user-a")).toBe("quick");
+      expect(writeEntryCreateMode("user-a", "full")).toBe("full");
+    } finally {
+      Object.defineProperty(window, "localStorage", descriptor!);
+    }
   });
 
   it("falls back to quick mode when storage is unavailable", () => {
