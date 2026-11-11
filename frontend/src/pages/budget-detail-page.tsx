@@ -28,6 +28,7 @@ import {
 
 import { useOfflineReadOnly } from "@/auth/auth-context";
 import { budgetPeriodLabel } from "@/components/budget-card";
+import { BudgetRemainingBreakdown } from "@/components/budget-remaining-breakdown";
 import { AppLink, useAppNavigate } from "@/components/navigation-transition";
 import { OfflineUnavailableState } from "@/components/offline-state";
 import { ErrorState, PageLoading } from "@/components/page-state";
@@ -718,66 +719,20 @@ export function BudgetDetailPage() {
                       已超過本期可用額度
                     </p>
                   </>
-                ) : remainingBreakdown.adjustment ? (
-                  <>
-                    <p className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tabular-nums">
-                      <span className="text-finance-income">
-                        {formatMoney(remainingBreakdown.currentMinor)}
-                      </span>
-                      <span
-                        className="text-muted-foreground"
-                        aria-hidden="true"
-                      >
-                        {remainingBreakdown.adjustment.kind === "rollover"
-                          ? "+"
-                          : "−"}
-                      </span>
-                      <span
-                        className={cn(
-                          remainingBreakdown.adjustment.kind === "rollover"
-                            ? "text-finance-rollover"
-                            : "text-destructive",
-                        )}
-                      >
-                        {formatMoney(remainingBreakdown.adjustment.amountMinor)}
-                      </span>
-                    </p>
-                    <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                      <span className="text-finance-income">當期剩餘</span>
-                      <span
-                        className="text-muted-foreground"
-                        aria-hidden="true"
-                      >
-                        {remainingBreakdown.adjustment.kind === "rollover"
-                          ? "+"
-                          : "−"}
-                      </span>
-                      <span
-                        className={cn(
-                          remainingBreakdown.adjustment.kind === "rollover"
-                            ? "text-finance-rollover"
-                            : "text-destructive",
-                        )}
-                      >
-                        {remainingBreakdown.adjustment.kind === "rollover"
-                          ? "往期沿襲"
-                          : "往期超支抵扣"}
-                      </span>
-                    </p>
-                    <span className="sr-only">
-                      當期剩餘 {formatMoney(remainingBreakdown.currentMinor)}
-                      {remainingBreakdown.adjustment.kind === "rollover"
-                        ? "加上往期沿襲"
-                        : "扣除往期超支"}
-                      {formatMoney(remainingBreakdown.adjustment.amountMinor)}
-                    </span>
-                  </>
                 ) : (
                   <>
-                    <p className="text-2xl font-semibold tabular-nums text-finance-income">
-                      {formatMoney(remainingBreakdown.currentMinor)}
+                    <p className="text-2xl font-semibold tabular-nums text-finance-net">
+                      {formatMoney(budget.remaining_minor)}
                     </p>
-                    <p className="text-xs text-finance-income">當期剩餘</p>
+                    {remainingBreakdown.adjustment ? (
+                      <BudgetRemainingBreakdown
+                        breakdown={remainingBreakdown}
+                      />
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        來自本期額度
+                      </p>
+                    )}
                   </>
                 )}
               </CardContent>

@@ -38,48 +38,53 @@ const budget: BudgetStatus = {
 };
 
 describe("BudgetCard", () => {
-  it("separates current unused and previous rollover amounts", () => {
+  it("leads with the available balance and explains rollover below it", () => {
     render(<BudgetCard budget={budget} />);
-    expect(screen.getByText("已使用")).toBeVisible();
     expect(screen.getByText("可用餘額")).toBeVisible();
-    expect(screen.getByText("當期剩餘")).toBeVisible();
-    expect(screen.getByText("往期沿襲")).toBeVisible();
-    expect(screen.getByText(/本期額度/)).toHaveTextContent("TWD 10,000");
-    expect(screen.getByText(/總額度/)).toHaveTextContent("TWD 12,000");
-    expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-income");
+    const available = screen.getByText("TWD 5,000");
+    expect(available).toHaveAttribute("data-budget-available-amount");
+    expect(available).toHaveClass("text-finance-net", "whitespace-nowrap");
+
+    const breakdown = document.querySelector(
+      "[data-budget-remaining-breakdown]",
+    );
+    expect(breakdown).toHaveTextContent(
+      "當期剩餘 TWD 3,000+往期沿襲 TWD 2,000",
+    );
     expect(screen.getByText("TWD 2,000")).toHaveClass("text-finance-rollover");
-    expect(screen.getByText("TWD 3,000").parentElement).toHaveClass(
-      "whitespace-nowrap",
+
+    expect(screen.getByText(/^已使用/)).toHaveTextContent("已使用 TWD 7,000");
+    expect(screen.getByText(/總額度/)).toHaveTextContent("TWD 12,000");
+    expect(screen.queryByText(/本期額度/)).not.toBeInTheDocument();
+
+    const progress = screen.getByRole("progressbar");
+    expect(progress).toHaveAttribute("aria-valuenow", "7000");
+    expect(progress).toHaveAttribute("aria-valuemax", "12000");
+    expect(progress.lastElementChild).toHaveClass("bg-finance-net");
+    expect(progress.getAttribute("aria-valuetext")).toMatch(
+      /可用餘額 TWD\s5,000/,
     );
-    expect(screen.getByText("TWD 3,000").parentElement).not.toHaveClass(
-      "flex-wrap",
-    );
-    expect(screen.getByRole("progressbar")).toHaveAttribute(
-      "aria-valuenow",
-      "7000",
-    );
-    expect(
-      screen.getByRole("progressbar").getAttribute("aria-valuetext"),
-    ).toContain("加上往期沿襲");
+    expect(progress.getAttribute("aria-valuetext")).toContain("加上往期沿襲");
   });
 
-  it("labels negative rollover as a previous-period deduction", () => {
+  it("shows the net balance first when earlier overspending is deducted", () => {
     render(
       <BudgetCard
         budget={{
           ...budget,
-          carry_in_minor: -2_000,
-          available_minor: 8_000,
-          spent_minor: 7_000,
-          remaining_minor: 1_000,
+          amount_minor: 400,
+          carry_in_minor: -129,
+          available_minor: 271,
+          spent_minor: 0,
+          remaining_minor: 271,
         }}
       />,
     );
-    expect(screen.getByText("往期超支抵扣")).toHaveClass("text-destructive");
-    expect(screen.getByText("TWD 2,000")).toHaveClass("text-destructive");
-    expect(screen.getByText("TWD 3,000").parentElement).toHaveTextContent(
-      "TWD 3,000−TWD 2,000",
-    );
+    expect(screen.getByText("TWD 271")).toHaveClass("text-finance-net");
+    expect(
+      document.querySelector("[data-budget-remaining-breakdown]"),
+    ).toHaveTextContent("當期剩餘 TWD 400−往期超支抵扣 TWD 129");
+    expect(screen.getByText("TWD 129")).toHaveClass("text-destructive");
   });
 
   it.each(["reset", "surplus_only"] as const)(
@@ -97,10 +102,10 @@ describe("BudgetCard", () => {
         />,
       );
 
-      expect(screen.getByText("當期剩餘")).toBeVisible();
-      expect(screen.queryByText("往期沿襲")).not.toBeInTheDocument();
-      expect(screen.queryByText("往期超支抵扣")).not.toBeInTheDocument();
-      expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-income");
+      expect(screen.getByText("TWD 3,000")).toHaveClass("text-finance-net");
+      expect(
+        document.querySelector("[data-budget-remaining-breakdown]"),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -114,9 +119,30 @@ describe("BudgetCard", () => {
         }}
       />,
     );
-    expect(screen.getByText("TWD 0").parentElement).toHaveTextContent(
-      "TWD 0+TWD 1,000",
+    expect(
+      document.querySelector("[data-budget-available-amount]"),
+    ).toHaveTextContent("TWD 1,000");
+    expect(
+      document.querySelector("[data-budget-remaining-breakdown]"),
+    ).toHaveTextContent("當期剩餘 TWD 0+往期沿襲 TWD 1,000");
+  });
+
+  it("leaves the bar empty when nothing is spent or available", () => {
+    render(
+      <BudgetCard
+        budget={{
+          ...budget,
+          carry_in_minor: 0,
+          amount_minor: 0,
+          available_minor: 0,
+          spent_minor: 0,
+          remaining_minor: 0,
+        }}
+      />,
     );
+    const bars = screen.getByRole("progressbar").children;
+    expect((bars[0] as HTMLElement).style.width).toBe("0%");
+    expect((bars[1] as HTMLElement).style.width).toBe("0%");
   });
 
   it("uses explicit overspent language without relying on color", () => {
@@ -132,7 +158,10 @@ describe("BudgetCard", () => {
     );
     expect(screen.getAllByText("已超支").length).toBeGreaterThan(0);
     expect(screen.getByText("超支")).toBeVisible();
-    expect(screen.getByText("TWD 3,000")).toBeVisible();
+    expect(screen.getByText("TWD 3,000")).toHaveClass("text-destructive");
+    expect(
+      document.querySelector("[data-budget-remaining-breakdown]"),
+    ).not.toBeInTheDocument();
   });
 
   it("groups management controls in the linked card footer", () => {
