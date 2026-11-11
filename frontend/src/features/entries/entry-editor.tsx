@@ -32,6 +32,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 import {
   Sheet,
   SheetBody,
@@ -757,16 +758,13 @@ export function EntryEditor({
               </Field>
               <Field data-invalid={Boolean(postingEditorErrors.amount)}>
                 <FieldLabel htmlFor="mobile-posting-amount">金額</FieldLabel>
-                <Input
+                <NumberField
                   id="mobile-posting-amount"
+                  title="分錄金額"
                   aria-invalid={Boolean(postingEditorErrors.amount)}
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={postingEditor?.draft.amount || ""}
-                  onChange={(event) => {
-                    updatePostingDraft({ amount: Number(event.target.value) });
+                  value={postingEditor?.draft.amount ?? 0}
+                  onValueChange={(amount) => {
+                    updatePostingDraft({ amount });
                     setPostingEditorErrors((current) => ({
                       ...current,
                       amount: undefined,

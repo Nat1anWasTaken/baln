@@ -1,15 +1,33 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { ComponentProps } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuickEntryEditor } from "@/features/entries/quick-entry-editor";
 import { API_BASE_URL } from "@/lib/api-client";
 import type { Account, AccountType, CreateEntryRequest } from "@/lib/schemas";
 import { server } from "@/test/server";
+
+vi.mock("@/auth/auth-context", () => ({
+  useAuth: () => ({ user: { id: "user-1" } }),
+}));
+
+function setViewport(mobile: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      addEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: mobile && query === "(max-width: 767px)",
+      media: query,
+      onchange: null,
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
 
 function account(id: number, key: string, name: string, type: AccountType) {
   return {
@@ -212,5 +230,144 @@ describe("quick entry editor", () => {
       "href",
       "/accounts",
     );
+  });
+});
+
+describe("mobile quick entry editor", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    setViewport(true);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function tapKeys(
+    user: ReturnType<typeof userEvent.setup>,
+    digits: string,
+  ) {
+    const keypad = screen.getByRole("group", { name: "金額鍵盤" });
+    for (const digit of digits) {
+      await user.click(within(keypad).getByRole("button", { name: digit }));
+    }
+  }
+
+  it("types the amount on the keypad and saves the category as the description", async () => {
+    const user = userEvent.setup();
+    const requests = captureCreatedEntries();
+    renderQuickEditor();
+
+    const amount = screen.getByRole("status", { name: "金額" });
+    expect(amount).toHaveTextContent("0");
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    await tapKeys(user, "1250");
+    await user.click(
+      screen.getByRole("button", { name: "刪除一位，長按清除" }),
+    );
+    await tapKeys(user, "00");
+    expect(amount).toHaveTextContent("12,500");
+
+    await user.click(screen.getByRole("radio", { name: "餐飲" }));
+    expect(screen.getByLabelText("交易說明")).toHaveAttribute(
+      "placeholder",
+      "說明（留空則為「餐飲」）",
+    );
+    await user.click(screen.getByRole("button", { name: "付款帳戶：未選擇" }));
+    const picker = await screen.findByRole("dialog", { name: "付款帳戶" });
+    await user.click(within(picker).getByRole("radio", { name: "信用卡" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "付款帳戶" })).toBeNull(),
+    );
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+
+    await screen.findByText("交易已儲存");
+    expect(requests[0]).toMatchObject({
+      description: "餐飲",
+      postings: [
+        { account_key: "expense.restaurant", amount_minor: 12500, memo: null },
+        { account_key: "liability.card", amount_minor: -12500, memo: null },
+      ],
+    });
+  });
+
+  it("starts the next entry from the last used account and category", async () => {
+    window.localStorage.setItem(
+      "baln:quick-entry-memory:user-1",
+      JSON.stringify({
+        expense: {
+          recentCategoryKeys: ["expense.restaurant"],
+          fundingKey: "liability.card",
+        },
+      }),
+    );
+    const extraAccounts = [
+      ...accounts,
+      account(6, "expense.fun", "娛樂", "expense"),
+    ];
+    const user = userEvent.setup();
+    const requests = captureCreatedEntries();
+    renderQuickEditor([
+      ...extraAccounts.slice(0, 2),
+      extraAccounts[5],
+      ...extraAccounts.slice(2, 5),
+    ]);
+
+    const categories = within(
+      screen.getByRole("radiogroup", { name: "支出分類" }),
+    ).getAllByRole("radio");
+    expect(categories.map((item) => item.textContent)).toEqual([
+      "餐飲",
+      "娛樂",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "付款帳戶：信用卡" }),
+    ).toBeInTheDocument();
+
+    // Income has no history of its own, so it borrows the expense account.
+    await user.click(screen.getByRole("radio", { name: "收入" }));
+    expect(
+      screen.getByRole("button", { name: "入帳帳戶：信用卡" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "支出" }));
+
+    await tapKeys(user, "90");
+    await user.click(screen.getByRole("radio", { name: "娛樂" }));
+    await user.type(screen.getByLabelText("交易說明"), " 電影 ");
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+    await screen.findByText("交易已儲存");
+    expect(requests[0]).toMatchObject({
+      description: "電影",
+      postings: [
+        { account_key: "expense.fun", amount_minor: 90 },
+        { account_key: "liability.card", amount_minor: -90 },
+      ],
+    });
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("baln:quick-entry-memory:user-1") ?? "",
+      ).expense,
+    ).toEqual({
+      recentCategoryKeys: ["expense.fun", "expense.restaurant"],
+      fundingKey: "liability.card",
+    });
+  });
+
+  it("explains missing fields and focuses the amount first", async () => {
+    const user = userEvent.setup();
+    const requests = captureCreatedEntries();
+    renderQuickEditor();
+
+    await user.click(screen.getByRole("button", { name: "建立交易" }));
+    expect(
+      await screen.findByText("請輸入大於零的整數金額。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("請選擇分類。")).toBeInTheDocument();
+    expect(screen.getByText("請選擇帳戶。")).toBeInTheDocument();
+    expect(screen.queryByText("請輸入交易說明。")).toBeNull();
+    expect(screen.getByRole("status", { name: "金額" })).toHaveFocus();
+    expect(requests).toHaveLength(0);
+
+    await tapKeys(user, "5");
+    expect(
+      screen.queryByText("請輸入大於零的整數金額。"),
+    ).not.toBeInTheDocument();
   });
 });

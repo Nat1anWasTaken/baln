@@ -44,11 +44,15 @@ export function useEntrySubmission({
   onError,
   onPendingChange,
   onSaved,
+  onSuccess,
 }: {
   entry?: EntryResponse;
   onError: (message: string) => void;
   onPendingChange?: (pending: boolean) => void;
+  /** Replaces the default navigation to the saved entry. */
   onSaved?: (entry: EntryResponse) => void;
+  /** Runs after a save succeeds, before `onSaved` or the default navigation. */
+  onSuccess?: (entry: EntryResponse) => void;
 }) {
   const { search } = useLocation();
   const navigate = useAppNavigate();
@@ -69,6 +73,7 @@ export function useEntrySubmission({
     onSuccess: async (saved) => {
       await invalidateAfterEntryWrite(queryClient);
       toast.success(entry ? "交易已更新" : "交易已建立");
+      onSuccess?.(saved);
       if (onSaved) {
         onSaved(saved);
       } else {

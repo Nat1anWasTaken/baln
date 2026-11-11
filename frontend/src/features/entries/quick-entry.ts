@@ -48,8 +48,14 @@ export function blankQuickEntryValues(
   };
 }
 
-/** Whether a quick draft still holds nothing worth confirming a discard. */
-export function isBlankQuickEntryValues(values: QuickEntryValues) {
+/**
+ * Whether a quick draft still holds nothing worth confirming a discard. A
+ * funding account the editor filled in by itself does not count as input.
+ */
+export function isBlankQuickEntryValues(
+  values: QuickEntryValues,
+  defaultFundingKey = "",
+) {
   return (
     values.date === todayTaipei() &&
     values.description === "" &&
@@ -57,8 +63,36 @@ export function isBlankQuickEntryValues(values: QuickEntryValues) {
     !values.excludedFromBudgets &&
     normalizedAmount(values.amount) === 0 &&
     !values.categoryKey &&
-    !values.fundingKey
+    (!values.fundingKey || values.fundingKey === defaultFundingKey)
   );
+}
+
+/**
+ * The description to save: what the user typed, or the category's name when
+ * they left it blank so a quick entry needs no typing at all.
+ */
+export function quickEntryDescription(
+  values: Pick<QuickEntryValues, "description" | "categoryKey">,
+  accounts: Account[],
+) {
+  const typed = values.description.trim();
+  if (typed) return typed;
+  return (
+    accounts.find((account) => account.key === values.categoryKey)?.name ?? ""
+  );
+}
+
+/** Orders accounts by recent use, keeping the rest in their given order. */
+export function sortByRecentKeys(accounts: Account[], recentKeys: string[]) {
+  const rank = new Map(recentKeys.map((key, index) => [key, index]));
+  return accounts
+    .map((account, index) => ({ account, index }))
+    .sort(
+      (a, b) =>
+        (rank.get(a.account.key) ?? recentKeys.length + a.index) -
+        (rank.get(b.account.key) ?? recentKeys.length + b.index),
+    )
+    .map(({ account }) => account);
 }
 
 /**

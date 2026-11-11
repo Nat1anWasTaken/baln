@@ -140,6 +140,28 @@ async function fillEntry(user: ReturnType<typeof userEvent.setup>) {
   }
 }
 
+async function enterKeypadAmount(
+  user: ReturnType<typeof userEvent.setup>,
+  trigger: HTMLElement,
+  digits: string,
+) {
+  await user.click(trigger);
+  const keypadSheet = await screen.findByRole("dialog", { name: "分錄金額" });
+  const backspace = within(keypadSheet).getByRole("button", {
+    name: "刪除一位，長按清除",
+  });
+  for (let index = 0; index < 15; index += 1) await user.click(backspace);
+  for (const digit of digits) {
+    await user.click(within(keypadSheet).getByRole("button", { name: digit }));
+  }
+  await user.click(within(keypadSheet).getByRole("button", { name: "完成" }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("dialog", { name: "分錄金額" }),
+    ).not.toBeInTheDocument(),
+  );
+}
+
 describe("mobile posting editor", () => {
   it("discards canceled edits and applies completed edits to the summary", async () => {
     setMobileViewport();
@@ -167,8 +189,11 @@ describe("mobile posting editor", () => {
     let postingSheet = await screen.findByRole("dialog", {
       name: "編輯第 1 筆分錄",
     });
-    await user.clear(within(postingSheet).getByLabelText("金額"));
-    await user.type(within(postingSheet).getByLabelText("金額"), "999");
+    await enterKeypadAmount(
+      user,
+      within(postingSheet).getByLabelText("金額"),
+      "999",
+    );
     await user.type(within(postingSheet).getByLabelText("分錄備註"), "不保留");
     await user.click(
       within(postingSheet).getByRole("button", { name: "取消" }),
@@ -183,11 +208,16 @@ describe("mobile posting editor", () => {
     postingSheet = await screen.findByRole("dialog", {
       name: "編輯第 1 筆分錄",
     });
-    expect(within(postingSheet).getByLabelText("金額")).toHaveValue(320);
+    expect(within(postingSheet).getByLabelText("金額")).toHaveTextContent(
+      "320",
+    );
     expect(within(postingSheet).getByLabelText("分錄備註")).toHaveValue("");
 
-    await user.clear(within(postingSheet).getByLabelText("金額"));
-    await user.type(within(postingSheet).getByLabelText("金額"), "450");
+    await enterKeypadAmount(
+      user,
+      within(postingSheet).getByLabelText("金額"),
+      "450",
+    );
     await user.type(within(postingSheet).getByLabelText("分錄備註"), "午餐");
     await user.click(
       within(postingSheet).getByRole("button", { name: "完成" }),
@@ -239,7 +269,11 @@ describe("mobile posting editor", () => {
       within(postingSheet).getByRole("combobox", { name: "帳戶" }),
     );
     await user.click(await screen.findByRole("option", { name: "餐飲" }));
-    await user.type(within(postingSheet).getByLabelText("金額"), "120");
+    await enterKeypadAmount(
+      user,
+      within(postingSheet).getByLabelText("金額"),
+      "120",
+    );
     await user.type(within(postingSheet).getByLabelText("分錄備註"), "加點");
     await user.click(
       within(postingSheet).getByRole("button", { name: "完成" }),
