@@ -227,7 +227,9 @@ export function MobileQuickEntryEditor({
       <EditorBody
         data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
         className={cn(
-          "grid auto-rows-max content-start gap-3",
+          // One shrinkable column: the swipeable category row must scroll
+          // inside the sheet, not widen every row to the width of all chips.
+          "grid auto-rows-max grid-cols-1 content-start gap-3",
           presentation === "sheet" && "py-4",
         )}
       >
@@ -313,7 +315,10 @@ export function MobileQuickEntryEditor({
           />
         </Field>
 
-        <Field data-invalid={Boolean(errors.categoryKey?.message)}>
+        <Field
+          data-invalid={Boolean(errors.categoryKey?.message)}
+          className="min-w-0"
+        >
           <FieldLabel htmlFor="quick-entry-category" className="sr-only">
             分類
           </FieldLabel>
@@ -323,21 +328,26 @@ export function MobileQuickEntryEditor({
               name="categoryKey"
               rules={{ required: "請選擇分類。" }}
               render={({ field }) => (
-                <AccountPills
-                  id="quick-entry-category"
-                  accounts={recentCategories}
-                  label={`${quickEntryKindLabels[kind]}分類`}
-                  value={field.value}
-                  onValueChange={(next) => {
-                    field.onChange(next);
-                    form.clearErrors("categoryKey");
-                  }}
-                  className={cn(
-                    "-mx-6 w-auto snap-x scroll-px-6 flex-nowrap overflow-x-auto px-6 pb-1 [scrollbar-width:none]",
-                    presentation === "page" && "-mx-4 scroll-px-4 px-4",
-                  )}
-                  itemClassName="shrink-0 snap-start"
-                />
+                // Field stretches its direct children to its width, so the
+                // row bleeds to the sheet edges from inside a plain wrapper.
+                <div>
+                  <AccountPills
+                    id="quick-entry-category"
+                    accounts={recentCategories}
+                    label={`${quickEntryKindLabels[kind]}分類`}
+                    value={field.value}
+                    onValueChange={(next) => {
+                      field.onChange(next);
+                      form.clearErrors("categoryKey");
+                    }}
+                    className={cn(
+                      "-mx-6 w-[calc(100%+3rem)] snap-x scroll-px-6 flex-nowrap overflow-x-auto px-6 pb-1 [scrollbar-width:none]",
+                      presentation === "page" &&
+                        "-mx-4 w-[calc(100%+2rem)] scroll-px-4 px-4",
+                    )}
+                    itemClassName="shrink-0 snap-start"
+                  />
+                </div>
               )}
             />
           ) : (
