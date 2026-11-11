@@ -1645,6 +1645,69 @@ test("offers quick and full create modes while editing stays full", async ({
   );
 });
 
+test("keeps the phone quick entry within the screen with many categories", async ({
+  page,
+}) => {
+  const categoryNames = [
+    "娛樂",
+    "電子用品",
+    "生活必需品",
+    "家庭",
+    "食品雜貨",
+    "醫療",
+    "中原大學",
+    "交通與通勤",
+  ];
+  await page.route(/\/api\/v1\/accounts(\?|$)/, (route) =>
+    route.fulfill({
+      json: [
+        ...accounts,
+        ...categoryNames.map((name, index) => ({
+          ...accounts[1],
+          id: `01980000-0000-7000-8000-0000000001${String(index).padStart(2, "0")}`,
+          key: `expense.extra-${index}`,
+          name,
+        })),
+      ],
+    }),
+  );
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto("/entries");
+  await page.getByLabel("新增交易").click();
+
+  const sheet = page.getByRole("dialog", { name: "新增交易" });
+  const body = sheet.locator("[data-entry-editor-scroll]");
+  await expect(sheet.getByRole("radio", { name: "交通與通勤" })).toBeAttached();
+  await expect
+    .poll(() =>
+      body.evaluate((element) => element.scrollWidth - element.clientWidth),
+    )
+    .toBeLessThanOrEqual(0);
+  const categoryRow = sheet.getByRole("radiogroup", { name: "支出分類" });
+  expect(
+    await categoryRow.evaluate(
+      (element) => element.scrollWidth > element.clientWidth,
+    ),
+  ).toBe(true);
+
+  const viewportWidth = 393;
+  // The swipeable row bleeds to both sheet edges rather than stopping short.
+  const rowBounds = await settledBoundingBox(categoryRow);
+  expect(rowBounds).not.toBeNull();
+  expect(Math.round(rowBounds!.x)).toBe(0);
+  expect(Math.round(rowBounds!.x + rowBounds!.width)).toBe(viewportWidth);
+  for (const control of [
+    sheet.getByLabel("交易日期"),
+    sheet.getByRole("button", { name: /^付款帳戶：/ }),
+    sheet.getByRole("status", { name: "金額" }),
+  ]) {
+    const bounds = await settledBoundingBox(control);
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewportWidth);
+  }
+});
+
 test("records a quick expense and carries the draft between modes", async ({
   page,
 }) => {
