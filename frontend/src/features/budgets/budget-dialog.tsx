@@ -37,6 +37,7 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 import { SwitchField } from "@/components/ui/switch";
 import { accountTypeLabels, accountTypes } from "@/lib/account";
 import { budgetsApi } from "@/lib/api-client";
@@ -232,22 +233,19 @@ export function BudgetDialog({
                       }
                     >
                       <FieldLabel htmlFor="budget-amount">每期額度</FieldLabel>
-                      <Input
+                      <NumberField
                         id="budget-amount"
+                        title="每期額度"
                         aria-invalid={
                           submitted &&
                           (!Number.isSafeInteger(values.amount_minor) ||
                             values.amount_minor <= 0)
                         }
-                        type="number"
-                        min={1}
-                        step={1}
-                        inputMode="numeric"
-                        value={values.amount_minor || ""}
-                        onChange={(event) =>
+                        value={values.amount_minor}
+                        onValueChange={(amount) =>
                           setValues((current) => ({
                             ...current,
-                            amount_minor: Number(event.target.value),
+                            amount_minor: amount,
                           }))
                         }
                       />
@@ -306,22 +304,19 @@ export function BudgetDialog({
                       <FieldLabel htmlFor="budget-period-count">
                         週期長度
                       </FieldLabel>
-                      <Input
+                      <NumberField
                         id="budget-period-count"
+                        title="週期長度"
                         aria-invalid={
                           submitted &&
                           (!Number.isSafeInteger(values.period_count) ||
                             values.period_count <= 0)
                         }
-                        type="number"
-                        min={1}
-                        step={1}
-                        inputMode="numeric"
                         value={values.period_count}
-                        onChange={(event) =>
+                        onValueChange={(count) =>
                           setValues((current) => ({
                             ...current,
-                            period_count: Number(event.target.value),
+                            period_count: count,
                           }))
                         }
                       />

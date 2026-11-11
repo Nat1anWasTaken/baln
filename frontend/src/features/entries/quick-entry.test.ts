@@ -9,7 +9,9 @@ import {
   blankQuickEntryValues,
   editorToQuickValues,
   isBlankQuickEntryValues,
+  quickEntryDescription,
   quickToEditorValues,
+  sortByRecentKeys,
   type QuickEntryValues,
 } from "@/features/entries/quick-entry";
 import {
@@ -289,10 +291,52 @@ describe("quick entry conversion", () => {
     expect(
       isBlankQuickEntryValues({ ...blankQuickEntryValues(), amount: 10 }),
     ).toBe(false);
+    const prefilled = { ...blankQuickEntryValues(), fundingKey: "asset.cash" };
+    expect(isBlankQuickEntryValues(prefilled)).toBe(false);
+    expect(isBlankQuickEntryValues(prefilled, "asset.cash")).toBe(true);
+    expect(isBlankQuickEntryValues(prefilled, "asset.bank")).toBe(false);
     expect(isBlankEditorValues(blankEditorValues())).toBe(true);
     expect(
       isBlankEditorValues({ ...blankEditorValues(), description: "午餐" }),
     ).toBe(false);
+  });
+});
+
+describe("quick entry helpers", () => {
+  it("falls back to the category name for a blank description", () => {
+    const food = { ...account("expense.food", "expense"), name: "餐飲" };
+    expect(
+      quickEntryDescription(
+        { description: "  午餐  ", categoryKey: "expense.food" },
+        [food],
+      ),
+    ).toBe("午餐");
+    expect(
+      quickEntryDescription(
+        { description: "   ", categoryKey: "expense.food" },
+        [food],
+      ),
+    ).toBe("餐飲");
+    expect(
+      quickEntryDescription({ description: "", categoryKey: "" }, [food]),
+    ).toBe("");
+  });
+
+  it("orders accounts by recent use and keeps the rest stable", () => {
+    const list = [
+      account("expense.a", "expense"),
+      account("expense.b", "expense"),
+      account("expense.c", "expense"),
+      account("expense.d", "expense"),
+    ];
+    expect(
+      sortByRecentKeys(list, ["expense.c", "expense.gone", "expense.a"]).map(
+        (item) => item.key,
+      ),
+    ).toEqual(["expense.c", "expense.a", "expense.b", "expense.d"]);
+    expect(sortByRecentKeys(list, []).map((item) => item.key)).toEqual(
+      list.map((item) => item.key),
+    );
   });
 });
 

@@ -161,12 +161,15 @@ function EntryCreateModes({
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const handleQuickValues = useCallback((values: QuickEntryValues) => {
-    valuesRef.current = { mode: "quick", values };
-    lastQuickKind.current = values.kind;
-    setIsDirty(!isBlankQuickEntryValues(values));
-    setQuickAvailable(true);
-  }, []);
+  const handleQuickValues = useCallback(
+    (values: QuickEntryValues, defaultFundingKey?: string) => {
+      valuesRef.current = { mode: "quick", values };
+      lastQuickKind.current = values.kind;
+      setIsDirty(!isBlankQuickEntryValues(values, defaultFundingKey));
+      setQuickAvailable(true);
+    },
+    [],
+  );
   const handleFullValues = useCallback(
     (values: EditorValues) => {
       valuesRef.current = { mode: "full", values };

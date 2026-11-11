@@ -1,11 +1,6 @@
-import {
-  Controller,
-  type FieldErrors,
-  useForm,
-  useWatch,
-} from "react-hook-form";
-import { useEffect, useState } from "react";
-import { type To, useLocation } from "react-router-dom";
+import { Controller } from "react-hook-form";
+import { useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { AppLink } from "@/components/navigation-transition";
 import { Button } from "@/components/ui/button";
@@ -13,7 +8,6 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { DialogBody, DialogFooter } from "@/components/ui/dialog";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -26,94 +20,49 @@ import { SwitchField } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AccountPills } from "@/features/entries/account-pills";
-import { signedPosting } from "@/features/entries/entry-draft";
 import {
   entryEditorPageFooterClassName,
   EntryEditorRootError,
   useEditorValuesSync,
-  type EntryEditorPresentation,
 } from "@/features/entries/entry-editor";
-import {
-  DuplicateEntryDialog,
-  useEntrySubmission,
-} from "@/features/entries/entry-submission";
+import { DuplicateEntryDialog } from "@/features/entries/entry-submission";
+import { MobileQuickEntryEditor } from "@/features/entries/mobile-quick-entry-editor";
 import {
   blankQuickEntryValues,
-  quickEntryCategoryTypes,
   quickEntryFundingTypes,
   quickEntryKindLabels,
-  quickToEditorValues,
-  type QuickEntryKind,
-  type QuickEntryValues,
 } from "@/features/entries/quick-entry";
-import { accountTypeLabels } from "@/lib/account";
+import {
+  focusFirstInvalidField,
+  MissingAccounts,
+  quickEntryFundingLabels,
+  quickEntryKinds,
+  type QuickEntryEditorProps,
+  type QuickEntryFieldOrder,
+  useQuickEntryForm,
+} from "@/features/entries/quick-entry-form";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { Account, AccountType, EntryResponse } from "@/lib/schemas";
-
-const quickEntryKinds: QuickEntryKind[] = ["expense", "income"];
 
 /** Field order as rendered, so validation focuses the first visible error. */
-const quickEntryFieldOrder = [
+const desktopFieldOrder: QuickEntryFieldOrder = [
   ["amount", "quick-entry-amount"],
   ["description", "quick-entry-description"],
   ["categoryKey", "quick-entry-category"],
   ["fundingKey", "quick-entry-funding"],
   ["date", "quick-entry-date"],
-] as const;
+];
 
-function focusFirstInvalidField(errors: FieldErrors<QuickEntryValues>) {
-  const invalid = quickEntryFieldOrder.find(([name]) => errors[name]);
-  if (!invalid) return;
-  const element = document.getElementById(invalid[1]);
-  const target =
-    element instanceof HTMLInputElement || element instanceof HTMLButtonElement
-      ? element
-      : element?.querySelector<HTMLElement>("button");
-  target?.focus();
-}
-
-const fundingLabels: Record<QuickEntryKind, string> = {
-  expense: "付款帳戶",
-  income: "入帳帳戶",
-};
-
-function typeListLabel(types: AccountType[]) {
-  return types.map((type) => accountTypeLabels[type]).join("或");
-}
-
-function MissingAccounts({
-  types,
-  presentation,
-  onNavigate,
-}: {
-  types: AccountType[];
-  presentation: EntryEditorPresentation;
-  onNavigate?: (to: To) => void;
-}) {
-  return (
-    <div className="grid justify-items-start gap-3 rounded-3xl bg-input/30 p-4">
-      <FieldDescription>
-        尚未建立可用的{typeListLabel(types)}帳戶，請先新增帳戶或改用完整模式。
-      </FieldDescription>
-      {presentation === "sheet" ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onNavigate?.("/accounts")}
-        >
-          前往帳戶管理
-        </Button>
-      ) : (
-        <Button asChild variant="outline" size="sm">
-          <AppLink to="/accounts">前往帳戶管理</AppLink>
-        </Button>
-      )}
-    </div>
+export function QuickEntryEditor(props: QuickEntryEditorProps) {
+  const isMobile = useIsMobile();
+  return isMobile ? (
+    <MobileQuickEntryEditor {...props} />
+  ) : (
+    <DesktopQuickEntryEditor {...props} />
   );
 }
 
-export function QuickEntryEditor({
+function DesktopQuickEntryEditor({
   accounts,
   draft,
   presentation = "page",
@@ -123,75 +72,25 @@ export function QuickEntryEditor({
   onPendingChange,
   onSaved,
   onValuesChange,
-}: {
-  accounts: Account[];
-  /** Initial values carried over from the full editor. */
-  draft?: QuickEntryValues;
-  presentation?: EntryEditorPresentation;
-  onCancel?: () => void;
-  onDirtyChange?: (dirty: boolean) => void;
-  onNavigate?: (to: To) => void;
-  onPendingChange?: (pending: boolean) => void;
-  onSaved?: (entry: EntryResponse) => void;
-  onValuesChange?: (values: QuickEntryValues) => void;
-}) {
+}: QuickEntryEditorProps) {
   const { search } = useLocation();
   const [defaults] = useState(() => draft ?? blankQuickEntryValues());
-  const form = useForm<QuickEntryValues>({
-    defaultValues: defaults,
-    shouldFocusError: false,
-  });
-  useEditorValuesSync({ form, onValuesChange });
-  const kind = useWatch({ control: form.control, name: "kind" });
-
-  const activeAccounts = accounts.filter((account) => !account.archived);
-  const categoryTypes = quickEntryCategoryTypes[kind];
-  const categoryAccounts = activeAccounts.filter((account) =>
-    categoryTypes.includes(account.type),
-  );
-  const fundingAccounts = activeAccounts.filter((account) =>
-    quickEntryFundingTypes.includes(account.type),
-  );
-
-  const submission = useEntrySubmission({
-    onError: (message) => form.setError("root", { message }),
+  const {
+    form,
+    kind,
+    categoryTypes,
+    categoryAccounts,
+    fundingAccounts,
+    submission,
+    submit,
+  } = useQuickEntryForm({
+    accounts,
+    defaults,
+    onDirtyChange,
     onPendingChange,
     onSaved,
   });
-
-  useEffect(() => {
-    onDirtyChange?.(form.formState.isDirty);
-  }, [form.formState.isDirty, onDirtyChange]);
-
-  function submit(values: QuickEntryValues) {
-    form.clearErrors("root");
-    // Only keys the pills can show count as selected: an unmounted field
-    // (no eligible accounts) or a carried-over key that is no longer
-    // eligible, such as an archived account, must not reach the API.
-    const missingAccounts = (
-      [
-        ["categoryKey", "請選擇分類。", categoryAccounts],
-        ["fundingKey", "請選擇帳戶。", fundingAccounts],
-      ] as const
-    ).filter(
-      ([name, , eligible]) =>
-        !eligible.some((account) => account.key === values[name]),
-    );
-    if (missingAccounts.length > 0) {
-      for (const [name, message] of missingAccounts) {
-        form.setError(name, { message });
-      }
-      return;
-    }
-    const editorValues = quickToEditorValues(values);
-    submission.submit({
-      date: values.date,
-      description: values.description.trim(),
-      note: values.note.trim() || null,
-      excluded_from_budgets: values.excludedFromBudgets,
-      postings: editorValues.postings.map(signedPosting),
-    });
-  }
+  useEditorValuesSync({ form, onValuesChange });
 
   const errors = form.formState.errors;
   const EditorBody = presentation === "sheet" ? DialogBody : "div";
@@ -203,7 +102,9 @@ export function QuickEntryEditor({
       className={cn(
         presentation === "page" ? "grid gap-5" : "flex min-h-0 flex-1 flex-col",
       )}
-      onSubmit={form.handleSubmit(submit, focusFirstInvalidField)}
+      onSubmit={form.handleSubmit(submit, (errors) =>
+        focusFirstInvalidField(errors, desktopFieldOrder),
+      )}
     >
       <EditorBody
         data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
@@ -325,7 +226,7 @@ export function QuickEntryEditor({
             </Field>
             <Field data-invalid={Boolean(errors.fundingKey?.message)}>
               <FieldLabel htmlFor="quick-entry-funding">
-                {fundingLabels[kind]}
+                {quickEntryFundingLabels[kind]}
               </FieldLabel>
               {fundingAccounts.length > 0 ? (
                 <Controller
@@ -336,7 +237,7 @@ export function QuickEntryEditor({
                     <AccountPills
                       id="quick-entry-funding"
                       accounts={fundingAccounts}
-                      label={fundingLabels[kind]}
+                      label={quickEntryFundingLabels[kind]}
                       value={field.value}
                       onValueChange={field.onChange}
                     />
