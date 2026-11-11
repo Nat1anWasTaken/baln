@@ -217,13 +217,11 @@ describe("BudgetDetailPage", () => {
     expect(screen.getByText("每日可用")).toBeVisible();
     expect(screen.getByText("TWD 273")).toHaveClass("text-finance-expense");
     expect(screen.getByText("TWD 364")).toHaveClass("text-finance-income");
+    expect(screen.getByText("TWD 7,500")).toHaveClass("text-finance-net");
     expect(screen.getByText("TWD 1,000")).toHaveClass("text-finance-rollover");
-    expect(screen.getByText("TWD 6,500")).toHaveClass("text-finance-income");
-    expect(screen.getByText("TWD 6,500").parentElement).toHaveTextContent(
-      "TWD 6,500+TWD 1,000",
-    );
-    expect(screen.getByText("當期剩餘")).toHaveClass("text-finance-income");
-    expect(screen.getByText("往期沿襲")).toHaveClass("text-finance-rollover");
+    expect(
+      document.querySelector("[data-budget-remaining-breakdown]"),
+    ).toHaveTextContent("當期剩餘 TWD 6,500+往期沿襲 TWD 1,000");
     expect(screen.getByLabelText("預算期間進度")).toBeVisible();
     expect(screen.getByLabelText("預算已使用額度")).toBeVisible();
     expect((await screen.findAllByText("未來日期")).length).toBeGreaterThan(0);
