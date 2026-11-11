@@ -227,7 +227,7 @@ export function MobileQuickEntryEditor({
       <EditorBody
         data-entry-editor-scroll={presentation === "sheet" ? "" : undefined}
         className={cn(
-          "grid auto-rows-max content-start gap-4",
+          "grid auto-rows-max content-start gap-3",
           presentation === "sheet" && "py-4",
         )}
       >
@@ -278,7 +278,7 @@ export function MobileQuickEntryEditor({
 
         <Field
           data-invalid={Boolean(errors.amount?.message)}
-          className="justify-items-center gap-1 py-2"
+          className="justify-items-center gap-1"
         >
           <NumericKeypadDisplay
             id="quick-entry-amount"
@@ -485,9 +485,10 @@ export function MobileQuickEntryEditor({
             <Button
               type="submit"
               loading={submission.isPending}
-              className="h-full rounded-3xl text-base whitespace-normal"
+              aria-label="建立交易"
+              className="h-full rounded-3xl text-base"
             >
-              建立交易
+              建立
             </Button>
           }
         />

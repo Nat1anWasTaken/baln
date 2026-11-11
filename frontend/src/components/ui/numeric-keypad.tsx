@@ -15,7 +15,7 @@ const digitRows: NumericKeypadKey[][] = [
 const CLEAR_HOLD_MS = 500;
 
 export const numericKeypadKeyClassName =
-  "h-13 rounded-3xl text-xl font-medium tabular-nums";
+  "h-12 rounded-3xl text-xl font-medium tabular-nums";
 
 /**
  * An on-screen number pad for phones, so typing an amount never raises the

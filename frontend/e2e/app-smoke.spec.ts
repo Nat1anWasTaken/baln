@@ -679,6 +679,31 @@ async function openFullEntryEditor(page: Page) {
   await expect(page.locator('[data-entry-create-mode="quick"]')).toHaveCount(0);
 }
 
+async function tapKeypad(keypad: Locator, digits: string) {
+  for (const digit of digits) {
+    await keypad.getByRole("button", { name: digit, exact: true }).click();
+  }
+}
+
+/** Enters a whole number through a phone keypad sheet and confirms it. */
+async function enterKeypadNumber(
+  page: Page,
+  field: Locator,
+  title: string,
+  digits: string,
+) {
+  await field.click();
+  const keypadSheet = page.getByRole("dialog", { name: title });
+  await expect(keypadSheet).toBeVisible();
+  const backspace = keypadSheet.getByRole("button", {
+    name: "刪除一位，長按清除",
+  });
+  for (let index = 0; index < 15; index += 1) await backspace.click();
+  await tapKeypad(keypadSheet, digits);
+  await keypadSheet.getByRole("button", { name: "完成" }).click();
+  await expect(keypadSheet).not.toBeVisible();
+}
+
 async function fillBalancedPostings(page: Page, amount: string) {
   for (const [index, accountName] of ["餐飲", "現金"].entries()) {
     await page
@@ -689,7 +714,12 @@ async function fillBalancedPostings(page: Page, amount: string) {
     });
     await postingSheet.getByRole("combobox", { name: "帳戶" }).click();
     await page.getByRole("option", { name: accountName }).click();
-    await postingSheet.getByLabel("金額", { exact: true }).fill(amount);
+    await enterKeypadNumber(
+      page,
+      postingSheet.getByLabel("金額", { exact: true }),
+      "分錄金額",
+      amount,
+    );
     await postingSheet.getByRole("button", { name: "完成" }).click();
     await expect(postingSheet).not.toBeVisible();
   }
@@ -1644,9 +1674,11 @@ test("records a quick expense and carries the draft between modes", async ({
   );
   await expect(sheet.getByRole("radio", { name: "薪資" })).toHaveCount(0);
 
-  await sheet.getByLabel("金額").fill("120");
+  await expect(
+    sheet.getByRole("button", { name: "付款帳戶：現金" }),
+  ).toBeVisible();
+  await tapKeypad(sheet.getByRole("group", { name: "金額鍵盤" }), "120");
   await sheet.getByRole("radio", { name: "餐飲" }).click();
-  await sheet.getByRole("radio", { name: "現金" }).click();
   await sheet.getByLabel("交易說明").fill("午餐便當");
 
   await openFullEntryEditor(page);
@@ -1666,15 +1698,14 @@ test("records a quick expense and carries the draft between modes", async ({
   await sheet.getByRole("tab", { name: "簡易" }).click();
   await expect(sheet.locator('[data-entry-create-mode="full"]')).toHaveCount(0);
   await expect(sheet).toHaveAttribute("data-size", "near-full");
-  await expect(sheet.getByLabel("金額")).toHaveValue("120");
+  await expect(sheet.getByRole("status", { name: "金額" })).toHaveText(/120$/);
   await expect(sheet.getByRole("radio", { name: "餐飲" })).toHaveAttribute(
     "aria-checked",
     "true",
   );
-  await expect(sheet.getByRole("radio", { name: "現金" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
+  await expect(
+    sheet.getByRole("button", { name: "付款帳戶：現金" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "關閉新增交易" }).click();
   const discardDialog = page.getByRole("alertdialog", {
@@ -1714,7 +1745,7 @@ test("confirms before leaving a quick draft for account management", async ({
   await page.getByLabel("新增交易").click();
 
   const sheet = page.getByRole("dialog", { name: "新增交易" });
-  await sheet.getByLabel("金額").fill("120");
+  await tapKeypad(sheet.getByRole("group", { name: "金額鍵盤" }), "120");
   await sheet.getByRole("button", { name: "前往帳戶管理" }).click();
 
   const discardDialog = page.getByRole("alertdialog", {
@@ -1722,7 +1753,7 @@ test("confirms before leaving a quick draft for account management", async ({
   });
   await expect(discardDialog).toBeVisible();
   await discardDialog.getByRole("button", { name: "繼續編輯" }).click();
-  await expect(sheet.getByLabel("金額")).toHaveValue("120");
+  await expect(sheet.getByRole("status", { name: "金額" })).toHaveText(/120$/);
   await expect(page).toHaveURL(/\/entries\/new$/);
 
   await sheet.getByRole("button", { name: "前往帳戶管理" }).click();
@@ -1914,6 +1945,8 @@ test("hands a single drag from sheet scrolling to dismissal", async ({
     const sheet = page.getByRole("dialog", { name: "新增交易" });
     const sheetScroller = sheet.locator("[data-entry-editor-scroll]");
     await expect(sheet).toBeVisible();
+    // The phone quick entry fits without scrolling; the full editor scrolls.
+    await openFullEntryEditor(page);
     await expect(sheetScroller).toHaveCSS("overflow-y", "auto");
     await expect(sheet).toHaveCSS("touch-action", "auto");
     await page.waitForTimeout(550);
@@ -2170,7 +2203,7 @@ test("edits through the same route-backed mobile transaction sheet", async ({
     name: "編輯第 1 筆分錄",
   });
   await expect(postingSheet).toHaveAttribute("data-presentation", "sheet");
-  await expect(postingSheet.getByLabel("金額")).toHaveValue("120");
+  await expect(postingSheet.getByLabel("金額")).toHaveText("120");
   await postingSheet.getByRole("button", { name: "取消" }).click();
   await expect(postingSheet).not.toBeVisible();
 
@@ -2355,7 +2388,12 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
     await expect(page.getByText("請至少選擇一個帳戶。")).toBeVisible();
     await expect(page.getByLabel("預算名稱")).toBeFocused();
     await page.getByLabel("預算名稱").fill("旅行基金");
-    await page.getByLabel("每期額度").fill("5000");
+    await enterKeypadNumber(
+      page,
+      page.getByLabel("每期額度"),
+      "每期額度",
+      "5000",
+    );
     await page.getByRole("checkbox", { name: /現金/ }).check();
     await page.getByRole("button", { name: "儲存預算" }).click();
     await expect(sheet).not.toBeVisible();
@@ -2368,7 +2406,12 @@ test("manages budgets with the shared mobile sheet and touch navigation", async 
     await page.getByRole("button", { name: "編輯 旅行基金" }).click();
     const editSheet = page.getByRole("dialog", { name: "編輯預算" });
     await expect(editSheet).toBeFocused();
-    await page.getByLabel("每期額度").fill("6000");
+    await enterKeypadNumber(
+      page,
+      page.getByLabel("每期額度"),
+      "每期額度",
+      "6000",
+    );
     await page.getByRole("button", { name: "儲存預算" }).click();
     await expect(
       page.getByRole("alertdialog", { name: "如何處理累計餘額？" }),
@@ -2666,7 +2709,12 @@ test("provides touch-sized controls and feedback on coarse pointers", async ({
     await expectContainedTab(createSheet.getByRole("tab", { name: "完整" }));
     await expectTouchTarget(createSheet.getByRole("radio", { name: "支出" }));
     await expectTouchTarget(createSheet.getByRole("radio", { name: "餐飲" }));
-    await expectTouchTarget(createSheet.getByLabel("金額"));
+    await expectTouchTarget(
+      createSheet.getByRole("button", { name: "1", exact: true }),
+    );
+    await expectTouchTarget(
+      createSheet.getByRole("button", { name: "付款帳戶：現金" }),
+    );
     await openFullEntryEditor(page);
     await expect(createSheet.locator("form").getByRole("tab")).toHaveCount(0);
     await page.setViewportSize({ width: 320, height: 844 });

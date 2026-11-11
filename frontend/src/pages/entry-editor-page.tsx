@@ -128,7 +128,7 @@ function CreateModePanel({
 }
 
 type CarriedDraft =
-  | { mode: "quick"; values: QuickEntryValues }
+  | { mode: "quick"; values: QuickEntryValues; blank?: boolean }
   | { mode: "full"; values: EditorValues };
 
 function EntryCreateModes({
@@ -163,9 +163,10 @@ function EntryCreateModes({
 
   const handleQuickValues = useCallback(
     (values: QuickEntryValues, defaultFundingKey?: string) => {
-      valuesRef.current = { mode: "quick", values };
+      const blank = isBlankQuickEntryValues(values, defaultFundingKey);
+      valuesRef.current = { mode: "quick", values, blank };
       lastQuickKind.current = values.kind;
-      setIsDirty(!isBlankQuickEntryValues(values, defaultFundingKey));
+      setIsDirty(!blank);
       setQuickAvailable(true);
     },
     [],
@@ -192,8 +193,10 @@ function EntryCreateModes({
     if (nextMode === mode || isPending) return;
     const current = valuesRef.current;
     if (nextMode === "full") {
+      // A blank quick draft starts the full editor blank too, so an account
+      // the quick editor only filled in by itself is not carried as input.
       setCarried(
-        current?.mode === "quick"
+        current?.mode === "quick" && !current.blank
           ? { mode: "full", values: quickToEditorValues(current.values) }
           : null,
       );
